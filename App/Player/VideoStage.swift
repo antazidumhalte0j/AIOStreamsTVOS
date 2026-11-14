@@ -14,6 +14,12 @@ struct VideoFrame: Equatable {
     var bottomRadius: CGFloat
     /// Subtitles show in the box; trailer previews have none.
     var subtitles: Bool
+    /// A trailer behind the page: the part of the box the page's hole shows (patches/web/0050). Over the
+    /// app's own wash the page's background is clear, so the video is clipped to it here, and with
+    /// `fade` its bottom and start fade out over that fraction of it, as the hole's edges did.
+    var clip: CGRect?
+    var fade: CGFloat = 0
+    var rtl = false
 
     /// nil when the message holds no frame (`frame: null`), which fills the screen again. `webWidth` is the
     /// web view's width in points: the frame is in the page's measure, and the bridge script sends the
@@ -29,7 +35,7 @@ struct VideoFrame: Equatable {
             // Far outside any screen is a mistake in the page, not a place.
             return CGFloat(min(max(value, -100_000), 100_000)) * scale
         }
-        return VideoFrame(
+        var placed = VideoFrame(
             rect: CGRect(x: number("x"), y: number("y"), width: max(0, number("width")), height: max(0, number("height"))),
             hidden: frame.flag("hidden") == true,
             animate: frame.flag("animate") == true,
@@ -37,6 +43,16 @@ struct VideoFrame: Equatable {
             bottomRadius: max(0, number("bottomRadius")),
             subtitles: frame.flag("subtitles") != false
         )
+        if let clip = frame.object("clip") {
+            func value(_ key: String) -> CGFloat {
+                guard let v = clip.number(key), v.isFinite else { return 0 }
+                return CGFloat(min(max(v, -100_000), 100_000)) * scale
+            }
+            placed.clip = CGRect(x: value("x"), y: value("y"), width: max(0, value("width")), height: max(0, value("height")))
+            placed.fade = CGFloat(min(max(frame.number("fade") ?? 0, 0), 1))
+            placed.rtl = frame.flag("rtl") == true
+        }
+        return placed
     }
 }
 
@@ -118,6 +134,14 @@ final class VideoStage {
             self.animator = animator
         } else {
             view.frame = target
+        }
+        // A trailer behind the page, kept to its hole and faded at its edges as the hole was.
+        if let shown, shown.hidden, let clip = shown.clip, let web {
+            let inView = container.convert(clip, from: web).offsetBy(dx: -target.minX, dy: -target.minY)
+            view.layer.mask = FadeMask.layer(size: target.size, clip: inView,
+                                             bottom: shown.fade, start: shown.fade, rtl: shown.rtl)
+        } else {
+            view.layer.mask = nil
         }
         cutHole(shown, animated: animated)
     }

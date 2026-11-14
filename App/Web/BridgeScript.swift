@@ -276,6 +276,16 @@ enum BridgeScript {
      * over the art stay.
      */
     const APP_BACKDROP = 'html[data-app-backdrop] ';
+    /*
+     * With "Background from artwork" on, the app draws the wash beneath the page and fades each new
+     * one in itself (patches/web/0050, WashStage.swift), so the page's background and its root, which
+     * is painted the page's colour too, are clear while the app's is drawn (`data-app-wash`). The
+     * root's rule is upstream's for an on-screen keyboard, outweighed here.
+     */
+    rules.push(
+      "html[data-app-wash] [data-ui='page-background']{background-color:transparent!important}",
+      'html.see-through[data-app-wash][data-app-wash][data-app-wash]:not(.playing){background-color:transparent!important}'
+    );
     // The rotating hero's art and the one following the card in focus (whole window or corner), and a title page's.
     rules.push(
       [APP_BACKDROP + "[data-ui='hero-art'] img", APP_BACKDROP + "[data-ui='hero-corner'] img",
@@ -868,9 +878,19 @@ enum BridgeScript {
     const look = {};
     try {
       const page = document.querySelector("[data-ui='page-background']");
-      const colour = page && getComputedStyle(page).backgroundColor;
+      // Read off a probe in the page's colour: the background itself is clear over the app's wash.
+      let colour = '';
+      if (page) {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;width:0;height:0;background:var(--background)';
+        page.appendChild(probe);
+        colour = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+      }
       if (colour) look.background = colour;
-      if (document.documentElement.hasAttribute('data-art-wash')) {
+      // Over the app's own wash, the app adds it to the keyboard itself.
+      if (document.documentElement.hasAttribute('data-art-wash') &&
+          !document.documentElement.hasAttribute('data-app-wash')) {
         const shown = [...document.querySelectorAll("[data-ui='art-wash'] canvas")].find(
           (c) => c.style.visibility === 'visible' && c.style.zIndex === '1'
         );

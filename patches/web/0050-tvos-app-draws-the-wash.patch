@@ -1,0 +1,274 @@
+diff --git a/packages/web/src/components/shell/art-wash.tsx b/packages/web/src/components/shell/art-wash.tsx
+index a2e18b3a4..04c76c1cc 100644
+--- a/packages/web/src/components/shell/art-wash.tsx
++++ b/packages/web/src/components/shell/art-wash.tsx
+@@ -2,11 +2,67 @@ import React from 'react';
+ import { cn } from '@aiostreams/ui/core/styling';
+ import { currentWash, subscribeWash } from '@/lib/artwork/background';
+ import { WASH_H, WASH_W } from '@/lib/artwork/wash';
++import { appBridge, appleTv } from '@/lib/hosts/shell/bridge';
+ 
+ const FADE_MS = 600;
+ 
+ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+ 
++/** On `<html>` while the app draws the wash beneath the page, which leaves its background clear (BridgeScript). */
++const APP_WASH = 'data-app-wash';
++
++let nextId = 0;
++
++/**
++ * On an Apple TV, the app draws the wash beneath the page and fades each new
++ * one in itself (WashStage.swift): the page's fade made its canvas a layer the
++ * screen's size at 2x while it ran, and every part of the page over it layers
++ * of their own (AIOStreamsTVOS). The page's background is clear once the
++ * app's is drawn; a wash the app can't draw is drawn here instead, unfaded.
++ * Returns whether the app has it, so the canvases stay empty.
++ */
++function useAppWash(
++  frame: ReturnType<typeof currentWash>,
++  drawHere: (frame: NonNullable<ReturnType<typeof currentWash>>) => void
++): boolean {
++  const shell = appBridge();
++  const on = !!shell && appleTv();
++  const [id] = React.useState(() => ++nextId);
++  const latest = React.useRef({ frame, drawHere });
++  latest.current = { frame, drawHere };
++  React.useEffect(() => {
++    if (!on || !shell) return;
++    const html = document.documentElement;
++    const unsubscribe = shell.subscribe((m) => {
++      const message = m as unknown as {
++        type: string;
++        id?: number;
++        src?: string;
++        drawn?: boolean;
++      };
++      const { frame: now, drawHere: draw } = latest.current;
++      if (message.type !== 'tvos-wash' || message.id !== id) return;
++      if (!now || message.src !== now.src) return;
++      if (message.drawn) html.setAttribute(APP_WASH, '');
++      else {
++        html.removeAttribute(APP_WASH);
++        draw(now);
++      }
++    });
++    return () => {
++      unsubscribe();
++      html.removeAttribute(APP_WASH);
++      shell.send({ type: 'tvos-wash', id, src: null });
++    };
++  }, [on, shell, id]);
++  React.useEffect(() => {
++    if (!on || !shell) return;
++    if (!frame) document.documentElement.removeAttribute(APP_WASH);
++    shell.send({ type: 'tvos-wash', id, src: frame?.src ?? null });
++  }, [on, shell, id, frame]);
++  return on;
++}
++
+ /**
+  * The artwork wash, each new one fading in over the last. The covered layer
+  * is hidden after, so the screen composites one.
+@@ -16,9 +72,25 @@ export function ArtWash({ className }: { className?: string }) {
+   const first = React.useRef<HTMLCanvasElement>(null);
+   const second = React.useRef<HTMLCanvasElement>(null);
+   const front = React.useRef<HTMLCanvasElement | null>(null);
++  // The app's fallback: drawn at once, over whatever was, with no fade.
++  const drawHere = React.useCallback(
++    (shown: NonNullable<ReturnType<typeof currentWash>>) => {
++      const layers = [first.current, second.current];
++      const [next, other] = layers;
++      if (!next || !other) return;
++      next
++        .getContext('2d', { alpha: false })
++        ?.drawImage(shown.image, 0, 0, WASH_W, WASH_H);
++      next.style.visibility = 'visible';
++      other.style.visibility = 'hidden';
++      front.current = next;
++    },
++    []
++  );
++  const inApp = useAppWash(frame, drawHere);
+   React.useLayoutEffect(() => {
+     const layers = [first.current!, second.current!];
+-    if (!frame) {
++    if (!frame || inApp) {
+       for (const layer of layers) layer.style.visibility = 'hidden';
+       front.current = null;
+       return;
+@@ -44,7 +116,7 @@ export function ArtWash({ className }: { className?: string }) {
+         easing: 'ease-out',
+       })
+       .finished.then(hide, hide);
+-  }, [frame]);
++  }, [frame, inApp]);
+   return (
+     <div
+       data-ui="art-wash"
+diff --git a/packages/web/src/features/trailers/preview.tsx b/packages/web/src/features/trailers/preview.tsx
+index c24e76efe..73d588a9e 100644
+--- a/packages/web/src/features/trailers/preview.tsx
++++ b/packages/web/src/features/trailers/preview.tsx
+@@ -234,6 +234,23 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
+ /** How much of a soft trailer's height and width its bottom and start fade over. */
+ const FADE = 0.5;
+ 
++/** Whether the Apple TV app draws the artwork wash beneath the page (components/shell/art-wash.tsx). */
++function useAppWashShown(): boolean {
++  const [shown, setShown] = React.useState(() =>
++    document.documentElement.hasAttribute('data-app-wash')
++  );
++  React.useEffect(() => {
++    if (!appleTv()) return;
++    const html = document.documentElement;
++    const update = () => setShown(html.hasAttribute('data-app-wash'));
++    const observer = new MutationObserver(update);
++    observer.observe(html, { attributeFilter: ['data-app-wash'] });
++    update();
++    return () => observer.disconnect();
++  }, []);
++  return shown;
++}
++
+ /** Fades a soft trailer's hole at its bottom and start, for an element drawn over `frame`. */
+ function fadeMask(frame: Box, hole: Box): React.CSSProperties {
+   const rtl = pageRtl();
+@@ -490,26 +507,39 @@ function PlayedPreview({
+     if (error) failed.current();
+   }, [error, failed]);
+ 
++  // Over the app's own wash the page's background is clear (AIOStreamsTVOS), so its hole no longer
++  // bounds or softens a trailer behind the page: the app clips the video to the hole and fades it.
++  const appWash = useAppWashShown();
+   // Drawn a pixel past the hole, so rounding never leaves a seam.
+-  const placed = React.useMemo<VideoFrame | null>(
+-    () =>
+-      full
+-        ? null
+-        : {
+-            x: frame.x - 1,
+-            y: frame.y - 1,
+-            width: frame.width + 2,
+-            height: frame.height + 2,
+-            draggable: false,
+-            // Over the page only once it plays, as it shows black until then.
+-            hidden: !over || !shown,
+-            animate: false,
+-            radius: over ? radius : 0,
+-            bottomRadius: over ? radius : 0,
+-            subtitles: false,
+-          },
+-    [full, frame, over, shown, radius]
+-  );
++  const placed = React.useMemo<VideoFrame | null>(() => {
++    if (full) return null;
++    const zoom = window.visualViewport?.scale ?? 1;
++    const placed: VideoFrame = {
++      x: frame.x - 1,
++      y: frame.y - 1,
++      width: frame.width + 2,
++      height: frame.height + 2,
++      draggable: false,
++      // Over the page only once it plays, as it shows black until then.
++      hidden: !over || !shown,
++      animate: false,
++      radius: over ? radius : 0,
++      bottomRadius: over ? radius : 0,
++      subtitles: false,
++    };
++    if (over || !appleTv()) return placed;
++    return {
++      ...placed,
++      clip: {
++        x: hole.x * zoom,
++        y: hole.y * zoom,
++        width: hole.width * zoom,
++        height: hole.height * zoom,
++      },
++      fade: soft && appWash ? FADE : 0,
++      rtl: pageRtl(),
++    } as VideoFrame;
++  }, [full, frame, hole, over, shown, radius, soft, appWash]);
+   const setFrame = useLatest(player.setFrame);
+   React.useEffect(() => {
+     if (host) setFrame.current?.(placed);
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 785029d65..e1edbf5a3 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -139,7 +139,10 @@ export function useAppBackdrop(
+   art: React.RefObject<HTMLElement | null>,
+   src: string | undefined,
+   on: boolean,
+-  { frame: frameSelector = FRAME, fade }: { frame?: string; fade?: HoleFade } = {}
++  {
++    frame: frameSelector = FRAME,
++    fade,
++  }: { frame?: string; fade?: HoleFade } = {}
+ ) {
+   const options = React.useRef({ frameSelector, fade });
+   options.current = { frameSelector, fade };
+@@ -160,6 +163,12 @@ export function useAppBackdrop(
+     let frame = 0;
+     const send = (message: Record<string, unknown>) =>
+       shell.send({ type: 'tvos-backdrop', id, ...message });
++    /** How the art fades into what's beneath: as asked, or as the artwork background's masks do. */
++    const edgesNow = (): HoleFade | null =>
++      options.current.fade ??
++      (html.hasAttribute('data-art-wash')
++        ? { bottom: FADE, start: FADE }
++        : null);
+     /** The page's copy back on screen first, then the hole closed beneath it and the app's put away. */
+     const hide = () => {
+       cancelAnimationFrame(frame);
+@@ -197,12 +206,15 @@ export function useAppBackdrop(
+       clip = at.visible;
+       asked = next;
+       const scale = window.visualViewport?.scale || 1;
++      // Over the app's own wash the page's background is clear, so the app fades the art's edges itself.
++      const fade = html.hasAttribute('data-app-wash') ? edgesNow() : null;
+       send({
+         src: next,
+         frame: scaled(at.box, scale),
+         clip: scaled(at.visible, scale),
+         pageWidth: innerWidth * scale,
+         quick: shown === null,
++        ...(fade && { fade, rtl: html.dir === 'rtl' }),
+       });
+     };
+     place.current = () => {
+@@ -222,12 +234,7 @@ export function useAppBackdrop(
+       shown = message.src;
+       if (!first) return;
+       // The app's is under the page's copy now: the hole first, then the copy hidden a frame later.
+-      const edges =
+-        options.current.fade ??
+-        (html.hasAttribute('data-art-wash')
+-          ? { bottom: FADE, start: FADE }
+-          : null);
+-      if (!cutHole(clip, edges)) return hide();
++      if (!cutHole(clip, edgesNow())) return hide();
+       frame = requestAnimationFrame(() => {
+         if (shown !== null) html.setAttribute(SHOWN, '');
+       });
+@@ -248,6 +255,11 @@ export function useAppBackdrop(
+       if (asked !== null || shown !== null) moved();
+     });
+     if (art.current) observer.observe(art.current);
++    // The app's wash coming or going changes who fades the art's edges: told again, in place.
++    const washes = new MutationObserver(() => {
++      if (asked !== null) show();
++    });
++    washes.observe(html, { attributeFilter: ['data-app-wash'] });
+     document.addEventListener('scroll', scrolled, {
+       capture: true,
+       passive: true,
+@@ -259,6 +271,7 @@ export function useAppBackdrop(
+       clearTimeout(rest);
+       cancelAnimationFrame(frame);
+       observer.disconnect();
++      washes.disconnect();
+       document.removeEventListener('scroll', scrolled, { capture: true });
+       removeEventListener('resize', moved);
+       unsubscribe();

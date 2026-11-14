@@ -31,6 +31,8 @@ final class BackdropStage {
     /// The art's box (`frame`) and the part of it shown (`clip`), in the container's points.
     private var box = CGRect.zero
     private var clip = CGRect.zero
+    /// How the art's bottom and start fade into the wash beneath, when the app draws that too.
+    private var edges: (bottom: CGFloat, start: CGFloat, rtl: Bool)?
     /// Decoded art by address, the newest last: Back to a title or the hero coming round finds it ready.
     private var decoded: [(src: String, image: UIImage)] = []
     private static let keep = 3
@@ -74,6 +76,12 @@ final class BackdropStage {
         owner = id
         box = rect(frame)
         self.clip = rect(clip)
+        // Over the app's own wash the page's background is clear, so the art's edges fade here.
+        let fadeIn = message.object("fade")
+        edges = fadeIn.map {
+            (bottom: CGFloat($0.number("bottom") ?? 0), start: CGFloat($0.number("start") ?? 0),
+             rtl: message.flag("rtl") == true)
+        }
         let fade = wasShown && message.flag("quick") != true && src != self.src
         self.src = src
         if let image = decoded.first(where: { $0.src == src })?.image {
@@ -99,6 +107,8 @@ final class BackdropStage {
     private func clear() {
         owner = nil
         src = nil
+        edges = nil
+        view.layer.mask = nil
         view.isHidden = true
         leaving?.removeFromSuperview()
         leaving = nil
@@ -113,6 +123,10 @@ final class BackdropStage {
     private func show(_ image: UIImage, fade: Bool) {
         view.frame = clip
         view.isHidden = false
+        view.layer.mask = edges.map {
+            FadeMask.layer(size: clip.size, clip: CGRect(origin: .zero, size: clip.size),
+                           bottom: $0.bottom, start: $0.start, rtl: $0.rtl)
+        }
         // The art covers its box from the top, as the page's `object-cover object-top`.
         let size = image.size
         let fill = max(box.width / max(size.width, 1), box.height / max(size.height, 1))

@@ -15,6 +15,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private lazy var stage = VideoStage(video: videoView, subtitles: subtitleView)
     /// The hero's or a title page's backdrop at 4K, beneath the page (`tvos-backdrop`, BackdropStage).
     private let backdrop = BackdropStage()
+    /// "Background from artwork"'s wash, beneath the backdrop (`tvos-wash`, WashStage).
+    private let wash = WashStage()
     private var web: AIOWebView?
     private let status = UILabel()
     private var engine: AetherPlayer?
@@ -48,6 +50,11 @@ final class MainViewController: UIViewController, RemoteReceiver {
         // Beneath the video too: a trailer plays only while the backdrop is put away.
         view.insertSubview(backdrop.view, at: 0)
         backdrop.reply = { [weak self] in self?.sendToPage($0) }
+        // Beneath everything: the page's background, which it stands in for.
+        wash.view.frame = view.bounds
+        wash.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(wash.view, at: 0)
+        wash.reply = { [weak self] in self?.sendToPage($0) }
 
         status.frame = view.bounds.insetBy(dx: 160, dy: 160)
         status.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -184,6 +191,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
         // The page that set a frame is gone: the video fills the screen and the page is whole again.
         stage.place(nil)
         backdrop.reset()
+        wash.reset()
         let now = Date()
         pageEnds = pageEnds.filter { now.timeIntervalSince($0) < 10 * Self.quickEnd } + [now]
         var quick = 0
@@ -414,13 +422,20 @@ final class MainViewController: UIViewController, RemoteReceiver {
      * the page, typing straight into the field; passwords and PINs get the
      * alert, which keeps them hidden and sends a PIN's form on Done.
      */
+    /// The page's colour, and the wash: the page's copy, or the one drawn here beneath it (WashStage).
+    private func keyboardLook(_ message: Message) -> KeyboardLook {
+        var look = KeyboardLook(background: message.text("background"), wash: message.text("wash"))
+        if look.wash == nil, !wash.view.isHidden { look.wash = wash.image }
+        return look
+    }
+
     private func showKeyboard(_ message: Message) {
         guard presentedViewController == nil else { return }
         if message.flag("secure") == true || message.flag("numeric") == true { return showKeyboardAlert(message) }
         let keyboard = SearchKeyboard(
             text: message.text("value") ?? "",
             prompt: message.text("label") ?? "",
-            look: KeyboardLook(background: message.text("background"), wash: message.text("wash")),
+            look: keyboardLook(message),
             keyboardType: message.flag("email") == true ? .emailAddress : message.flag("url") == true ? .URL : .default,
             onChange: { [weak self] text in
                 guard let self else { return }
@@ -513,6 +528,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // A page that loaded again knows nothing of a frame the last one set.
             stage.place(nil)
             backdrop.reset()
+            wash.reset()
             web?.focusPage()
             pipButtonShown = false
             updatePipButton()
@@ -582,6 +598,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
         case "tvos-backdrop":
             // The hero's or a title page's backdrop, drawn here at 4K, or put away (patches/web/0048).
             backdrop.handle(message)
+        case "tvos-wash":
+            // "Background from artwork"'s wash, drawn here beneath the page, or none (patches/web/0050).
+            wash.handle(message)
         case "tvos-page-stats":
             MemoryLog.pageStats(message)
         case "tvos-page-moved":
