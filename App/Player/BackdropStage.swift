@@ -65,8 +65,11 @@ final class BackdropStage {
 
     /// As the page's own layers fade (`duration-700`, and 400 ms from nothing).
     private static let fadeSeconds: TimeInterval = 0.7
-    /// Putting the art away as the page scrolls: about the frame or two WebKit takes to show its own copy.
-    private static let clearSeconds: TimeInterval = 0.1
+    /// Putting the art away as the page scrolls: the two frames or so WebKit takes to show its own copy.
+    private static let clearSeconds: TimeInterval = 2.0 / 60
+    /// The art put away, held those frames, where it was and the scroll it was placed at.
+    private var leavingGhost: UIView?
+    private var ghostAt: (frame: CGRect, scroll: CGFloat) = (.zero, 0)
     /// The width the app draws a backdrop down to: the 4K screen's.
     private static let width = 3840
 
@@ -80,6 +83,18 @@ final class BackdropStage {
     /// The page's `tvos-backdrop`: a backdrop to draw where it says, or `src: null` to put it away.
     func handle(_ message: Message) {
         let id = Int(message.number("id") ?? 0)
+        // The page hid its copy (patches/web/0057): the art, drawn unseen till now, shows a frame on,
+        // as WebKit draws the page without the copy. Before that frame, they're both drawn.
+        if message.flag("revealed") == true {
+            guard owner == id, awaitingReveal else { return }
+            awaitingReveal = false
+            ArtLog.note("backdrop #\(id) shown as the page hid its copy")
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.frameSeconds) { [weak self] in
+                guard let self, self.owner == id, !self.awaitingReveal else { return }
+                self.applyAlpha(animated: false)
+            }
+            return
+        }
         guard let src = message.text("src"), let frame = message.object("frame"),
               let clip = message.object("clip"), let web, let container = view.superview else {
             // Only the backdrop that asked puts itself away: the next page's can ask first.
@@ -124,18 +139,10 @@ final class BackdropStage {
         self.src = src
         // A trailer playing in its place (patches/web/0051): the art fades off it, as the page's did, and
         // back once it ends, kept meanwhile so the page needn't bring its own copy back.
-        let alpha: CGFloat = message.flag("hidden") == true ? 0 : 1
-        if view.alpha != alpha {
-            if wasShown {
-                UIView.animate(withDuration: Self.fadeSeconds, delay: 0,
-                               options: [.curveEaseOut, .beginFromCurrentState]) { [view] in
-                    view.alpha = alpha
-                }
-            } else {
-                view.layer.removeAnimation(forKey: "opacity")
-                view.alpha = alpha
-            }
-        }
+        pageHidden = message.flag("hidden") == true
+        // From nothing, the page's copy shows over it: unseen until the page has hidden the copy.
+        if message.flag("quick") == true && !wasShown { awaitingReveal = true }
+        applyAlpha(animated: wasShown)
         if let image = decoded.first(where: { $0.src == src })?.image {
             show(image, src: src, fade: fade)
             drawn(id, src)
@@ -163,6 +170,12 @@ final class BackdropStage {
 
     /// The page scrolled: the art moves with it, frame by frame, until the page puts it away.
     private func scrolled(to y: CGFloat) {
+        if let ghost = leavingGhost {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            ghost.frame = ghostAt.frame.offsetBy(dx: 0, dy: -(y - ghostAt.scroll))
+            CATransaction.commit()
+        }
         guard !view.isHidden, let placedAt else { return }
         let moved = y - placedAt
         guard abs(moved) >= 0.5 || view.frame.origin.y != clip.minY else { return }
@@ -225,13 +238,15 @@ final class BackdropStage {
         edges = nil
         maskKey = nil
         let pictures = [leaving, shown].compactMap { $0 }
-        if !pictures.isEmpty { ArtLog.note("backdrop art faded away") }
+        if !pictures.isEmpty { ArtLog.note("backdrop art put away") }
         leaving = nil
         shown = nil
         shownSrc = nil
         loading = nil
         placedAt = nil
-        // Faded out on a copy of the view, over the frame WebKit takes to show the page as it is
+        awaitingReveal = false
+        pageHidden = false
+        // Held on a copy of the view, over the frame WebKit takes to show the page as it is
         // now (its copy back, the hole closed): gone at once, what's beneath showed through the hole
         // for that frame. The view itself is free at once for the next ask.
         if !view.isHidden, view.alpha > 0, !pictures.isEmpty, let container = view.superview {
@@ -245,10 +260,16 @@ final class BackdropStage {
             ghost.layer.mask = mask
             for picture in pictures { ghost.addSubview(picture) }
             container.insertSubview(ghost, aboveSubview: view)
-            UIView.animate(withDuration: Self.clearSeconds, delay: 0, options: [.curveEaseIn]) {
-                ghost.alpha = 0
-            } completion: { _ in
-                ghost.removeFromSuperview()
+            // Held whole for the frames WebKit takes to show its copy again, moving with the scroll,
+            // then gone at once. Faded out over a tenth of a second, it and the copy were both drawn
+            // that long, doubling the art where both fade out: a lighter flash at its edges.
+            leavingGhost?.removeFromSuperview()
+            leavingGhost = ghost
+            // Its frame already follows the scroll to now, so it moves on from where the scroll is.
+            ghostAt = (frame: ghost.frame, scroll: scrollView?.contentOffset.y ?? 0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.clearSeconds) { [weak self, weak ghost] in
+                ghost?.removeFromSuperview()
+                if let self, self.leavingGhost === ghost { self.leavingGhost = nil }
             }
         } else {
             for picture in pictures { picture.removeFromSuperview() }
@@ -340,6 +361,28 @@ final class BackdropStage {
 
     /// From the app menu: a new title's art replaces the last at once, to tell the crossfade's part in a flash.
     var cuts = false
+
+    /// A trailer plays in the art's place (the page's `hidden`).
+    private var pageHidden = false
+    /// Drawn from nothing while the page's copy still shows over it, waiting for the page to hide it.
+    private var awaitingReveal = false
+    /// About one frame of the screen's.
+    private static let frameSeconds: TimeInterval = 1.0 / 60
+
+    /// Seen only once the page has hidden its copy, and not while a trailer plays in its place.
+    private func applyAlpha(animated: Bool) {
+        let alpha: CGFloat = pageHidden || awaitingReveal ? 0 : 1
+        guard view.alpha != alpha else { return }
+        if animated {
+            UIView.animate(withDuration: Self.fadeSeconds, delay: 0,
+                           options: [.curveEaseOut, .beginFromCurrentState]) { [view] in
+                view.alpha = alpha
+            }
+        } else {
+            view.layer.removeAnimation(forKey: "opacity")
+            view.alpha = alpha
+        }
+    }
 
     private func remember(_ src: String, _ image: UIImage) {
         decoded.removeAll { $0.src == src }

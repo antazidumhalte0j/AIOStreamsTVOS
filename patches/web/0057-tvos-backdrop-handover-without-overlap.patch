@@ -1,0 +1,55 @@
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index a590a2c66..8a05436ea 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -179,7 +179,6 @@ export function useAppBackdrop(
+     let asked: string | null = null;
+     let clip: Rect | null = null;
+     let rest = 0;
+-    let frame = 0;
+     const send = (message: Record<string, unknown>) =>
+       shell.send({ type: 'tvos-backdrop', id, ...message });
+     /** How the art fades into what's beneath: as asked, or as the artwork background's masks do. */
+@@ -191,11 +190,10 @@ export function useAppBackdrop(
+     /**
+      * The page's copy back on screen, the hole closed and the app's put away, all at once: sent from
+      * the scroll's own event, the app hears before WebKit's frame that moves the page reaches it, and
+-     * fades its art out over that frame. A frame later, the page had moved while the app's art and
++     * holds its art over that frame. A frame later, the page had moved while the app's art and
+      * the hole stayed where they were, showing the art twice (AIOStreamsTVOS).
+      */
+     const hide = () => {
+-      cancelAnimationFrame(frame);
+       if (asked === null && shown === null) return;
+       html.removeAttribute(SHOWN);
+       asked = null;
+@@ -285,13 +283,16 @@ export function useAppBackdrop(
+       const first = shown === null;
+       shown = message.src;
+       if (!first) return;
+-      // The app's is under the page's copy now: the hole first, then the copy hidden a frame later.
+-      // Behind a trailer the trailer's hole stands, and the art's is cut as it ends.
++      // The app's is drawn, unseen, beneath the page's copy now. The hole and the copy hidden at
++      // once, then the app told to show its art, which it does a frame on, as WebKit draws the
++      // page so. Both shown for a moment, as before (the copy hidden a frame after the app's art
++      // came, which took up to a fifth of a second), doubled the art where both fade out, a
++      // lighter flash at its edges (AIOStreamsTVOS). Behind a trailer the trailer's hole stands,
++      // and the art's is cut as it ends.
+       if (!options.current.hidden && !cutHole(clip, edgesNow()))
+         return hide();
+-      frame = requestAnimationFrame(() => {
+-        if (shown !== null) html.setAttribute(SHOWN, '');
+-      });
++      html.setAttribute(SHOWN, '');
++      send({ src: shown, revealed: true });
+     });
+     const moved = () => {
+       hide();
+@@ -332,7 +333,6 @@ export function useAppBackdrop(
+       place.current = null;
+       turned.current = null;
+       clearTimeout(rest);
+-      cancelAnimationFrame(frame);
+       observer.disconnect();
+       washes.disconnect();
+       document.removeEventListener('scroll', scrolled, { capture: true });
