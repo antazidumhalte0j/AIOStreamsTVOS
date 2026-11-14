@@ -1,0 +1,60 @@
+diff --git a/packages/web/src/components/shell/art-wash.tsx b/packages/web/src/components/shell/art-wash.tsx
+index 04c76c1cc..19d4a3cea 100644
+--- a/packages/web/src/components/shell/art-wash.tsx
++++ b/packages/web/src/components/shell/art-wash.tsx
+@@ -23,10 +23,11 @@ let nextId = 0;
+  */
+ function useAppWash(
+   frame: ReturnType<typeof currentWash>,
+-  drawHere: (frame: NonNullable<ReturnType<typeof currentWash>>) => void
++  drawHere: (frame: NonNullable<ReturnType<typeof currentWash>>) => void,
++  app: boolean
+ ): boolean {
+   const shell = appBridge();
+-  const on = !!shell && appleTv();
++  const on = app && !!shell && appleTv();
+   const [id] = React.useState(() => ++nextId);
+   const latest = React.useRef({ frame, drawHere });
+   latest.current = { frame, drawHere };
+@@ -67,7 +68,18 @@ function useAppWash(
+  * The artwork wash, each new one fading in over the last. The covered layer
+  * is hidden after, so the screen composites one.
+  */
+-export function ArtWash({ className }: { className?: string }) {
++export function ArtWash({
++  className,
++  app = false,
++}: {
++  className?: string;
++  /**
++   * The one behind the whole page, which the Apple TV app draws. Another, as
++   * the version picker's inside its dialog, is drawn here: given to the app
++   * too, closing it took the page's wash away with it (AIOStreamsTVOS).
++   */
++  app?: boolean;
++}) {
+   const frame = React.useSyncExternalStore(subscribeWash, currentWash);
+   const first = React.useRef<HTMLCanvasElement>(null);
+   const second = React.useRef<HTMLCanvasElement>(null);
+@@ -87,7 +99,7 @@ export function ArtWash({ className }: { className?: string }) {
+     },
+     []
+   );
+-  const inApp = useAppWash(frame, drawHere);
++  const inApp = useAppWash(frame, drawHere, app);
+   React.useLayoutEffect(() => {
+     const layers = [first.current!, second.current!];
+     if (!frame || inApp) {
+diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
+index 33bf1bbf7..f03966e3f 100644
+--- a/packages/web/src/components/shell/layout.tsx
++++ b/packages/web/src/components/shell/layout.tsx
+@@ -113,7 +113,7 @@ export function PageBackground() {
+       data-ui="page-background"
+       className="page-background pointer-events-none fixed inset-0 -z-10 bg-[--background]"
+     >
+-      {wash && <ArtWash />}
++      {wash && <ArtWash app />}
+     </div>
+   );
+ }
