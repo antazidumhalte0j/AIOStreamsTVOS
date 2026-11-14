@@ -370,11 +370,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
         // What the app draws beneath the page now, beside the page's marks in the memory lines below.
         lines.append("Backdrop: \(backdrop.summary) · wash: \(wash.view.isHidden ? "none" : "shown")")
         lines.append("Video: \(stage.summary), \(videoView.isHidden ? "video view hidden" : "video view shown")")
-        if !ArtLog.report.isEmpty {
-            lines.append("")
-            lines.append("Art beneath the page, oldest first, each after the one before:")
-            lines += ArtLog.report
-        }
         lines.append("")
         lines += AppAnswers.videoLines(player: engine, window: view.window)
         lines.append("")
@@ -401,33 +396,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
                 self?.flashStatus(priming
                     ? "Dolby primer off from the next video"
                     : "Dolby primer on from the next video: for surround that plays as stereo")
-            },
-            // To tell the app's 4K backdrop on screen from the page's own copy, which looks the same.
-            AppMenu.Action(title: backdrop.tinted ? "Stop tinting the app's backdrop" : "Tint the app's backdrop red",
-                           destructive: false) { [weak self] in
-                guard let self else { return }
-                self.backdrop.tinted.toggle()
-                self.flashStatus(self.backdrop.tinted
-                    ? "The app's backdrop is tinted red; art not tinted is the page's own"
-                    : "The app's backdrop is no longer tinted")
-            },
-            // To tell a flash from the wash changing apart from one the page draws.
-            AppMenu.Action(title: wash.frozen ? "Let the wash change again" : "Freeze the wash",
-                           destructive: false) { [weak self] in
-                guard let self else { return }
-                self.wash.frozen.toggle()
-                self.flashStatus(self.wash.frozen
-                    ? "The wash stays as it is while titles change"
-                    : "The wash changes with the titles again")
-            },
-            // To tell the backdrop's crossfade's part in a flash as a title changes.
-            AppMenu.Action(title: backdrop.cuts ? "Crossfade between backdrops" : "Cut between backdrops",
-                           destructive: false) { [weak self] in
-                guard let self else { return }
-                self.backdrop.cuts.toggle()
-                self.flashStatus(self.backdrop.cuts
-                    ? "A new title's art replaces the last at once"
-                    : "A new title's art crossfades in again")
             },
             AppMenu.Action(title: "Reset the app's data", destructive: true) { [weak self] in self?.confirmReset() },
             AppMenu.Action(title: "Close", destructive: false) {},
@@ -683,9 +651,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             sendToPage(["type": "tvos-page-color", "color": text, "drawn": true])
         case "tvos-page-stats":
             MemoryLog.pageStats(message)
-        case "tvos-art-event":
-            // The page's marks for the art drawn here changing, for the app menu's art log (ArtLog).
-            ArtLog.note(String((message.text("text") ?? "").prefix(200)))
+
         case "tvos-page-moved":
             MemoryLog.pageMoved(from: message.text("from") ?? "?", to: message.text("to") ?? "?")
         default:

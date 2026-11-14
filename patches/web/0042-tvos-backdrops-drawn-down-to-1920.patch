@@ -68,7 +68,7 @@ index 3f53049f0..0f0c9b333 100644
      (el: HTMLImageElement | null) => {
        view.current = el;
 diff --git a/packages/web/src/components/media/hero.tsx b/packages/web/src/components/media/hero.tsx
-index 470268111..5c5c54c65 100644
+index 7653961a6..7266365e5 100644
 --- a/packages/web/src/components/media/hero.tsx
 +++ b/packages/web/src/components/media/hero.tsx
 @@ -11,6 +11,7 @@ import { useMediaQuery } from '@aiostreams/ui/hooks/media-query';

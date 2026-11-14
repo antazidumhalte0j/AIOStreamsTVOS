@@ -37,17 +37,11 @@ final class WashStage {
     func handle(_ message: Message) {
         let id = Int(message.number("id") ?? 0)
         guard let src = message.text("src") else {
-            if owner == nil || owner == id {
-                if shown != nil { ArtLog.note("wash #\(id) put away") }
-                clear()
-            }
+            if owner == nil || owner == id { clear() }
             return
         }
         owner = id
-        // Frozen from the app menu, to tell a flash from the wash changing apart from the page's.
-        if frozen, shown != nil { return drawn(id, src, true) }
         guard src != self.src || shown == nil else { return drawn(id, src, true) }
-        ArtLog.note("wash #\(id) asked for new art")
         self.src = src
         guard let address = URL(string: src) else { return drawn(id, src, false) }
         ArtWash.make(address) { made in
@@ -71,9 +65,6 @@ final class WashStage {
     /// The page reloaded, or its process ended.
     func reset() { clear() }
 
-    /// From the app menu: the wash shown stays, whatever the page asks for, until this is off again.
-    var frozen = false
-
     /// The backdrop is loading new art (BackdropStage's `awaitingArt`).
     var waitForArt: () -> Bool = { false }
     /// A wash waiting for its title's art, and the longest it waits.
@@ -82,7 +73,6 @@ final class WashStage {
     private static let holdSeconds: TimeInterval = 1
 
     private func hold(_ image: UIImage) {
-        ArtLog.note("wash waits for the backdrop's new art")
         held = image
         holdEnd?.cancel()
         let end = DispatchWorkItem { [weak self] in
@@ -114,7 +104,6 @@ final class WashStage {
     }
 
     private func drawn(_ id: Int, _ src: String, _ drawn: Bool) {
-        ArtLog.note(drawn ? "wash #\(id) drawn" : "wash #\(id) COULDN'T be drawn: the page draws its own")
         reply(["type": "tvos-wash", "id": id, "src": src, "drawn": drawn])
     }
 

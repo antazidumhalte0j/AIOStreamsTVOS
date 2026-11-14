@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/lib/artwork/background.ts b/packages/web/src/lib/artwork/background.ts
-index 659f66a51..3493adc5d 100644
+index eec454934..1e59283ed 100644
 --- a/packages/web/src/lib/artwork/background.ts
 +++ b/packages/web/src/lib/artwork/background.ts
 @@ -5,6 +5,7 @@ import { useSession } from '@/lib/jellyfin/session';

@@ -1365,32 +1365,9 @@ enum BridgeScript {
       })(),
       // What was on screen that the reloads with "Background from artwork" on point at.
       artWash: document.documentElement.hasAttribute('data-art-wash'),
-      // Who draws the wash and the backdrop now (patches/web/0048, 0050), for art drawn with hard edges.
-      appArt: ['data-app-wash', 'data-app-backdrop', 'data-video-hole']
+      // What the app draws beneath the page now (patches/web/0048): its colour, the wash and the backdrop.
+      appArt: ['data-app-color', 'data-app-wash', 'data-app-backdrop']
         .filter((name) => document.documentElement.hasAttribute(name))
-        .concat(document.querySelector('[data-ui="page-background"][data-app-hole]') ? ['data-app-hole'] : [])
-        // A trailer the page has mounted, playing or on its way, in the hero or behind a title page.
-        .concat(['hero-trailer', 'item-trailer'].filter((name) => document.querySelector(`[data-ui="${name}"]`)))
-        // While the app draws the art, any of the page's own backdrop pictures still drawn, by where
-        // it is and what keeps it on screen: these show with hard edges over the app's.
-        .concat((() => {
-          if (!document.documentElement.hasAttribute('data-app-backdrop')) return [];
-          const shown = [];
-          const pictures = document.querySelectorAll(
-            "[data-ui='hero-backdrop'],[data-ui='item-backdrop-image'],[data-ui='hero-art'] img,[data-ui='hero-art'] canvas," +
-            "[data-ui='hero-corner'] img,[data-ui='item-backdrop'] img,[data-ui='item-backdrop'] canvas");
-          for (const el of new Set(pictures)) {
-            const box = el.getBoundingClientRect();
-            if (box.width < 2 || box.height < 2 || box.bottom <= 0 || box.top >= innerHeight) continue;
-            const style = getComputedStyle(el);
-            if (style.visibility === 'hidden' && Number(style.opacity) === 0) continue;
-            const holder = el.closest('[data-ui]:not([data-ui="hero-backdrop"]):not([data-ui="item-backdrop-image"])');
-            const where = holder ? holder.getAttribute('data-ui') : 'page';
-            shown.push(`copy SHOWN: ${el.getAttribute('data-ui') || el.tagName.toLowerCase()} in ${where}` +
-              ` (visibility ${style.visibility}, opacity ${style.opacity}, ${Math.round(box.width)}x${Math.round(box.height)})`);
-          }
-          return shown.slice(0, 3);
-        })())
         .join(' ') || 'none',
       cardPreview: !!document.querySelector('[data-ui="open-card"]:not(.invisible)'),
       layers: document.querySelectorAll('[data-glide-layer]').length,
@@ -1415,125 +1392,6 @@ enum BridgeScript {
         send(pageStats());
       } catch {}
     }, STATS_EVERY);
-  } catch {}
-
-  /*
-   * While the app draws the art (`data-app-backdrop`), a new title's picture in the page's own copy
-   * fades in (upstream's `animate-in fade-in-0`, or a title page's `transition-opacity`). WebKit runs
-   * those on the compositor, past the rule that hides the copy, so for that fade the copy showed
-   * over the app's art: a lighter flash at its edges, where the two fade differently, with the app's
-   * art tinted and the wash frozen. Each is finished as it starts, which a CSS animation doesn't run
-   * again, so the copy is still back at once as the page scrolls. The art log notes each, with the
-   * opacity the picture had then.
-   */
-  try {
-    const COPY = "[data-ui='hero-art'],[data-ui='hero-corner'],[data-ui='item-backdrop']";
-    const settle = (img) => {
-      if (!document.documentElement.hasAttribute('data-app-backdrop') || !img.closest(COPY)) return;
-      const running = img.getAnimations().filter((a) => a.playState === 'running' || a.playState === 'pending');
-      if (!running.length) return;
-      const opacity = getComputedStyle(img).opacity;
-      for (const animation of running) {
-        try {
-          animation.finish();
-        } catch {
-          animation.cancel();
-        }
-      }
-      send({ type: 'tvos-art-event', text: `page copy's fade cut short (${running.length}, its opacity ${opacity})` });
-    };
-    /*
-     * For 1.5 s after a new picture comes into the copy, every frame: the first thing of the page's
-     * drawn over the art, into the art log (a flash there lasts a moment, which the five-second
-     * page stats can't catch). The copy's pictures shown at all, and the page's background or root
-     * no longer clear over the app's wash.
-     */
-    let watchUntil = 0;
-    let watching = false;
-    const describe = (el) => {
-      const style = getComputedStyle(el);
-      const names = el.getAnimations().map((a) => a.animationName || a.transitionProperty || a.constructor.name).join('+');
-      return `${el.getAttribute('data-ui') || el.tagName.toLowerCase()} (visibility ${style.visibility}, opacity ${style.opacity}` +
-        `${names ? ', running ' + names : ''}, class "${String(el.className).slice(0, 60)}")`;
-    };
-    const watchFrames = () => {
-      if (watching) return;
-      watching = true;
-      let reported = false;
-      const html = document.documentElement;
-      const background = document.querySelector("[data-ui='page-background']");
-      const frame = () => {
-        if (!html.hasAttribute('data-app-backdrop') || performance.now() > watchUntil || reported) {
-          watching = false;
-          return;
-        }
-        for (const img of document.querySelectorAll(COPY.split(',').map((s) => s + ' img').join(','))) {
-          const box = img.getBoundingClientRect();
-          if (box.width < 2 || box.bottom <= 0 || box.top >= innerHeight) continue;
-          const style = getComputedStyle(img);
-          if (style.visibility !== 'hidden' || Number(style.opacity) > 0.01) {
-            reported = true;
-            send({ type: 'tvos-art-event', text: 'FLASH WATCH: copy drawn: ' + describe(img) });
-            break;
-          }
-        }
-        if (!reported && html.hasAttribute('data-app-wash')) {
-          const clear = (el) => !el || /rgba\(0, 0, 0, 0\)|transparent/.test(getComputedStyle(el).backgroundColor);
-          if (!clear(background) || !clear(html)) {
-            reported = true;
-            send({ type: 'tvos-art-event', text: `FLASH WATCH: page ${!clear(background) ? 'background' : 'root'} not clear (` +
-              getComputedStyle(!clear(background) ? background : html).backgroundColor + ')' });
-          }
-        }
-        requestAnimationFrame(frame);
-      };
-      requestAnimationFrame(frame);
-    };
-    const look = (node) => {
-      if (node.nodeType !== 1) return;
-      const pictures = node.tagName === 'IMG' ? [node] : [...node.getElementsByTagName('img')];
-      for (const img of pictures) settle(img);
-      if (document.documentElement.hasAttribute('data-app-backdrop') && pictures.some((img) => img.closest(COPY))) {
-        watchUntil = performance.now() + 1500;
-        watchFrames();
-      }
-    };
-    new MutationObserver((records) => {
-      for (const record of records) {
-        if (record.type === 'childList') record.addedNodes.forEach(look);
-        else if (record.target.tagName === 'IMG') settle(record.target);
-      }
-    }).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      // A layer's class changes as it starts to fade out, or a title page's as its art arrives.
-      attributeFilter: ['class'],
-    });
-  } catch {}
-
-  /*
-   * The page's marks for the art the app draws beneath it (patches/web/0048, 0050) as they change,
-   * into the app's art log (ArtLog.swift), beside what the app did: a flash as a backdrop is
-   * replaced lasts only a moment, so the app menu's lines on what's drawn now can't catch it.
-   */
-  try {
-    const ART_MARKS = ['data-app-wash', 'data-app-backdrop', 'data-video-hole', 'data-art-wash', 'data-app-hole'];
-    new MutationObserver((records) => {
-      for (const record of records) {
-        const el = record.target;
-        const on = el.hasAttribute(record.attributeName);
-        // Set again while set, or cleared while clear, changes nothing on screen.
-        if (on === (record.oldValue !== null)) continue;
-        const where = el === document.documentElement ? '' : ' on ' + (el.getAttribute('data-ui') || el.tagName.toLowerCase());
-        send({ type: 'tvos-art-event', text: `page ${on ? 'set' : 'cleared'} ${record.attributeName}${where}` });
-      }
-    }).observe(document.documentElement, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ART_MARKS,
-      attributeOldValue: true,
-    });
   } catch {}
 
   /*
