@@ -1,0 +1,26 @@
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 2c091c034..9464938f9 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -11,10 +11,17 @@ import { appBridge, appleTv } from './bridge';
+  * again, through a hole cut in the page's background (as for a trailer).
+  */
+ 
+-/** How long the page holds still before the app's picture shows again: past a keyed scroll's glide. */
+-const REST_MS = 450;
+-/** As a page opens: past its entrance, which moves it a few pixels (the layout's `PAGE_FADE`). */
+-const FIRST_MS = 800;
++/**
++ * How long the page holds still before the app's picture shows again. Each frame a scroll moves the
++ * page starts it over, so it's counted from the glide's end whatever its length; short, so the art
++ * sharpens soon after a move, and long enough that the next press of a run comes within it.
++ */
++const REST_MS = 200;
++/**
++ * As a page opens: past its entrance (the layout's `PAGE_FADE`, a spring that moves it 6 px and is
++ * still within a tenth of a pixel by 300 ms), which the app's picture couldn't follow.
++ */
++const FIRST_MS = 400;
+ /** On `<html>` while the app's picture shows, which hides the page's own copy (BridgeScript). */
+ const SHOWN = 'data-app-backdrop';
+ const MASK = ['mask-image', '-webkit-mask-image'];
