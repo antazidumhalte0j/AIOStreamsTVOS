@@ -1332,6 +1332,8 @@ enum BridgeScript {
       appArt: ['data-app-wash', 'data-app-backdrop', 'data-video-hole']
         .filter((name) => document.documentElement.hasAttribute(name))
         .concat(document.querySelector('[data-ui="page-background"][data-app-hole]') ? ['data-app-hole'] : [])
+        // A trailer the page has mounted, playing or on its way, in the hero or behind a title page.
+        .concat(['hero-trailer', 'item-trailer'].filter((name) => document.querySelector(`[data-ui="${name}"]`)))
         .join(' ') || 'none',
       cardPreview: !!document.querySelector('[data-ui="open-card"]:not(.invisible)'),
       layers: document.querySelectorAll('[data-glide-layer]').length,

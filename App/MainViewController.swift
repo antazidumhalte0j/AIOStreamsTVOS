@@ -365,6 +365,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
         }
         // What the app draws beneath the page now, beside the page's marks in the memory lines below.
         lines.append("Backdrop: \(backdrop.summary) · wash: \(wash.view.isHidden ? "none" : "shown")")
+        lines.append("Video: \(stage.summary), \(videoView.isHidden ? "video view hidden" : "video view shown")")
         lines.append("")
         lines += AppAnswers.videoLines(player: engine, window: view.window)
         lines.append("")

@@ -139,6 +139,22 @@ final class VideoStage {
 
     private static func behindPage(_ frame: VideoFrame) -> Bool { frame.hidden && frame.clip != nil }
 
+    /// For the app menu: where the video is and whether it shows, beside the backdrop's line.
+    var summary: String {
+        let alpha = String(format: "%.2f", view.alpha)
+        guard let frame else {
+            return "full screen, alpha \(alpha)\(afterTrailer ? ", held unseen after a trailer" : "")"
+        }
+        let r = frame.rect
+        var text = "boxed at \(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))x\(Int(r.height))"
+        text += frame.hidden ? " behind the page" : " over the page"
+        if let clip = frame.clip {
+            text += ", clipped to \(Int(clip.minX)),\(Int(clip.minY)) \(Int(clip.width))x\(Int(clip.height))"
+            text += ", fades \(frame.fade), \(frame.playing ? "playing" : "waiting")"
+        }
+        return text + ", \(view.layer.mask == nil ? "no mask" : "masked"), alpha \(alpha)"
+    }
+
     /// Lays the stage and the hole out again, as picture in picture starts or ends.
     func refresh(animated: Bool = false) {
         guard let container = view.superview else { return }
