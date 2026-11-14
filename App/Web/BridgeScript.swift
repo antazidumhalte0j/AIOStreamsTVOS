@@ -1419,10 +1419,61 @@ enum BridgeScript {
       }
       send({ type: 'tvos-art-event', text: `page copy's fade cut short (${running.length}, its opacity ${opacity})` });
     };
+    /*
+     * For 1.5 s after a new picture comes into the copy, every frame: the first thing of the page's
+     * drawn over the art, into the art log (a flash there lasts a moment, which the five-second
+     * page stats can't catch). The copy's pictures shown at all, and the page's background or root
+     * no longer clear over the app's wash.
+     */
+    let watchUntil = 0;
+    let watching = false;
+    const describe = (el) => {
+      const style = getComputedStyle(el);
+      const names = el.getAnimations().map((a) => a.animationName || a.transitionProperty || a.constructor.name).join('+');
+      return `${el.getAttribute('data-ui') || el.tagName.toLowerCase()} (visibility ${style.visibility}, opacity ${style.opacity}` +
+        `${names ? ', running ' + names : ''}, class "${String(el.className).slice(0, 60)}")`;
+    };
+    const watchFrames = () => {
+      if (watching) return;
+      watching = true;
+      let reported = false;
+      const html = document.documentElement;
+      const background = document.querySelector("[data-ui='page-background']");
+      const frame = () => {
+        if (!html.hasAttribute('data-app-backdrop') || performance.now() > watchUntil || reported) {
+          watching = false;
+          return;
+        }
+        for (const img of document.querySelectorAll(COPY.split(',').map((s) => s + ' img').join(','))) {
+          const box = img.getBoundingClientRect();
+          if (box.width < 2 || box.bottom <= 0 || box.top >= innerHeight) continue;
+          const style = getComputedStyle(img);
+          if (style.visibility !== 'hidden' || Number(style.opacity) > 0.01) {
+            reported = true;
+            send({ type: 'tvos-art-event', text: 'FLASH WATCH: copy drawn: ' + describe(img) });
+            break;
+          }
+        }
+        if (!reported && html.hasAttribute('data-app-wash')) {
+          const clear = (el) => !el || /rgba\(0, 0, 0, 0\)|transparent/.test(getComputedStyle(el).backgroundColor);
+          if (!clear(background) || !clear(html)) {
+            reported = true;
+            send({ type: 'tvos-art-event', text: `FLASH WATCH: page ${!clear(background) ? 'background' : 'root'} not clear (` +
+              getComputedStyle(!clear(background) ? background : html).backgroundColor + ')' });
+          }
+        }
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    };
     const look = (node) => {
       if (node.nodeType !== 1) return;
-      if (node.tagName === 'IMG') settle(node);
-      else for (const img of node.getElementsByTagName('img')) settle(img);
+      const pictures = node.tagName === 'IMG' ? [node] : [...node.getElementsByTagName('img')];
+      for (const img of pictures) settle(img);
+      if (document.documentElement.hasAttribute('data-app-backdrop') && pictures.some((img) => img.closest(COPY))) {
+        watchUntil = performance.now() + 1500;
+        watchFrames();
+      }
     };
     new MutationObserver((records) => {
       for (const record of records) {
