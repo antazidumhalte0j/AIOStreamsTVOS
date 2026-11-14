@@ -411,6 +411,15 @@ final class MainViewController: UIViewController, RemoteReceiver {
                     ? "The app's backdrop is tinted red; art not tinted is the page's own"
                     : "The app's backdrop is no longer tinted")
             },
+            // To tell a flash from the wash changing apart from one the page draws.
+            AppMenu.Action(title: wash.frozen ? "Let the wash change again" : "Freeze the wash",
+                           destructive: false) { [weak self] in
+                guard let self else { return }
+                self.wash.frozen.toggle()
+                self.flashStatus(self.wash.frozen
+                    ? "The wash stays as it is while titles change"
+                    : "The wash changes with the titles again")
+            },
             AppMenu.Action(title: "Reset the app's data", destructive: true) { [weak self] in self?.confirmReset() },
             AppMenu.Action(title: "Close", destructive: false) {},
         ])

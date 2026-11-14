@@ -44,6 +44,8 @@ final class WashStage {
             return
         }
         owner = id
+        // Frozen from the app menu, to tell a flash from the wash changing apart from the page's.
+        if frozen, shown != nil { return drawn(id, src, true) }
         guard src != self.src || shown == nil else { return drawn(id, src, true) }
         ArtLog.note("wash #\(id) asked for new art")
         self.src = src
@@ -68,6 +70,9 @@ final class WashStage {
 
     /// The page reloaded, or its process ended.
     func reset() { clear() }
+
+    /// From the app menu: the wash shown stays, whatever the page asks for, until this is off again.
+    var frozen = false
 
     /// The backdrop is loading new art (BackdropStage's `awaitingArt`).
     var waitForArt: () -> Bool = { false }
