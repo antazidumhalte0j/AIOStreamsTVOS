@@ -102,6 +102,40 @@ enum BridgeScript {
    */
   const SLIDES = true;
   /*
+   * Rows' glide layers only near focus. Every row's three, kept composited at WebKit's 2x, came to
+   * about 200 MB by the page's estimate on a title page, more than its pictures: the likely reason
+   * its process was still ended moving between pages. With ROW_LAYERS_NEAR, only the row with focus
+   * and the rows either side of it keep theirs (`data-glide-near`, set as focus moves); the rest are
+   * drawn with the page, as they look the same holding still. Focus reaches a row from its
+   * neighbour, which has its layers made already by then, before its first glide across.
+   */
+  const ROW_LAYERS_NEAR = true;
+  /** The rows either side of the one with focus that keep their layers. */
+  const NEAR_ROWS = 1;
+  if (ROW_LAYERS_NEAR && SLIDES) {
+    try {
+      const ROW = "[data-ui='media-row']";
+      const NEAR = 'data-glide-near';
+      let near = new Set();
+      const mark = (target) => {
+        const rows = [...document.querySelectorAll(ROW)].filter((row) => !row.closest('[inert]'));
+        if (!rows.length) return;
+        const row = target instanceof Element ? target.closest(ROW) : null;
+        const at = row ? rows.indexOf(row) : -1;
+        // Off the rows (the hero, the navigation), as it was; at first, the top rows, which focus reaches first.
+        if (at < 0 && near.size && [...near].some((r) => r.isConnected && !r.closest('[inert]'))) return;
+        const from = Math.max(0, at < 0 ? 0 : at - NEAR_ROWS);
+        const next = new Set(rows.slice(from, (at < 0 ? 0 : at) + NEAR_ROWS + 1));
+        for (const r of near) if (!next.has(r)) r.removeAttribute(NEAR);
+        for (const r of next) if (!near.has(r)) r.setAttribute(NEAR, '');
+        near = next;
+      };
+      document.addEventListener('focusin', (e) => mark(e.target), true);
+      // Rows mounted since, and a page shown again, are marked by the next move; and once, as it starts.
+      addEventListener('load', () => mark(document.activeElement));
+    } catch {}
+  }
+  /*
    * A keyed move up or down eases the scroll position itself, frame by frame:
    * the page's glide code finds no layer to ease a box's content in
    * (patches/web/0014), the page's and the home rows' box alike. Its own way
@@ -155,6 +189,11 @@ enum BridgeScript {
         '.animate-pulse,.UI-Skeleton__root{animation:none!important}'
       );
     else if (!SLIDES) rules.push('[data-glide-layer]{will-change:auto!important}');
+    if (ROW_LAYERS_NEAR && SLIDES)
+      rules.push(
+        "[data-ui='media-row'] [data-glide-layer]{will-change:auto!important}",
+        "[data-ui='media-row'][data-glide-near] [data-glide-layer]{will-change:transform!important}"
+      );
     /*
      * The page's "Blur episodes you haven't started" setting marks the page
      * `data-blur-spoilers` and blurs those episodes' pictures and text with
@@ -237,11 +276,13 @@ enum BridgeScript {
      * over the art stay.
      */
     const APP_BACKDROP = 'html[data-app-backdrop] ';
+    // The rotating hero's art and the one following the card in focus (whole window or corner), and a title page's.
     rules.push(
-      APP_BACKDROP + "[data-ui='hero-backdrops'] img," + APP_BACKDROP + "[data-ui='item-backdrop-image']" +
-        '{visibility:hidden!important}',
+      [APP_BACKDROP + "[data-ui='hero-art'] img", APP_BACKDROP + "[data-ui='hero-corner'] img",
+        APP_BACKDROP + "[data-ui='item-backdrop-image']"].join(',') + '{visibility:hidden!important}',
       [APP_BACKDROP + "[data-ui='hero-art']", APP_BACKDROP + "[data-ui='item-backdrop']",
-        APP_BACKDROP + "[data-ui='backdrop-frame']"].join(',') + NO_MASK
+        APP_BACKDROP + "[data-ui='backdrop-frame']", APP_BACKDROP + "[data-ui='hero-corner']",
+        APP_BACKDROP + "[data-ui='hero-corner']>div"].join(',') + NO_MASK
     );
     /*
      * Frosted and liquid glass (Theme > Glass surface: the navigation, and with Glass panels on, the
@@ -1190,9 +1231,13 @@ enum BridgeScript {
         const w = Math.max(0, Math.min(r.right, innerWidth + nearW) - Math.max(r.left, -nearW));
         const h = Math.max(0, Math.min(r.bottom, innerHeight + nearH) - Math.max(r.top, -nearH));
         if (!w || !h) continue;
+        // As drawn: a row's glide layers away from focus, and the bridge's own rules, take theirs off.
+        const style = getComputedStyle(el);
+        const backdrop = style.backdropFilter || style.webkitBackdropFilter || 'none';
+        const blurred = backdrop !== 'none' || /blur/.test(style.filter || '');
+        const own = el.tagName === 'VIDEO' || el.tagName === 'CANVAS';
+        if (!own && !blurred && (style.willChange || 'auto') === 'auto') continue;
         layerCount++;
-        // An SVG's className isn't a string.
-        const blurred = /blur/.test(typeof el.className === 'string' ? el.className : '');
         if (blurred) blurCount++;
         // A blur draws what's behind it again, into a buffer of its own.
         layerBytes += w * h * scale * scale * 4 * (blurred ? 2 : 1);

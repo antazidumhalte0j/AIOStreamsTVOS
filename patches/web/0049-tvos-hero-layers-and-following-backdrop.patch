@@ -1,0 +1,179 @@
+diff --git a/packages/web/src/components/media/hero.tsx b/packages/web/src/components/media/hero.tsx
+index 19939dfe6..e8aa166d7 100644
+--- a/packages/web/src/components/media/hero.tsx
++++ b/packages/web/src/components/media/hero.tsx
+@@ -12,7 +12,10 @@ import { useSession } from '@/lib/jellyfin/session';
+ import { settings, useSetting } from '@/lib/settings';
+ import { currentHost } from '@/lib/hosts';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
+-import { useAppBackdrop } from '@/lib/hosts/shell/app-backdrop';
++import {
++  CORNER_FADE,
++  useAppBackdrop,
++} from '@/lib/hosts/shell/app-backdrop';
+ import { usePageShown } from '@/lib/page-shown';
+ import { useFetchNextUp, useItem } from '@/lib/jellyfin/queries';
+ import { focusOn, keyboardFocus, useAction } from '@/lib/input';
+@@ -142,6 +145,11 @@ interface Layer {
+ let nextLayer = 0;
+ /** Fading layers kept at once, as each holds a whole decoded backdrop. */
+ const MAX_LAYERS = 4;
++/**
++ * On an Apple TV, the one shown and the one fading in over it: titles changed
++ * quickly otherwise stacked four decoded backdrops (AIOStreamsTVOS).
++ */
++const TV_MAX_LAYERS = 2;
+ /** How long the last backdrop waits on the next before fading, so it doesn't sit behind another item. */
+ const WAIT_MS = 500;
+ 
+@@ -173,7 +181,7 @@ function Backdrops({
+       if (!fade)
+         return [{ src: current, id: nextLayer++, quick: false, still: true }];
+       return [
+-        ...all.slice(1 - MAX_LAYERS),
++        ...all.slice(1 - (appleTv() ? TV_MAX_LAYERS : MAX_LAYERS)),
+         { src: current, id: nextLayer++, quick: all.every((l) => l.gone) },
+       ];
+     });
+@@ -948,6 +956,17 @@ function FollowBackdrop({
+     'transition-opacity duration-700',
+     trailer.shown && 'opacity-0'
+   );
++  // On an Apple TV, the card's backdrop drawn by the app at 4K (AIOStreamsTVOS).
++  const shown = usePageShown();
++  const art = React.useRef<HTMLDivElement>(null);
++  useAppBackdrop(
++    art,
++    src,
++    shown && !trailer.shown,
++    corner
++      ? { frame: ':scope > div', fade: CORNER_FADE }
++      : { frame: ':scope > [data-ui=backdrop-frame]' }
++  );
+   const box = (
+     <div className="absolute inset-x-0 top-0 h-[var(--hero-h)]">
+       {trailer.box}
+@@ -961,6 +980,7 @@ function FollowBackdrop({
+           {box}
+         </div>
+         <div
++          ref={art}
+           aria-hidden
+           data-ui="hero-corner"
+           // Masks rather than shades, which leave a seam beside the fading layers.
+@@ -981,7 +1001,7 @@ function FollowBackdrop({
+       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+     >
+       {box}
+-      <div data-ui="hero-art" className="absolute inset-0">
++      <div ref={art} data-ui="hero-art" className="absolute inset-0">
+         <BackdropFrame className={cn('max-w-[calc(100vh*2.6)]', fade)}>
+           <Backdrops current={src} />
+         </BackdropFrame>
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 65a26b50d..785029d65 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -20,6 +20,12 @@ const SHOWN = 'data-app-backdrop';
+ const MASK = ['mask-image', '-webkit-mask-image'];
+ /** How much of the hole's height and width its bottom and start fade over, as the artwork background's masks do. */
+ const FADE = 0.5;
++/**
++ * The hero's corner backdrop fades into the page at its start and bottom
++ * whatever the background (its masks in hero.tsx): in by 45% of its width, and
++ * out over its last 55% (AIOStreamsTVOS).
++ */
++export const CORNER_FADE: HoleFade = { bottom: 0.55, start: 0.45 };
+ 
+ interface Rect {
+   x: number;
+@@ -58,8 +64,14 @@ function scaled(r: Rect, scale: number): Rect {
+ /** On the page's background while the hole cut in it is the backdrop's. */
+ const HOLE = 'data-app-hole';
+ 
+-/** The page's background cut away over `box`, its bottom and start fading back in when `soft`. */
+-function cutHole(box: Rect, soft: boolean) {
++/** How much of the hole's height its bottom, and of its width its start, fade back in over. */
++export interface HoleFade {
++  bottom: number;
++  start: number;
++}
++
++/** The page's background cut away over `box`, its bottom and start fading back in over `fade`. */
++function cutHole(box: Rect, fade: HoleFade | null) {
+   const background = document.querySelector<HTMLElement>(
+     '[data-ui=page-background]'
+   );
+@@ -76,11 +88,17 @@ function cutHole(box: Rect, soft: boolean) {
+   const { width: w, height: h } = box;
+   const rtl = html.dir === 'rtl';
+   /* eslint-disable lingui/no-unlocalized-strings -- SVG */
+-  const edges = soft
++  const down = h * (fade?.bottom ?? 0);
++  const side = w * (fade?.start ?? 0);
++  const edges = fade
+     ? `<defs><linearGradient id="d" x2="0" y2="1"><stop stop-opacity="0"/><stop offset="1"/></linearGradient>` +
+       `<linearGradient id="s" x1="${rtl ? 0 : 1}" x2="${rtl ? 1 : 0}"><stop stop-opacity="0"/><stop offset="1"/></linearGradient></defs>` +
+-      `<rect x="${x - 1}" y="${y + h - h * FADE}" width="${w + 2}" height="${h * FADE + 1}" fill="url(#d)"/>` +
+-      `<rect x="${rtl ? x + w - w * FADE : x - 1}" y="${y - 1}" width="${w * FADE + 1}" height="${h + 2}" fill="url(#s)"/>`
++      (down
++        ? `<rect x="${x - 1}" y="${y + h - down}" width="${w + 2}" height="${down + 1}" fill="url(#d)"/>`
++        : '') +
++      (side
++        ? `<rect x="${rtl ? x + w - side : x - 1}" y="${y - 1}" width="${side + 1}" height="${h + 2}" fill="url(#s)"/>`
++        : '')
+     : '';
+   const svg =
+     `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}">` +
+@@ -107,16 +125,24 @@ function closeHole() {
+ 
+ let nextId = 0;
+ 
++/** Where in `art` the picture lies: the hero's shown slide's frame, or a title page's. */
++const FRAME =
++  '[data-slide="0"] [data-ui=backdrop-frame], :scope > [data-ui=backdrop-frame]';
++
+ /**
+- * On an Apple TV, has the app draw `src` where `art`'s `[data-ui=backdrop-frame]`
+- * lies, within `art`, while `on`. The page's own copy shows meanwhile, and while
+- * it scrolls. `quick` fades it in from nothing rather than over the last.
++ * On an Apple TV, has the app draw `src` where `art`'s `frame` lies, within
++ * `art`, while `on`. The page's own copy shows meanwhile, and while it scrolls.
++ * The hole fades back in over `fade`, or with the artwork background on over
++ * half its height and width, as that background's masks do.
+  */
+ export function useAppBackdrop(
+   art: React.RefObject<HTMLElement | null>,
+   src: string | undefined,
+-  on: boolean
++  on: boolean,
++  { frame: frameSelector = FRAME, fade }: { frame?: string; fade?: HoleFade } = {}
+ ) {
++  const options = React.useRef({ frameSelector, fade });
++  options.current = { frameSelector, fade };
+   const shell = appBridge();
+   const active = !!shell && appleTv() && on && !!src;
+   // Changes of source while shown go to the app as they are, to fade there.
+@@ -149,7 +175,7 @@ export function useAppBackdrop(
+     const measure = () => {
+       const el = art.current;
+       const target = el?.querySelector<HTMLElement>(
+-        '[data-slide="0"] [data-ui=backdrop-frame], :scope > [data-ui=backdrop-frame]'
++        options.current.frameSelector
+       );
+       if (!el || !target || !latest.current) return null;
+       const box = rectOf(target.getBoundingClientRect());
+@@ -196,7 +222,12 @@ export function useAppBackdrop(
+       shown = message.src;
+       if (!first) return;
+       // The app's is under the page's copy now: the hole first, then the copy hidden a frame later.
+-      if (!cutHole(clip, html.hasAttribute('data-art-wash'))) return hide();
++      const edges =
++        options.current.fade ??
++        (html.hasAttribute('data-art-wash')
++          ? { bottom: FADE, start: FADE }
++          : null);
++      if (!cutHole(clip, edges)) return hide();
+       frame = requestAnimationFrame(() => {
+         if (shown !== null) html.setAttribute(SHOWN, '');
+       });
