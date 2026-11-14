@@ -1,0 +1,26 @@
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 0fec2cb7b..74754b031 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -159,10 +159,19 @@ export function useAppBackdrop(
+         options.current.frameSelector
+       );
+       if (!el || !target) return null;
+-      const box = rectOf(target.getBoundingClientRect());
++      // Where the page will be once its entrance ends (the layout's `PAGE_FADE`, which slides it up
++      // from 6 px below by its `top`): placed where it was then, the art sat that low, a gap above
++      // it, until it was measured again as the entrance settled (AIOStreamsTVOS).
++      const page = el.closest<HTMLElement>('[data-page]');
++      const rising = page ? parseFloat(getComputedStyle(page).top) || 0 : 0;
++      const settledRect = (r: DOMRect): Rect => ({
++        ...rectOf(r),
++        y: r.top - rising,
++      });
++      const box = settledRect(target.getBoundingClientRect());
+       // The whole of the art's box, off screen too: the app follows the page's scroll itself, and
+       // the page's masks measure their fades from it.
+-      const within = intersect(rectOf(el.getBoundingClientRect()), box);
++      const within = intersect(settledRect(el.getBoundingClientRect()), box);
+       return within ? { box, within, target } : null;
+     };
+     const show = () => {
