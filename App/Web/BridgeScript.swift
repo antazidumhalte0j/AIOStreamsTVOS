@@ -494,6 +494,67 @@ enum BridgeScript {
         },
         true
       );
+      /*
+       * The page's "Blur episodes you haven't started" blurs a spoiler's picture with
+       * `filter: blur(12px)` (upstream's styles.css, `html[data-blur-spoilers]`), which WebKit draws
+       * into a surface of its own at 2x, one per card. Instead, while the page would blur a picture,
+       * it loads the app's blurred copy (`&blur=`, ImageFit.swift), a third as wide, and the page's
+       * filter comes off that copy alone. When the blur would come off (focus on the card, or the
+       * episode started or watched), the sharp copy is put back; until it arrives the blurred one
+       * shows, and a sharp one that should be blurred keeps the page's filter until it's swapped, so
+       * nothing shows unblurred that the page would blur. SPOILER_ART is upstream's selector for the
+       * pictures it blurs.
+       */
+      const SPOILER_BLUR = 12;
+      const SPOILER_ART =
+        "html[data-blur-spoilers] :is([data-ui='episode-card'],[data-ui='episode-list-item']," +
+        "[data-ui='player-episode'],[data-row='next-up'] [data-ui='wide-card']," +
+        "[data-row='upcoming'] [data-ui='wide-card'],[data-row='resume'] [data-ui='wide-card']," +
+        "[data-ui='calendar-entry'][data-episode]," +
+        "[data-ui='calendar-day']:not(:hover,:focus-within) [data-ui='calendar-day-art'][data-episode])" +
+        ":not([data-watched],[data-in-progress],[data-current],:hover,:focus-within,[data-menu-open]>*) " +
+        "[data-ui='artwork']";
+      const BLURRED_COPY = '&blur=';
+      // A WebKit that can't read the selector leaves the page's own blur as it is.
+      document.documentElement.matches(SPOILER_ART);
+      const spoilerStyle = document.createElement('style');
+      spoilerStyle.textContent =
+        "html[data-blur-spoilers] img[data-ui='artwork'][src^='" + fitPrefix + "'][src*='" + BLURRED_COPY +
+        "']{filter:none!important}";
+      (document.head || document.documentElement).appendChild(spoilerStyle);
+      // In the copy's own pixels, which the page asks for at its ratio: 1.5 on a 1280-wide page.
+      const spoilerRadius = () => Math.round(SPOILER_BLUR * Math.min(2, screen.width / innerWidth || 1));
+      let spoilersSeen = false;
+      let spoilerFrame = 0;
+      const matchSpoilers = () => {
+        spoilerFrame = 0;
+        const on = document.documentElement.hasAttribute('data-blur-spoilers');
+        // Nothing to do until the setting has been on once: then copies may be left to put back.
+        if (!on && !spoilersSeen) return;
+        spoilersSeen = true;
+        const radius = spoilerRadius();
+        for (const img of document.querySelectorAll("img[data-ui='artwork']")) {
+          const at = img.getAttribute('src');
+          if (!at || !at.startsWith(fitPrefix)) continue;
+          const blurred = at.includes(BLURRED_COPY);
+          const blur = on && img.matches(SPOILER_ART);
+          if (blur === blurred) continue;
+          // As text, so the sharp copy's address is the page's own again, which WebKit has cached.
+          setAttribute.call(img, 'src', blur ? at + BLURRED_COPY + radius : at.replace(/&blur=[^&]*/, ''));
+        }
+      };
+      const soonSpoilers = () => {
+        if (!spoilerFrame) spoilerFrame = requestAnimationFrame(matchSpoilers);
+      };
+      // Focus takes a card's blur off with no change to the page's markup.
+      document.addEventListener('focusin', soonSpoilers, true);
+      document.addEventListener('focusout', soonSpoilers, true);
+      new MutationObserver(soonSpoilers).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['src', 'data-blur-spoilers', 'data-watched', 'data-in-progress', 'data-current', 'data-menu-open'],
+        childList: true,
+        subtree: true,
+      });
     }
   } catch {}
 

@@ -1,3 +1,4 @@
+import CoreImage
 import Foundation
 import ImageIO
 
@@ -16,6 +17,11 @@ import ImageIO
  * JPEG at the reduced size itself, so the whole picture is never held in
  * either process. One already no wider goes back as it came. All in the app's
  * process, which has the memory to spare.
+ *
+ * With `&blur=<radius>` (BridgeScript's SPOILER_ART), the copy is blurred here too, for the page's
+ * "Blur episodes you haven't started", in place of the page's `filter: blur(12px)`, which WebKit
+ * draws into a surface of its own at 2x for each picture. Blurred, a picture has no detail finer
+ * than its blur, so it's made a third as wide, and WebKit scales it up: a ninth of the memory.
  */
 enum ImageFit {
     static let prefix = "/fit/"
@@ -58,13 +64,17 @@ enum ImageFit {
         return counts
     }
 
-    /// The picture at `source` no wider than `width`, as `done(data, type)`, or `done(nil, nil)`.
-    static func fit(_ source: URL, width: Int, done: @escaping (Data?, String?) -> Void) {
+    /**
+     * The picture at `source` no wider than `width`, as `done(data, type)`, or `done(nil, nil)`.
+     * With `blur`, blurred by that radius in pixels of a picture `width` wide.
+     */
+    static func fit(_ source: URL, width: Int, blur: Double = 0, done: @escaping (Data?, String?) -> Void) {
         guard ["http", "https"].contains(source.scheme?.lowercased() ?? ""), width > 0 else {
             note(failed: "not a web address")
             return done(nil, nil)
         }
-        let key = "\(width) \(source.absoluteString)"
+        let blur = blur.isFinite ? min(max(blur, 0), 200) : 0
+        let key = blur > 0 ? "\(width) blur \(blur) \(source.absoluteString)" : "\(width) \(source.absoluteString)"
         if let hit = cached(key) { return done(hit.data, hit.type) }
         load(source, retried: false) { data, response, error in
             if let error {
@@ -77,7 +87,7 @@ enum ImageFit {
                 return done(nil, nil)
             }
             queue.async {
-                guard let made = make(data, width: width) else {
+                guard let made = make(data, width: width, blur: blur) else {
                     note(failed: "couldn't read the picture")
                     return done(nil, nil)
                 }
@@ -108,7 +118,12 @@ enum ImageFit {
         }.resume()
     }
 
-    private static func make(_ data: Data, width: Int) -> (data: Data, type: String, drawn: Bool)? {
+    /// How many times narrower a blurred copy is made than the width asked for.
+    private static let blurShrink = 3
+    /// Only touched on `queue`.
+    private static let blurContext = CIContext(options: [.cacheIntermediates: false])
+
+    private static func make(_ data: Data, width: Int, blur: Double = 0) -> (data: Data, type: String, drawn: Bool)? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let pixelsWide = properties[kCGImagePropertyPixelWidth] as? Int,
@@ -117,16 +132,23 @@ enum ImageFit {
         else { return nil }
         let png = (CGImageSourceGetType(source) as String?) == "public.png"
         let type = png ? "image/png" : mime(CGImageSourceGetType(source) as String?)
-        if pixelsWide <= width { return (data, type, false) }
+        let blurring = blur > 0
+        if pixelsWide <= width, !blurring { return (data, type, false) }
+        let target = blurring ? max(16, min(width, pixelsWide) / blurShrink) : width
         // ImageIO sizes a thumbnail by its longer side; the width is what's capped.
-        let longest = Int((Double(max(pixelsWide, pixelsHigh)) * Double(width) / Double(pixelsWide)).rounded())
+        let longest = Int((Double(max(pixelsWide, pixelsHigh)) * Double(target) / Double(pixelsWide)).rounded())
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: longest,
             kCGImageSourceShouldCacheImmediately: true,
         ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        guard var image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        if blurring {
+            // The page draws the copy `width` wide, so the radius shrinks with it.
+            guard let blurred = blurred(image, radius: blur * Double(image.width) / Double(width)) else { return nil }
+            image = blurred
+        }
         let out = NSMutableData()
         // A PNG may be see-through; a backdrop otherwise is not.
         let format = png ? "public.png" : "public.jpeg"
@@ -135,6 +157,16 @@ enum ImageFit {
         CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.92] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return (out as Data, png ? "image/png" : "image/jpeg", true)
+    }
+
+    /// Its edges spread outward rather than fading to clear, so a blurred card has no dark rim.
+    private static func blurred(_ image: CGImage, radius: Double) -> CGImage? {
+        let input = CIImage(cgImage: image)
+        guard let filter = CIFilter(name: "CIGaussianBlur") else { return nil }
+        filter.setValue(input.clampedToExtent(), forKey: kCIInputImageKey)
+        filter.setValue(radius, forKey: kCIInputRadiusKey)
+        guard let output = filter.outputImage?.cropped(to: input.extent) else { return nil }
+        return blurContext.createCGImage(output, from: input.extent)
     }
 
     private static func mime(_ uti: String?) -> String {

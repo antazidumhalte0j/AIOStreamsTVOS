@@ -54,10 +54,11 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 @property (nonatomic, copy, nullable) NSData *_Nullable (^thumbnailAtPath)(NSString *path);
 /**
  * The picture at `source` drawn down to `width`, for a `/fit/<width>?u=<address>`
- * path: `done` with its bytes and type, or nils. Called on the main thread;
- * `done` may be called on any.
+ * path, blurred by `blur` pixels when it has `&blur=<radius>` (0 for none): `done`
+ * with its bytes and type, or nils. Called on the main thread; `done` may be
+ * called on any.
  */
-@property (nonatomic, copy, nullable) void (^fitImage)(NSURL *source, NSInteger width,
+@property (nonatomic, copy, nullable) void (^fitImage)(NSURL *source, NSInteger width, double blur,
                                                        void (^done)(NSData *_Nullable data, NSString *_Nullable type));
 /**
  * The artwork background's wash of the art at `source`, for a `/wash?u=<address>` path: `done`

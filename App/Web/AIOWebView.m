@@ -215,8 +215,11 @@ static NSString *AIOMimeType(NSString *extension) {
         AIOWebView *owner = self.owner;
         NSInteger width = path.lastPathComponent.integerValue;
         NSString *address = nil;
+        double blur = 0;
         for (NSURLQueryItem *item in [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO].queryItems) {
             if ([item.name isEqualToString:@"u"]) address = item.value;
+            // A spoiler's picture, blurred by the app (BridgeScript's SPOILER_ART).
+            if ([item.name isEqualToString:@"blur"]) blur = item.value.doubleValue;
         }
         NSURL *source = address ? [NSURL URLWithString:address] : nil;
         if (!owner.fitImage || !source || width <= 0) {
@@ -225,7 +228,7 @@ static NSString *AIOMimeType(NSString *extension) {
         }
         [self.liveTasks addObject:task];
         __weak AIOWebKitDelegate *weakSelf = self;
-        owner.fitImage(source, width, ^(NSData *data, NSString *type) {
+        owner.fitImage(source, width, blur, ^(NSData *data, NSString *type) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 AIOWebKitDelegate *strongSelf = weakSelf;
                 // WebKit throws if a task it stopped is answered.

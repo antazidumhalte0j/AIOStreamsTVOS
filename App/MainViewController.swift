@@ -126,7 +126,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             if status != 200 { NSLog("[web] %ld for %@", status, path) }
         }
         web.thumbnailAtPath = { ThumbnailStore.image($0) }
-        web.fitImage = { source, width, done in ImageFit.fit(source, width: width, done: done) }
+        web.fitImage = { source, width, blur, done in ImageFit.fit(source, width: width, blur: blur, done: done) }
         web.washImage = { source, done in ArtWash.make(source) { done($0?.png, $0?.tint, $0?.panel) } }
 
         startPlayer()
