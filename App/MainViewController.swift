@@ -398,6 +398,15 @@ final class MainViewController: UIViewController, RemoteReceiver {
                     ? "Dolby primer off from the next video"
                     : "Dolby primer on from the next video: for surround that plays as stereo")
             },
+            // To tell the app's 4K backdrop on screen from the page's own copy, which looks the same.
+            AppMenu.Action(title: backdrop.tinted ? "Stop tinting the app's backdrop" : "Tint the app's backdrop red",
+                           destructive: false) { [weak self] in
+                guard let self else { return }
+                self.backdrop.tinted.toggle()
+                self.flashStatus(self.backdrop.tinted
+                    ? "The app's backdrop is tinted red; art not tinted is the page's own"
+                    : "The app's backdrop is no longer tinted")
+            },
             AppMenu.Action(title: "Reset the app's data", destructive: true) { [weak self] in self?.confirmReset() },
             AppMenu.Action(title: "Close", destructive: false) {},
         ])

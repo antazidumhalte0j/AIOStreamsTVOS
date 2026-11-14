@@ -148,6 +148,25 @@ final class BackdropStage {
         return "shown at \(place), \(fades), \(mask), alpha \(String(format: "%.2f", view.alpha)), \(decoded.count) decoded"
     }
 
+    /// A red wash over the art, from the app menu: the art on screen that isn't red is the page's
+    /// own copy. Over the art and under its mask, so it fades as the art does.
+    var tinted = false {
+        didSet {
+            tint.frame = view.bounds
+            tint.isHidden = !tinted
+            view.bringSubviewToFront(tint)
+        }
+    }
+    private lazy var tint: UIView = {
+        let tint = UIView(frame: view.bounds)
+        tint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        tint.backgroundColor = UIColor.red.withAlphaComponent(0.45)
+        tint.isUserInteractionEnabled = false
+        tint.isHidden = true
+        view.addSubview(tint)
+        return tint
+    }()
+
     /// The page reloaded, or its process ended: nothing of its stays.
     func reset() {
         clear()
@@ -200,6 +219,7 @@ final class BackdropStage {
     private func show(_ image: UIImage, src: String, fade: Bool) {
         view.frame = clip
         view.isHidden = false
+        if tinted { tint.frame = view.bounds }
         // Made again only when its size or fades change: each new title asks again with the same.
         let maskKey = edges.map { "\(clip.size) \($0.bottom) \($0.start) \($0.rtl)" }
         if maskKey != self.maskKey || (maskKey != nil && view.layer.mask == nil) {
@@ -234,6 +254,7 @@ final class BackdropStage {
         next.frame = placed
         next.contentMode = .scaleToFill
         view.addSubview(next)
+        if tinted { view.bringSubviewToFront(tint) }
         leaving?.removeFromSuperview()
         leaving = nil
         guard fade, let last = shown else {
