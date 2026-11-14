@@ -1390,6 +1390,50 @@ enum BridgeScript {
   } catch {}
 
   /*
+   * While the app draws the art (`data-app-backdrop`), a new title's picture in the page's own copy
+   * fades in (upstream's `animate-in fade-in-0`, or a title page's `transition-opacity`). WebKit runs
+   * those on the compositor, past the rule that hides the copy, so for that fade the copy showed
+   * over the app's art: a lighter flash at its edges, where the two fade differently, with the app's
+   * art tinted and the wash frozen. Each is finished as it starts, which a CSS animation doesn't run
+   * again, so the copy is still back at once as the page scrolls. The art log notes each, with the
+   * opacity the picture had then.
+   */
+  try {
+    const COPY = "[data-ui='hero-art'],[data-ui='hero-corner'],[data-ui='item-backdrop']";
+    const settle = (img) => {
+      if (!document.documentElement.hasAttribute('data-app-backdrop') || !img.closest(COPY)) return;
+      const running = img.getAnimations().filter((a) => a.playState === 'running' || a.playState === 'pending');
+      if (!running.length) return;
+      const opacity = getComputedStyle(img).opacity;
+      for (const animation of running) {
+        try {
+          animation.finish();
+        } catch {
+          animation.cancel();
+        }
+      }
+      send({ type: 'tvos-art-event', text: `page copy's fade cut short (${running.length}, its opacity ${opacity})` });
+    };
+    const look = (node) => {
+      if (node.nodeType !== 1) return;
+      if (node.tagName === 'IMG') settle(node);
+      else for (const img of node.getElementsByTagName('img')) settle(img);
+    };
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.type === 'childList') record.addedNodes.forEach(look);
+        else if (record.target.tagName === 'IMG') settle(record.target);
+      }
+    }).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      // A layer's class changes as it starts to fade out, or a title page's as its art arrives.
+      attributeFilter: ['class'],
+    });
+  } catch {}
+
+  /*
    * The page's marks for the art the app draws beneath it (patches/web/0048, 0050) as they change,
    * into the app's art log (ArtLog.swift), beside what the app did: a flash as a backdrop is
    * replaced lasts only a moment, so the app menu's lines on what's drawn now can't catch it.
