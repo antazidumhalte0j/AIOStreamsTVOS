@@ -60,7 +60,7 @@ index 4c510ce4..95f6976a 100644
    return (
      <div
 diff --git a/packages/web/src/components/media/mixed-grid.tsx b/packages/web/src/components/media/mixed-grid.tsx
-index f987d692..68bc9017 100644
+index dc72074b9..9cfb3ca26 100644
 --- a/packages/web/src/components/media/mixed-grid.tsx
 +++ b/packages/web/src/components/media/mixed-grid.tsx
 @@ -3,6 +3,7 @@ import { Skeleton } from '@aiostreams/ui/skeleton';
@@ -71,12 +71,21 @@ index f987d692..68bc9017 100644
  import { href, itemPath } from '@/lib/paths';
  import { ScrollRoot, watch } from '@/hooks/use-in-view';
  import type { BaseItemDto } from '@/lib/jellyfin/types';
-@@ -17,7 +18,7 @@ import { CardGrid, fadeIn } from './media-row';
+@@ -18,7 +19,7 @@ import { CardGrid, fadeIn } from './media-row';
   * by half a row, so one screen still mounts a row long before it's in sight.
   */
  // eslint-disable-next-line lingui/no-unlocalized-strings -- a root margin
 -const DRAWN_MARGIN = '100% 0px';
-+const DRAWN_MARGIN = currentHost().tv ? '60% 0px' : '100% 0px';
++const drawnMargin = () => (currentHost().tv ? '60% 0px' : '100% 0px');
  /** Drawn before they're first measured, so a grid's first screen shows at once. */
  const FIRST_DRAWN = 30;
  
+@@ -61,7 +62,7 @@ function GridCell({
+   React.useEffect(() => {
+     const el = ref.current;
+     if (!el) return;
+-    return watch(el, root, DRAWN_MARGIN, (entry) => {
++    return watch(el, root, drawnMargin(), (entry) => {
+       if (entry.isIntersecting) return setShown(true);
+       // Measured already, so reading it costs nothing.
+       const h = entry.boundingClientRect.height;

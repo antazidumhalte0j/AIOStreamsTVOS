@@ -15,7 +15,7 @@ index cf184d58d..210f963b7 100644
    const src = newest.get(artworkKey(url));
    const entry = src ? drawn.get(src) : undefined;
 diff --git a/packages/web/src/lib/artwork/shrink.ts b/packages/web/src/lib/artwork/shrink.ts
-index e16a28a31..bfe727aff 100644
+index e16a28a31..7af5fd780 100644
 --- a/packages/web/src/lib/artwork/shrink.ts
 +++ b/packages/web/src/lib/artwork/shrink.ts
 @@ -5,7 +5,14 @@
@@ -34,7 +34,7 @@ index e16a28a31..bfe727aff 100644
  import type { ShrinkJob, ShrinkReply, WashJob } from './messages';
  import { imageAccept, noteRead, refused } from './reads';
  
-@@ -21,7 +28,13 @@ export const canShrink =
+@@ -21,17 +28,27 @@ export const canShrink =
    typeof OffscreenCanvas === 'function' &&
    typeof createImageBitmap === 'function';
  
@@ -44,50 +44,79 @@ index e16a28a31..bfe727aff 100644
 + * afford a dozen of at once (AIOStreamsTVOS): two workers, two jobs each,
 + * and as many again only while those are slow.
 + */
-+const TV = !!currentHost().tv;
-+const IN_FLIGHT = TV ? 2 : 4;
++let tvHost: boolean | undefined;
++/**
++ * Read on first use: the host isn't known while the modules load, as the
++ * Android host's own imports reach this one before it's made.
++ */
++const tv = () => (tvHost ??= !!currentHost().tv);
++const inFlight = () => (tv() ? 2 : 4);
  /**
   * A job still running after this long, as a huge image or a slow host's is,
   * gives its place to the next, up to as many again.
-@@ -30,8 +43,9 @@ const SLOW_MS = 1500;
+  */
+ const SLOW_MS = 1500;
  /** One core is left to the page. */
- const WORKERS = Math.max(
-   1,
+-const WORKERS = Math.max(
+-  1,
 -  Math.min(3, (navigator.hardwareConcurrency || 2) - 1)
-+  Math.min(TV ? 2 : 3, (navigator.hardwareConcurrency || 2) - 1)
- );
+-);
++const workers = () =>
++  Math.max(1, Math.min(tv() ? 2 : 3, (navigator.hardwareConcurrency || 2) - 1));
 +let peakRunning = 0;
  
  interface Pending extends Omit<
    ShrinkJob,
-@@ -193,6 +207,22 @@ function start(): Slot | null {
- // Started with the page, so the first artwork doesn't wait on the workers loading.
- if (canShrink) for (let i = 0; i < WORKERS; i++) start();
+@@ -190,8 +207,27 @@ function start(): Slot | null {
+   return slot;
+ }
  
-+/**
-+ * What the workers are doing, read by the TV app for its memory log: their
-+ * decodes are in the page's process but in none of the page's own counts.
-+ */
-+if (TV)
-+  (window as unknown as { __aioArtworkStats: () => unknown }).__aioArtworkStats =
-+    () => ({
-+      workers: slots.length,
-+      queued: queue.length,
-+      running: running.size,
-+      slow: slots.reduce((n, s) => n + s.slow, 0),
-+      peakRunning,
-+      kept: drawnStats().count,
-+      keptMB: Math.round(drawnStats().bytes / 1048576),
-+    });
-+
+-// Started with the page, so the first artwork doesn't wait on the workers loading.
+-if (canShrink) for (let i = 0; i < WORKERS; i++) start();
++// Started with the page, so the first artwork doesn't wait on the workers
++// loading; once every module has loaded, as how many depends on the host.
++queueMicrotask(() => {
++  if (canShrink)
++    for (let i = slots.length; i < workers(); i++) if (!start()) break;
++  /**
++   * What the workers are doing, read by the TV app for its memory log: their
++   * decodes are in the page's process but in none of the page's own counts.
++   */
++  if (tv())
++    (window as unknown as { __aioArtworkStats: () => unknown }).__aioArtworkStats =
++      () => ({
++        workers: slots.length,
++        queued: queue.length,
++        running: running.size,
++        slow: slots.reduce((n, s) => n + s.slow, 0),
++        peakRunning,
++        kept: drawnStats().count,
++        keptMB: Math.round(drawnStats().bytes / 1048576),
++      });
++});
+ 
  /** Starts another worker only while every one is busy. */
  function freeSlot(ahead: boolean): Slot | null {
-   if (broken) return null;
-@@ -273,6 +303,7 @@ function dispatch() {
+@@ -200,9 +236,9 @@ function freeSlot(ahead: boolean): Slot | null {
+     (best, s) => (!best || s.busy < best.busy ? s : best),
+     null
+   );
+-  if ((!least || least.busy > 0) && slots.length < WORKERS) return start();
++  if ((!least || least.busy > 0) && slots.length < workers()) return start();
+   if (!least) return null;
+-  return least.busy < (ahead ? 1 : IN_FLIGHT) ? least : null;
++  return least.busy < (ahead ? 1 : inFlight()) ? least : null;
+ }
+ 
+ let scrolls = 0;
+@@ -273,8 +309,9 @@ function dispatch() {
      queue.shift();
      slot.busy++;
      running.set(job.id, { job, slot });
 +    peakRunning = Math.max(peakRunning, running.size);
      job.slowTimer = setTimeout(() => {
-       if (!running.has(job.id) || slot.slow >= IN_FLIGHT) return;
+-      if (!running.has(job.id) || slot.slow >= IN_FLIGHT) return;
++      if (!running.has(job.id) || slot.slow >= inFlight()) return;
        job.released = true;
+       slot.busy--;
+       slot.slow++;
