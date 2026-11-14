@@ -292,9 +292,14 @@ enum BridgeScript {
       // Opacity too, the compositor's own: the copy still showed with visibility alone, its masks
       // stripped by the rule below, so the art had hard edges over the app's faded one. Only the
       // pictures, whose own fades are animations, so the copy is back at once as the page scrolls.
+      // No transitions either: a running one outranks even `!important`, and the last title's
+      // picture fading out (`transition-opacity duration-700`) was drawn over the app's art at 0.95
+      // for its 0.7 s, a flash at the edges where the two fade differently. A picture that would
+      // have faded is at its end at once, unseen. Animations stay: they don't outrank this, and
+      // taken off and given back, the newest picture's fade in would start again at each scroll.
       [APP_BACKDROP + "[data-ui='hero-art'] img", APP_BACKDROP + "[data-ui='hero-corner'] img",
         APP_BACKDROP + "[data-ui='item-backdrop-image']"].join(',') +
-        '{visibility:hidden!important;opacity:0!important}',
+        '{visibility:hidden!important;opacity:0!important;transition:none!important}',
       // Not with "Background from artwork" on, where the masks fade the art into the wash: given
       // back as the page took over from the app's art, WebKit drew the copy before its masks, so
       // for a moment after each move the art showed with hard bottom and start edges. They stay,
