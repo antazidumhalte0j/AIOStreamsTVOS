@@ -148,6 +148,14 @@ enum BridgeScript {
     Object.defineProperty(window, '__aioTVScrolls', { value: PAGE_SCROLLS });
   } catch {}
   /*
+   * One glide layer for a row, not three (patches/web/0061). The three nest, each the size of the
+   * row's content, so a held key's overlapping slides each take one; here a held key's repeats jump
+   * (above), and a press while one slides takes over what it has left, which one layer does.
+   */
+  try {
+    Object.defineProperty(window, '__aioTVGlideLayers', { value: SLIDES ? 1 : 3 });
+  } catch {}
+  /*
    * Test: those keyed scrolls up and down are WebKit's own smooth scroll
    * (`scrollTo` with `behavior: 'smooth'`, patches/web/0017) rather than the
    * page's, which sets the scroll position from the page's thread each frame:
@@ -193,6 +201,16 @@ enum BridgeScript {
       rules.push(
         "[data-ui='media-row'] [data-glide-layer]{will-change:auto!important}",
         "[data-ui='media-row'][data-glide-near] [data-glide-layer]{will-change:transform!important}"
+      );
+    /*
+     * The page's own glide layers, and the home rows' under the following hero, slide nothing here:
+     * a keyed move up or down eases the scroll position instead (PAGE_SCROLLS). Kept as layers they
+     * were each drawn the page's size at 2x, the most of the page's drawing layers. They stay what
+     * holds anything `position: fixed` inside them, as a layer does, with layout containment.
+     */
+    if (PAGE_SCROLLS)
+      rules.push(
+        "[data-glide-layer]:not([data-ui='media-row'] [data-glide-layer]){will-change:auto!important;contain:layout}"
       );
     /*
      * The page's "Blur episodes you haven't started" setting marks the page
