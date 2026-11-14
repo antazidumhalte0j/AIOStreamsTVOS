@@ -84,6 +84,20 @@ final class BackdropStage {
         }
         let fade = wasShown && message.flag("quick") != true && src != self.src
         self.src = src
+        // A trailer playing in its place (patches/web/0051): the art fades off it, as the page's did, and
+        // back once it ends, kept meanwhile so the page needn't bring its own copy back.
+        let alpha: CGFloat = message.flag("hidden") == true ? 0 : 1
+        if view.alpha != alpha {
+            if wasShown {
+                UIView.animate(withDuration: Self.fadeSeconds, delay: 0,
+                               options: [.curveEaseOut, .beginFromCurrentState]) { [view] in
+                    view.alpha = alpha
+                }
+            } else {
+                view.layer.removeAnimation(forKey: "opacity")
+                view.alpha = alpha
+            }
+        }
         if let image = decoded.first(where: { $0.src == src })?.image {
             show(image, fade: fade)
             drawn(id, src)
@@ -110,6 +124,8 @@ final class BackdropStage {
         edges = nil
         view.layer.mask = nil
         view.isHidden = true
+        view.layer.removeAnimation(forKey: "opacity")
+        view.alpha = 1
         leaving?.removeFromSuperview()
         leaving = nil
         shown?.removeFromSuperview()

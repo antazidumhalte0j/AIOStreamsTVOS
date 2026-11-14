@@ -524,6 +524,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
 
     private func receive(_ message: Message) {
         guard let type = message.text("type") else { return }
+        // Before the player shows its picture, or after it stops, so the stage knows a trailer's ended.
+        if type == "player-load" { stage.loading() }
+        if type == "player-stop" { stage.stopped() }
         if player?.handle(type, message) == true {
             // A load, a stop or a new item may show or hide the player's picture-in-picture button.
             updatePipButton()

@@ -20,6 +20,10 @@ struct VideoFrame: Equatable {
     var clip: CGRect?
     var fade: CGFloat = 0
     var rtl = false
+    /// A trailer behind the page has its picture (patches/web/0051). Until then its video shows nothing,
+    /// as the video view is black before its first frame, and with the app drawing the backdrop and the
+    /// wash nothing of the page covers it any more; it fades in as the page's veil over it did.
+    var playing = true
 
     /// nil when the message holds no frame (`frame: null`), which fills the screen again. `webWidth` is the
     /// web view's width in points: the frame is in the page's measure, and the bridge script sends the
@@ -51,6 +55,7 @@ struct VideoFrame: Equatable {
             placed.clip = CGRect(x: value("x"), y: value("y"), width: max(0, value("width")), height: max(0, value("height")))
             placed.fade = CGFloat(min(max(frame.number("fade") ?? 0, 0), 1))
             placed.rtl = frame.flag("rtl") == true
+            placed.playing = frame.flag("playing") != false
         }
         return placed
     }
@@ -80,7 +85,13 @@ final class VideoStage {
     private let hole = CAShapeLayer()
     private var frame: VideoFrame?
     private var animator: UIViewPropertyAnimator?
+    /// The last box the page gave was a trailer's behind the page.
+    private var trailerLast = false
+    /// That trailer stopped, and no video has loaded since.
+    private var afterTrailer = false
 
+    /// As the page's trailer veil fades off a trailer once it plays (`TrailerVeil`, `duration-500`).
+    private static let appearSeconds: TimeInterval = 0.5
     /// As the page's card moves (`MINI_MOVE_MS`, `MINI_MOVE_EASE`).
     private static let moveSeconds: TimeInterval = 0.22
     private static let moveCurve = (CGPoint(x: 0.2, y: 0.8), CGPoint(x: 0.2, y: 1))
@@ -101,9 +112,32 @@ final class VideoStage {
     /// The page's `player-frame`; nil fills the screen again.
     func place(_ next: VideoFrame?) {
         guard next != frame else { return }
+        if let next {
+            trailerLast = Self.behindPage(next)
+            afterTrailer = false
+        }
         frame = next
         refresh(animated: next?.animate == true)
     }
+
+    /// A video loads (`player-load`): the stage shows it again after a trailer's ended.
+    func loading() {
+        trailerLast = frame.map(Self.behindPage) ?? false
+        guard afterTrailer else { return }
+        afterTrailer = false
+        refresh()
+    }
+
+    /// The video stopped (`player-stop`). A trailer behind the page ended: its last picture, or the
+    /// black before one, would fill the screen beneath a page that draws nothing over it as its box
+    /// goes, until the next video loads. A trailer opened over the whole window plays on, unstopped.
+    func stopped() {
+        guard trailerLast, !afterTrailer else { return }
+        afterTrailer = true
+        refresh()
+    }
+
+    private static func behindPage(_ frame: VideoFrame) -> Bool { frame.hidden && frame.clip != nil }
 
     /// Lays the stage and the hole out again, as picture in picture starts or ends.
     func refresh(animated: Bool = false) {
@@ -142,6 +176,20 @@ final class VideoStage {
                                              bottom: shown.fade, start: shown.fade, rtl: shown.rtl)
         } else {
             view.layer.mask = nil
+        }
+        // A trailer behind the page shows nothing until it plays, then fades in.
+        let waiting = afterTrailer || (shown.map { Self.behindPage($0) && !$0.playing } ?? false)
+        let alpha: CGFloat = waiting ? 0 : 1
+        if view.alpha != alpha {
+            view.layer.removeAnimation(forKey: "opacity")
+            if alpha == 1, shown != nil {
+                UIView.animate(withDuration: Self.appearSeconds, delay: 0,
+                               options: [.curveEaseOut, .beginFromCurrentState]) { [view] in
+                    view.alpha = 1
+                }
+            } else {
+                view.alpha = alpha
+            }
         }
         cutHole(shown, animated: animated)
     }
