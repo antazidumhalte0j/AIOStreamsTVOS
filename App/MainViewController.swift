@@ -13,6 +13,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private let subtitleView = SubtitleOverlay(frame: .zero)
     /// The two above, full screen or where the page's mini player and trailer previews put them.
     private lazy var stage = VideoStage(video: videoView, subtitles: subtitleView)
+    /// The hero's or a title page's backdrop at 4K, beneath the page (`tvos-backdrop`, BackdropStage).
+    private let backdrop = BackdropStage()
     private var web: AIOWebView?
     private let status = UILabel()
     private var engine: AetherPlayer?
@@ -43,6 +45,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
         stage.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(stage.view)
         stage.pictureInPicture = { [weak self] in self?.pip?.active == true }
+        // Beneath the video too: a trailer plays only while the backdrop is put away.
+        view.insertSubview(backdrop.view, at: 0)
+        backdrop.reply = { [weak self] in self?.sendToPage($0) }
 
         status.frame = view.bounds.insetBy(dx: 160, dy: 160)
         status.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -61,6 +66,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
         view.addSubview(status)
         self.web = web
         stage.web = web
+        backdrop.web = web
         guard web.available else {
             return showStatus("This version of tvOS has no web engine the app can use.")
         }
@@ -177,6 +183,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private func pageEnded(at url: URL?, reason: AIOPageEnd) {
         // The page that set a frame is gone: the video fills the screen and the page is whole again.
         stage.place(nil)
+        backdrop.reset()
         let now = Date()
         pageEnds = pageEnds.filter { now.timeIntervalSince($0) < 10 * Self.quickEnd } + [now]
         var quick = 0
@@ -502,6 +509,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             status.isHidden = true
             // A page that loaded again knows nothing of a frame the last one set.
             stage.place(nil)
+            backdrop.reset()
             web?.focusPage()
             pipButtonShown = false
             updatePipButton()
@@ -568,6 +576,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
             sendToPage(["type": "voice-result", "text": NSNull(), "error": "failed"])
         case "web-error":
             NSLog("[page] %@", message.text("message") ?? "")
+        case "tvos-backdrop":
+            // The hero's or a title page's backdrop, drawn here at 4K, or put away (patches/web/0048).
+            backdrop.handle(message)
         case "tvos-page-stats":
             MemoryLog.pageStats(message)
         case "tvos-page-moved":

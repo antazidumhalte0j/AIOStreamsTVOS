@@ -230,6 +230,20 @@ enum BridgeScript {
     ];
     rules.push(...solidFades);
     /*
+     * The app draws the backdrop shown at 4K beneath the page (patches/web/0048, BackdropStage.swift),
+     * through a hole in the page's background, once the page has held still. Its own copy is hidden
+     * meanwhile, still decoded for when it scrolls, and the masks over it, which the hole's edges now
+     * stand in for, are taken off so WebKit makes no surfaces for them. The edges and shades drawn
+     * over the art stay.
+     */
+    const APP_BACKDROP = 'html[data-app-backdrop] ';
+    rules.push(
+      APP_BACKDROP + "[data-ui='hero-backdrops'] img," + APP_BACKDROP + "[data-ui='item-backdrop-image']" +
+        '{visibility:hidden!important}',
+      [APP_BACKDROP + "[data-ui='hero-art']", APP_BACKDROP + "[data-ui='item-backdrop']",
+        APP_BACKDROP + "[data-ui='backdrop-frame']"].join(',') + NO_MASK
+    );
+    /*
      * Frosted and liquid glass (Theme > Glass surface: the navigation, and with Glass panels on, the
      * menus, dialogs and settings cards over the artwork background) are a thin fill over a
      * `backdrop-filter` blur. Stripped, they're nearly see-through, so they keep their blur, drawn as
