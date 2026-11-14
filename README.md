@@ -613,16 +613,18 @@ xcodegen generate               # writes AIOStreamsTV.xcodeproj from project.yml
 open AIOStreamsTV.xcodeproj     # Xcode fetches AetherEngine and its FFmpeg build through SwiftPM
 ```
 
-The engine is pinned to one commit in `Packages/AetherHost/Package.swift`: upstream AetherEngine 7.66.0
+The engine is pinned to one commit in `Packages/AetherHost/Package.swift`: upstream AetherEngine 7.67.0
 plus the app's fork's own commits ([mickey2266/AetherEngine](https://github.com/mickey2266/AetherEngine),
-branch `aiostreams-7.66`, each described there):
+branch `aiostreams-7.67`, each described there):
 - the engine's software player, which plays interlaced H.264 among others, labels its 7.1 as
   CoreAudio's WAVE_7_1, so the side and rear surrounds play from their own speakers instead of each
   other's;
 - remuxes read 64 MB ahead in 128 MB ranges, a connection running below the video's rate is
   replaced, and the Atmos confirmation runs on the held source connection;
 - the silent Atmos stream beside a rendered TrueHD Atmos or DTS:X bed stops while the
-  picture-in-picture window shows. Lossless surround (TrueHD, DTS-HD) reaches AVPlayer as FLAC. Its FFmpeg comes as
+  picture-in-picture window shows;
+- a forward seek past the read-ahead reads as far as the link delivers in a new request's
+  first-byte time, and the bytes a skip lands on are fetched ahead of the skip. Lossless surround (TrueHD, DTS-HD) reaches AVPlayer as FLAC. Its FFmpeg comes as
 dynamic frameworks that Xcode embeds in the app; nothing else in the app may bring an FFmpeg of its
 own, or it takes the engine's symbols.
 
