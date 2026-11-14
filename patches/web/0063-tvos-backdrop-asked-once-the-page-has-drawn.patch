@@ -1,0 +1,47 @@
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 74754b0..1188b2b 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -136,6 +136,14 @@ export function useAppBackdrop(
+     const html = document.documentElement;
+     let asked: string | null = null;
+     let drawn = false;
++    /**
++     * The page has drawn a frame since this mounted. Home shown again, kept mounted under the
++     * title page, has no entrance and is laid out and painted anew, which takes a while: asked in
++     * the same turn, the app's art, decoded already, came in a moment before the hero's shades,
++     * and showed without them (AIOStreamsTVOS).
++     */
++    let painted = false;
++    let firstFrame = 0;
+     /** Counted among the backdrops the app draws, which hides the page's copies. */
+     let holding = false;
+     let frame = 0;
+@@ -176,6 +184,7 @@ export function useAppBackdrop(
+     };
+     const show = () => {
+       cancelAnimationFrame(frame);
++      if (!painted) return;
+       const at = measure();
+       const next = latest.current;
+       if (!at || !next) return;
+@@ -259,11 +268,18 @@ export function useAppBackdrop(
+       passive: true,
+     });
+     addEventListener('resize', later);
+-    show();
++    // The second frame's callback runs once the first, with the page and its shades, is drawn.
++    firstFrame = requestAnimationFrame(() => {
++      firstFrame = requestAnimationFrame(() => {
++        painted = true;
++        show();
++      });
++    });
+     const settled = window.setTimeout(show, SETTLED_MS);
+     return () => {
+       tell.current = null;
+       clearTimeout(settled);
++      cancelAnimationFrame(firstFrame);
+       cancelAnimationFrame(frame);
+       observer.disconnect();
+       washes.disconnect();
