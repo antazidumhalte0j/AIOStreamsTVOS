@@ -196,6 +196,7 @@ enum MemoryLog {
             text += ", drawing layers about \(int("layerMB")) MB in \(int("layerCount")) near the screen (\(int("blurCount")) blurred)"
         }
         if message.flag("artWash") == true { text += ", artwork background shown" }
+        if let marks = message.text("appArt"), !marks.isEmpty { text += " (page marks: \(marks))" }
         if message.flag("cardPreview") == true { text += ", a card preview open" }
         // The artwork workers decode inside the page's process, outside the picture counts above.
         if int("artWorkers") > 0 {

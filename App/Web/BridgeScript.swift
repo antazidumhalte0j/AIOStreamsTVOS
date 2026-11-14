@@ -1328,6 +1328,11 @@ enum BridgeScript {
       })(),
       // What was on screen that the reloads with "Background from artwork" on point at.
       artWash: document.documentElement.hasAttribute('data-art-wash'),
+      // Who draws the wash and the backdrop now (patches/web/0048, 0050), for art drawn with hard edges.
+      appArt: ['data-app-wash', 'data-app-backdrop', 'data-video-hole']
+        .filter((name) => document.documentElement.hasAttribute(name))
+        .concat(document.querySelector('[data-ui="page-background"][data-app-hole]') ? ['data-app-hole'] : [])
+        .join(' ') || 'none',
       cardPreview: !!document.querySelector('[data-ui="open-card"]:not(.invisible)'),
       layers: document.querySelectorAll('[data-glide-layer]').length,
       episodes: document.querySelectorAll('[data-ui="episode-card"],[data-ui="episode-list-item"]').length,

@@ -33,6 +33,8 @@ final class BackdropStage {
     private var clip = CGRect.zero
     /// How the art's bottom and start fade into the wash beneath, when the app draws that too.
     private var edges: (bottom: CGFloat, start: CGFloat, rtl: Bool)?
+    /// What the mask in place was made for, so a new title with the same box keeps it.
+    private var maskKey: String?
     /// Decoded art by address, the newest last: Back to a title or the hero coming round finds it ready.
     private var decoded: [(src: String, image: UIImage)] = []
     private static let keep = 3
@@ -112,6 +114,15 @@ final class BackdropStage {
         }
     }
 
+    /// For the app menu: what's drawn, where, and how its edges fade.
+    var summary: String {
+        guard !view.isHidden, shown != nil else { return "none" }
+        let fades = edges.map { "fades bottom \($0.bottom), start \($0.start)" } ?? "no fades"
+        let place = "\(Int(clip.minX)),\(Int(clip.minY)) \(Int(clip.width))x\(Int(clip.height))"
+        let mask = view.layer.mask == nil ? "no mask" : "masked"
+        return "shown at \(place), \(fades), \(mask), alpha \(String(format: "%.2f", view.alpha)), \(decoded.count) decoded"
+    }
+
     /// The page reloaded, or its process ended: nothing of its stays.
     func reset() {
         clear()
@@ -122,6 +133,7 @@ final class BackdropStage {
         owner = nil
         src = nil
         edges = nil
+        maskKey = nil
         view.layer.mask = nil
         view.isHidden = true
         view.layer.removeAnimation(forKey: "opacity")
@@ -139,9 +151,17 @@ final class BackdropStage {
     private func show(_ image: UIImage, fade: Bool) {
         view.frame = clip
         view.isHidden = false
-        view.layer.mask = edges.map {
-            FadeMask.layer(size: clip.size, clip: CGRect(origin: .zero, size: clip.size),
-                           bottom: $0.bottom, start: $0.start, rtl: $0.rtl)
+        // Made again only when its size or fades change: each new title asks again with the same.
+        let maskKey = edges.map { "\(clip.size) \($0.bottom) \($0.start) \($0.rtl)" }
+        if maskKey != self.maskKey || (maskKey != nil && view.layer.mask == nil) {
+            self.maskKey = maskKey
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            view.layer.mask = edges.map {
+                FadeMask.layer(size: clip.size, clip: CGRect(origin: .zero, size: clip.size),
+                               bottom: $0.bottom, start: $0.start, rtl: $0.rtl)
+            }
+            CATransaction.commit()
         }
         // The art covers its box from the top, as the page's `object-cover object-top`.
         let size = image.size

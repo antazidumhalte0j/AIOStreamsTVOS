@@ -13,8 +13,14 @@ enum FadeMask {
 
     static func layer(size: CGSize, clip: CGRect, bottom: CGFloat, start: CGFloat, rtl: Bool) -> CALayer {
         let layer = CALayer()
+        // A layer of its own, not a view's, fades its contents in by itself (Core Animation's implicit
+        // actions): as a mask, what it covers would vanish and come back each time it's made.
+        layer.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull(), "frame": NSNull()]
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         layer.frame = CGRect(origin: .zero, size: size)
         layer.contents = image(size: size, clip: clip, bottom: bottom, start: start, rtl: rtl)
+        CATransaction.commit()
         return layer
     }
 
