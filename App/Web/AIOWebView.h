@@ -86,6 +86,12 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 /** Forgets everything WebKit saved for pages: storage, IndexedDB, caches. */
 - (void)removeAllWebData:(void (^)(void))done;
 /**
+ * Empties WebKit's in-memory cache of what pages loaded, decoded pictures among it, in the page's
+ * process; storage and the disk cache stay. `done` on the main thread, or at once where WebKit
+ * can't.
+ */
+- (void)clearMemoryCache:(void (^)(void))done;
+/**
  * The page's web process's memory as tvOS counts it against its limit, in MB,
  * or -1 where WebKit doesn't say. WebKit's own process, so the app can't
  * measure it itself; asked of WebKit's private process list.

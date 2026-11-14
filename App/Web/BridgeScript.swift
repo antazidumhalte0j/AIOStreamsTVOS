@@ -1295,7 +1295,76 @@ enum BridgeScript {
    * it, so it's a floor, not the whole.
    */
   const STATS_EVERY = 5000;
+  /*
+   * Pictures made anywhere, on the page or off it: `new Image()` (as the page decodes one ahead)
+   * and every <img> made, watched through weak references, so watching keeps none of them. Those
+   * no longer on the page but still loaded are counted: a picture let go of by the page but still
+   * held by something, or not yet collected. tvOS ended the page's process at its 1 GB limit with
+   * the pictures on the page about 25 MB, so the rest is somewhere none of the counts here saw.
+   */
+  const madeImages = [];
+  let imagesMade = 0;
+  const MADE_WATCHED = 6000;
+  const watchImage = (img) => {
+    imagesMade++;
+    madeImages.push(new WeakRef(img));
+    // The oldest go unwatched past this many, so the list stays small.
+    if (madeImages.length > MADE_WATCHED) madeImages.splice(0, madeImages.length - MADE_WATCHED);
+  };
+  try {
+    if (typeof WeakRef === 'function') {
+      const NativeImage = window.Image;
+      window.Image = new Proxy(NativeImage, {
+        construct(target, args) {
+          const img = Reflect.construct(target, args);
+          watchImage(img);
+          return img;
+        },
+      });
+      const createElement = Document.prototype.createElement;
+      Document.prototype.createElement = function (name, options) {
+        const el = createElement.call(this, name, options);
+        if (el instanceof HTMLImageElement) watchImage(el);
+        return el;
+      };
+    }
+  } catch {}
+  /*
+   * How much the page keeps from the server (patches/web/0064, `__aioQueryStats`), sized as JSON,
+   * a floor for what the objects take. Every 30 s, as sizing it reads through all of it.
+   */
+  const QUERY_STATS_EVERY = 30000;
+  let queryStats = null;
+  let queryStatsAt = -Infinity;
   const pageStats = () => {
+    // Off the page: still loaded, and not on it.
+    let offPage = 0;
+    let offPageLoaded = 0;
+    let offPageBytes = 0;
+    try {
+      let kept = 0;
+      for (const ref of madeImages) {
+        const img = ref.deref();
+        if (!img) continue;
+        madeImages[kept++] = ref;
+        if (img.isConnected) continue;
+        offPage++;
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (img.complete && w && h && !String(img.getAttribute('src') || '').startsWith('data:')) {
+          offPageLoaded++;
+          offPageBytes += w * h * 4;
+        }
+      }
+      madeImages.length = kept;
+    } catch {}
+    try {
+      const now = performance.now();
+      if (now - queryStatsAt >= QUERY_STATS_EVERY && typeof window.__aioQueryStats === 'function') {
+        queryStatsAt = now;
+        queryStats = window.__aioQueryStats();
+      }
+    } catch {}
     let pictures = 0;
     let pictureBytes = 0;
     let artwork = 0;
@@ -1445,6 +1514,17 @@ enum BridgeScript {
       videos: document.getElementsByTagName('video').length,
       elements: document.getElementsByTagName('*').length,
       cards: document.querySelectorAll('[data-ui="poster-card"]').length,
+      imagesMade,
+      offPage,
+      offPageLoaded,
+      offPageMB: mb(offPageBytes),
+      ...(queryStats && {
+        queries: queryStats.queries || 0,
+        queryPages: queryStats.pages || 0,
+        queryMB: mb(queryStats.bytes || 0),
+        queryLargestMB: mb(queryStats.largest || 0),
+        queryLargest: String(queryStats.largestKey || ''),
+      }),
     };
   };
   try {

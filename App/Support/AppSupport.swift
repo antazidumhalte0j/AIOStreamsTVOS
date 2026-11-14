@@ -167,6 +167,26 @@ enum MemoryLog {
     /// The page's last few moves from page to page, newest last, so an end can be put next to one.
     private static var moves: [(at: Date, from: String, to: String)] = []
 
+    /**
+     * A test, from the app menu: WebKit's in-memory cache emptied at each move between pages. A
+     * picture the page let go of may stay decoded in it; if the page stops being ended for memory
+     * with this on, that's where its memory went. Kept across launches, so a session can run with it.
+     */
+    static var clearsMemoryCache: Bool {
+        get { UserDefaults.standard.bool(forKey: "debug.clearMemoryCache") }
+        set { UserDefaults.standard.set(newValue, forKey: "debug.clearMemoryCache") }
+    }
+    private static var cacheClears = 0
+
+    /// WebKit emptied its in-memory cache for `clearsMemoryCache`.
+    static func memoryCacheCleared() { cacheClears += 1 }
+
+    private static var cacheText: String {
+        clearsMemoryCache
+            ? "WebKit's memory cache emptied at each move (\(cacheClears) times since launch)"
+            : "WebKit's memory cache left alone"
+    }
+
     /// A `tvos-page-moved` message: the page went from one path to another, such as Back to `/`.
     static func pageMoved(from: String, to: String) {
         moves.append((Date(), from, to))
@@ -187,6 +207,20 @@ enum MemoryLog {
         text += ")"
         if int("canvases") > 0 { text += ", canvases \(int("canvasMB")) MB in \(int("canvases"))" }
         if int("videos") > 0 { text += ", \(int("videos")) videos" }
+        // Loaded but no longer on the page: let go of yet still held, or not yet collected.
+        if int("offPage") > 0 {
+            text += ", \(int("offPageLoaded")) pictures off the page still loaded (\(int("offPageMB")) MB"
+            text += ", \(int("offPage")) off the page in all, \(int("imagesMade")) made since load)"
+        }
+        // What the page keeps from the server (patches/web/0064), as JSON, which the objects outweigh.
+        if message.number("queries") != nil {
+            text += ", server data \(int("queryMB")) MB as JSON in \(int("queries")) queries"
+            text += " (\(int("queryPages")) catalog pages"
+            if let key = message.text("queryLargest"), !key.isEmpty {
+                text += ", largest \(key) \(int("queryLargestMB")) MB"
+            }
+            text += ")"
+        }
         text += ", \(int("cards")) cards, \(int("elements")) elements"
         if let most = message.text("mostUi"), !most.isEmpty { text += " (most \(most))" }
         if let path = message.text("path"), !path.isEmpty { text += " on \(path)" }
@@ -261,6 +295,7 @@ enum MemoryLog {
         lastStats = nil
         lastStatsAt = nil
         moves = []
+        before += "; \(cacheText)"
         let page = path.map { " on \($0)" } ?? ""
         note("page's web process ended (\(cause(reason)))\(page) \(playing ? "with a video loaded" : "while browsing")\(before)")
     }
@@ -282,7 +317,7 @@ enum MemoryLog {
         var peak = peakWebMB.map { ", the page at most \($0) MB" } ?? ""
         if let gpu = peakGpuMB { peak += ", WebKit graphics at most \(gpu) MB" }
         if let pictures = peakPictureMB { peak += ", the page's pictures at most \(pictures) MB" }
-        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText]
+        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText, cacheText]
         if let stats = lastStats { head.append("The page now holds \(stats)") }
         return head + lines
     }

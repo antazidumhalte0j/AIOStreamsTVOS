@@ -1,0 +1,43 @@
+diff --git a/packages/web/src/main.tsx b/packages/web/src/main.tsx
+index 42c73322b..978a0159d 100644
+--- a/packages/web/src/main.tsx
++++ b/packages/web/src/main.tsx
+@@ -34,6 +34,38 @@ const queryClient = new QueryClient({
+   },
+ });
+ 
++/**
++ * How much the page keeps from the server, for the Apple TV app's memory log:
++ * its web process is ended for memory with few pictures held, so the rest may
++ * be this. Sized as JSON, which the objects themselves outweigh, so a floor
++ * (AIOStreamsTVOS).
++ */
++Object.defineProperty(window, '__aioQueryStats', {
++  value: () => {
++    const queries = queryClient.getQueryCache().getAll();
++    let bytes = 0;
++    let pages = 0;
++    let largest = 0;
++    let largestKey = '';
++    for (const query of queries) {
++      const data = query.state.data as { pages?: unknown[] } | undefined;
++      if (data && Array.isArray(data.pages)) pages += data.pages.length;
++      let size = 0;
++      try {
++        size = JSON.stringify(data)?.length ?? 0;
++      } catch {
++        // A value JSON can't hold, such as one that refers to itself, goes uncounted.
++      }
++      bytes += size;
++      if (size > largest) {
++        largest = size;
++        largestKey = String(query.queryKey[0]);
++      }
++    }
++    return { queries: queries.length, pages, bytes, largest, largestKey };
++  },
++});
++
+ const container = document.getElementById('root')!;
+ // React listens at its root and at the body, where portals go, for every event
+ // it knows, so the browser would build and send one as each CSS transition and
