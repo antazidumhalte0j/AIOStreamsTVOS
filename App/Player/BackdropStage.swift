@@ -69,16 +69,11 @@ final class BackdropStage {
     /// The scroll view's offset less the page's own scroll position, learned while it's still.
     private var scrollInset: CGFloat = 0
     private var lastScrolled: CFTimeInterval = 0
-    /// The art put away, fading or held, where it was and the scroll it was placed at.
-    private var leavingGhost: UIView?
-    private var ghostAt: (frame: CGRect, scroll: CGFloat) = (.zero, 0)
 
     /// As the page's own layers fade (`duration-700`): a new title's art, and off a trailer.
     private static let fadeSeconds: TimeInterval = 0.7
     /// As the page's own layers fade in from nothing (`animate-in`, 400 ms).
     private static let appearSeconds: TimeInterval = 0.4
-    /// Put away: held about the two frames WebKit takes to draw anew.
-    private static let clearSeconds: TimeInterval = 2.0 / 60
     /// The width the app draws a backdrop down to: the 4K screen's.
     private static let width = 3840
 
@@ -95,8 +90,8 @@ final class BackdropStage {
         guard let src = message.text("src"), let frame = message.object("frame"),
               let clip = message.object("clip"), let web, let container = view.superview else {
             // Only the backdrop that asked puts itself away: the next page's can ask first. Not faded
-            // out, though the page asks (`fade`): its page is gone at once, and its shades with it, so
-            // the art faded with nothing over it, over the next page coming in.
+            // out: its page is gone at once, and its shades with it, so the art faded with nothing
+            // over it, over the next page coming in.
             if owner == nil || owner == id { clear() }
             return
         }
@@ -178,12 +173,6 @@ final class BackdropStage {
 
     /// The page scrolled: the art moves with it, frame by frame.
     private func scrolled(to y: CGFloat) {
-        if let ghost = leavingGhost {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            ghost.frame = ghostAt.frame.offsetBy(dx: 0, dy: -(y - ghostAt.scroll))
-            CATransaction.commit()
-        }
         guard !view.isHidden, let placedAt else { return }
         let moved = y - placedAt
         guard abs(view.frame.origin.y - (clip.minY - moved)) >= 0.25 else { return }
@@ -211,7 +200,13 @@ final class BackdropStage {
         decoded.removeAll()
     }
 
-    /// Held the two frames WebKit takes to draw the next page, then gone.
+    /**
+     * Gone at once. The page tells the app as it takes the art's box down, before WebKit draws it
+     * without it (patches/web/0065), and the shades it draws over the art are in the page's colour,
+     * which the app draws beneath it all: the art gone a moment early shows nothing. Held two frames
+     * more on a copy, it showed bare after the page and its shades had gone, a flash opening a cast
+     * member from a title page, and an unshaded moment going back from one.
+     */
     private func clear() {
         owner = nil
         src = nil
@@ -225,34 +220,14 @@ final class BackdropStage {
         measuredAt = nil
         appearing = false
         pageHidden = false
-        // On a copy of the view, moving with the scroll, so the view itself is free at once for the next ask.
-        if let picture, !view.isHidden, view.alpha > 0, let container = view.superview {
-            let ghost = UIView(frame: view.frame)
-            ghost.isUserInteractionEnabled = false
-            ghost.clipsToBounds = true
-            ghost.alpha = CGFloat(view.layer.presentation()?.opacity ?? Float(view.alpha))
-            // A layer masks one layer at a time: off the view first.
-            let mask = view.layer.mask
-            view.layer.mask = nil
-            ghost.layer.mask = mask
-            ghost.addSubview(picture)
-            container.insertSubview(ghost, aboveSubview: view)
-            leavingGhost?.removeFromSuperview()
-            leavingGhost = ghost
-            // Its frame already follows the scroll to now, so it moves on from where the scroll is.
-            ghostAt = (frame: ghost.frame, scroll: scrollView?.contentOffset.y ?? 0)
-            let gone: () -> Void = { [weak self, weak ghost] in
-                ghost?.removeFromSuperview()
-                if let self, self.leavingGhost === ghost { self.leavingGhost = nil }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.clearSeconds, execute: gone)
-        } else {
-            picture?.removeFromSuperview()
-        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture?.removeFromSuperview()
         view.layer.mask = nil
         view.isHidden = true
         view.layer.removeAnimation(forKey: "opacity")
         view.alpha = 1
+        CATransaction.commit()
         // No art coming now: a wash waiting on it changes at once.
         artShown()
     }

@@ -1,0 +1,47 @@
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 9d44172..17e4fc6 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -130,6 +130,22 @@ export function useAppBackdrop(
+   const latest = React.useRef(src);
+   latest.current = src;
+   const tell = React.useRef<(() => void) | null>(null);
++  /** Tells the app to put this art away, once. */
++  const putAway = React.useRef<(() => void) | null>(null);
++  /*
++   * Put away as the art's box is taken down, before WebKit draws the page without it: a layout
++   * effect's cleanup runs as the page's markup goes, a passive one's after. The page's shades go
++   * with its markup, and the app's art outlasted them, bare, a moment each time a title page closed
++   * or gave way to another. Gone a moment early it shows nothing, as the shades are the page's
++   * colour, which the app draws beneath (AIOStreamsTVOS).
++   */
++  React.useLayoutEffect(() => {
++    if (!active || !shell) return;
++    return () => {
++      putAway.current?.();
++      putAway.current = null;
++    };
++  }, [active, shell, art]);
+   React.useEffect(() => {
+     if (!active || !shell) return;
+     const id = ++nextId;
+@@ -155,6 +171,7 @@ export function useAppBackdrop(
+     };
+     const send = (message: Record<string, unknown>) =>
+       shell.send({ type: 'tvos-backdrop', id, ...message });
++    putAway.current = () => send({ src: null });
+     /** How the art fades into what's beneath: as asked, or as the artwork background's masks do. */
+     const edgesNow = (): HoleFade | null =>
+       options.current.fade ??
+@@ -287,8 +304,9 @@ export function useAppBackdrop(
+       removeEventListener('resize', later);
+       unsubscribe();
+       hold(false);
+-      // Faded out by the app, over the next page's art coming in.
+-      send({ src: null, fade: true });
++      // Already put away where the layout effect's cleanup ran first, as it does.
++      putAway.current?.();
++      putAway.current = null;
+     };
+   }, [active, shell, art]);
+   React.useEffect(() => {
