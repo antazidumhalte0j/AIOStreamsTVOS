@@ -343,7 +343,10 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private func showAppMenu() {
         guard presentedViewController == nil else { return }
         // In steps: as one expression, the compiler gives up type-checking it.
-        var lines: [String] = ["App \(Identity.version) · web app \(WebApp.commit) · \(storage.keyCount) saved keys", ""]
+        var lines: [String] = [
+            "App commit: \(WebApp.appCommit)",
+            "App \(Identity.version) · web app \(WebApp.commit) · \(storage.keyCount) saved keys", "",
+        ]
         lines += AppAnswers.videoLines(player: engine, window: view.window)
         lines.append("")
         lines += MemoryLog.report
