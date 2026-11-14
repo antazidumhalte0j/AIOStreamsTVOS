@@ -27,6 +27,11 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 
 /** False when this tvOS has no WebKit to load. */
 @property (nonatomic, readonly) BOOL available;
+/**
+ * WebKit's scroll view for the page, which its own smooth scrolls move in the app's process ahead
+ * of the page hearing of them; nil without WebKit.
+ */
+@property (nonatomic, readonly, nullable) UIScrollView *scrollView;
 /** A message the page posted to `aiostreamsNative`, parsed from JSON. */
 @property (nonatomic, copy, nullable) void (^onMessage)(NSDictionary<NSString *, id> *message);
 @property (nonatomic, copy, nullable) void (^onLoadFinished)(void);

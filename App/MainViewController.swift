@@ -77,6 +77,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
         self.web = web
         stage.web = web
         backdrop.web = web
+        backdrop.scrollView = web.scrollView
         guard web.available else {
             return showStatus("This version of tvOS has no web engine the app can use.")
         }

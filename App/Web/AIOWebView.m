@@ -335,6 +335,11 @@ static NSString *AIOMimeType(NSString *extension) {
     return self.webView != nil;
 }
 
+- (nullable UIScrollView *)scrollView {
+    id scrollView = AIOSend0(self.webView, @"scrollView");
+    return [scrollView isKindOfClass:UIScrollView.class] ? scrollView : nil;
+}
+
 - (void)build {
     AIOLoadWebKit();
     Class configurationClass = NSClassFromString(@"WKWebViewConfiguration");

@@ -21,6 +21,23 @@ final class BackdropStage {
     weak var web: UIView?
     /// Tells the page a backdrop is drawn, so it can hide its own.
     var reply: (Message) -> Void = { _ in }
+    /**
+     * WebKit's scroll view for the page. WebKit runs its smooth scrolls here in the app's process,
+     * and the page hears of them a frame or more later, longer while its thread is busy (a title
+     * page mounting its rows as it scrolls): the art stayed where it was until the page put it
+     * away. It follows the scroll from here meanwhile.
+     */
+    weak var scrollView: UIScrollView? {
+        didSet {
+            scrollWatch = scrollView?.observe(\.contentOffset, options: []) { [weak self] scrollView, _ in
+                let y = scrollView.contentOffset.y
+                MainActor.assumeIsolated { self?.scrolled(to: y) }
+            }
+        }
+    }
+    private var scrollWatch: NSKeyValueObservation?
+    /// Where the page was scrolled to as the art was placed, in the scroll view's points.
+    private var placedAt: CGFloat?
 
     /// The art in its box, and the one fading out under it.
     private var shown: UIImageView?
@@ -132,6 +149,20 @@ final class BackdropStage {
         }
     }
 
+    /// The page scrolled: the art moves with it, frame by frame, until the page puts it away.
+    private func scrolled(to y: CGFloat) {
+        guard !view.isHidden, let placedAt else { return }
+        let moved = y - placedAt
+        guard abs(moved) >= 0.5 || view.frame.origin.y != clip.minY else { return }
+        if abs(moved) >= 0.5, abs(view.frame.origin.y - clip.minY) < 0.5 {
+            ArtLog.note("backdrop following WebKit's scroll ahead of the page")
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        view.frame = clip.offsetBy(dx: 0, dy: -moved)
+        CATransaction.commit()
+    }
+
     /// The end of an address, enough to tell titles apart in the log.
     private static func short(_ src: String) -> String {
         let path = URLComponents(string: src)?.path ?? src
@@ -184,6 +215,7 @@ final class BackdropStage {
         shown = nil
         shownSrc = nil
         loading = nil
+        placedAt = nil
         // Faded out on a copy of the view, over the frame WebKit takes to show the page as it is
         // now (its copy back, the hole closed): gone at once, what's beneath showed through the hole
         // for that frame. The view itself is free at once for the next ask.
@@ -219,6 +251,8 @@ final class BackdropStage {
     private func show(_ image: UIImage, src: String, fade: Bool) {
         view.frame = clip
         view.isHidden = false
+        // Asked only once the page has held still, so this is where its measure was taken.
+        placedAt = scrollView?.contentOffset.y
         if tinted { tint.frame = view.bounds }
         // Made again only when its size or fades change: each new title asks again with the same.
         let maskKey = edges.map { "\(clip.size) \($0.bottom) \($0.start) \($0.rtl)" }
