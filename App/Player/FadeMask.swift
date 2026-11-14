@@ -11,7 +11,10 @@ import UIKit
  * fade, so the two multiply. Nothing is drawn by hand, and the fades are smooth at any size.
  */
 enum FadeMask {
-    static func layer(size: CGSize, clip: CGRect, bottom: CGFloat, start: CGFloat, rtl: Bool) -> CALayer {
+    /// `frameEdge`: a further fade in from `x` (points in from the clip's start edge) over `width`, as the page's
+    /// backdrop frame fades in from its start on top of the art's own fades.
+    static func layer(size: CGSize, clip: CGRect, bottom: CGFloat, start: CGFloat, rtl: Bool,
+                      frameEdge: (x: CGFloat, width: CGFloat)? = nil) -> CALayer {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -22,16 +25,36 @@ enum FadeMask {
         layer.frame = CGRect(origin: .zero, size: size)
         layer.actions = still
 
+        // The frame's fade over all of it, multiplying the two below, as the page's nested masks do.
+        let group = CALayer()
+        group.actions = still
+        group.frame = clip
+        layer.addSublayer(group)
+        if let frameEdge, frameEdge.width > 0, clip.width > 0 {
+            let edge = CAGradientLayer()
+            edge.actions = still
+            edge.frame = group.bounds
+            // `x` is measured from the clip's start edge, as the gradient runs from that side.
+            let from = frameEdge.x
+            let a = min(max(from / clip.width, 0), 1)
+            let b = min(max((from + frameEdge.width) / clip.width, 0), 1)
+            edge.colors = [gone, gone, shown, shown]
+            edge.locations = [0, NSNumber(value: Double(a)), NSNumber(value: Double(max(b, a))), 1]
+            edge.startPoint = CGPoint(x: rtl ? 1 : 0, y: 0.5)
+            edge.endPoint = CGPoint(x: rtl ? 0 : 1, y: 0.5)
+            group.mask = edge
+        }
+
         // Whole down to where the bottom fade starts, then out to nothing at the clip's bottom.
         let down = CAGradientLayer()
         down.actions = still
-        down.frame = clip
+        down.frame = group.bounds
         let b = min(max(bottom, 0), 1)
         down.colors = [shown, shown, b > 0 ? gone : shown]
         down.locations = [0, NSNumber(value: Double(1 - b)), 1]
         down.startPoint = CGPoint(x: 0.5, y: 0)
         down.endPoint = CGPoint(x: 0.5, y: 1)
-        layer.addSublayer(down)
+        group.addSublayer(down)
 
         // In from nothing at the start edge over its fraction of the width, then whole.
         let s = min(max(start, 0), 1)

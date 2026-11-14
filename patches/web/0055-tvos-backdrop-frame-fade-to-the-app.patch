@@ -1,0 +1,38 @@
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+index 9464938f9..a590a2c66 100644
+--- a/packages/web/src/lib/hosts/shell/app-backdrop.ts
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -219,8 +219,19 @@ export function useAppBackdrop(
+           width: innerWidth,
+           height: innerHeight,
+         });
+-      return visible && within ? { box, within, visible } : null;
++      return visible && within ? { box, within, visible, target } : null;
+     };
++    /**
++     * How far in from its start the backdrop frame fades in (hero.tsx's `BackdropFrame`, a 12rem
++     * mask in landscape or from 1024 px wide), in the page's pixels; none for another frame. The
++     * page's copy fades so on top of the art's own, so the app's art does too: without it, the
++     * app's was lighter there, and each swap between the two flashed at that edge (AIOStreamsTVOS).
++     */
++    const frameFadeOf = (target: HTMLElement) =>
++      target.matches('[data-ui=backdrop-frame]') &&
++      matchMedia('(orientation: landscape), (min-width: 1024px)').matches
++        ? 12 * (parseFloat(getComputedStyle(html).fontSize) || 16)
++        : 0;
+     const show = () => {
+       const at = measure();
+       const next = latest.current;
+@@ -239,7 +250,11 @@ export function useAppBackdrop(
+         clip: scaled(at.within, scale),
+         pageWidth: innerWidth * scale,
+         quick: shown === null,
+-        ...(fade && { fade, rtl: html.dir === 'rtl' }),
++        ...(fade && {
++          fade,
++          rtl: html.dir === 'rtl',
++          frameFade: frameFadeOf(at.target) * scale,
++        }),
+         ...(options.current.hidden && { hidden: true }),
+       });
+     };

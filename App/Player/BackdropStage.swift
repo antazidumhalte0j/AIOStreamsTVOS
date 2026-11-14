@@ -53,7 +53,7 @@ final class BackdropStage {
     private var box = CGRect.zero
     private var clip = CGRect.zero
     /// How the art's bottom and start fade into the wash beneath, when the app draws that too.
-    private var edges: (bottom: CGFloat, start: CGFloat, rtl: Bool)?
+    private var edges: (bottom: CGFloat, start: CGFloat, rtl: Bool, frame: CGFloat)?
     /// What the mask in place was made for, so a new title with the same box keeps it.
     private var maskKey: String?
     /// The art `shown` holds, and the art on its way from the server.
@@ -108,9 +108,14 @@ final class BackdropStage {
         self.clip = rect(clip)
         // Over the app's own wash the page's background is clear, so the art's edges fade here.
         let fadeIn = message.object("fade")
+        // The backdrop frame's own fade in from its start, in the page's pixels (patches/web/0055).
+        let frameFade: CGFloat = {
+            guard let value = message.number("frameFade"), value.isFinite, value > 0 else { return 0 }
+            return CGFloat(min(value, 10_000)) * scale
+        }()
         edges = fadeIn.map {
             (bottom: CGFloat($0.number("bottom") ?? 0), start: CGFloat($0.number("start") ?? 0),
-             rtl: message.flag("rtl") == true)
+             rtl: message.flag("rtl") == true, frame: frameFade)
         }
         let fade = wasShown && message.flag("quick") != true && src != self.src
         ArtLog.note("backdrop #\(id) asked: \(src == self.src ? "same art" : "new art \(Self.short(src))")"
@@ -179,7 +184,9 @@ final class BackdropStage {
     /// For the app menu: what's drawn, where, and how its edges fade.
     var summary: String {
         guard !view.isHidden, shown != nil else { return "none" }
-        let fades = edges.map { "fades bottom \($0.bottom), start \($0.start)" } ?? "no fades"
+        let fades = edges.map {
+            "fades bottom \($0.bottom), start \($0.start)" + ($0.frame > 0 ? ", frame \(Int($0.frame)) pt" : "")
+        } ?? "no fades"
         let place = "\(Int(clip.minX)),\(Int(clip.minY)) \(Int(clip.width))x\(Int(clip.height))"
         let mask = FadeMask.sample(view.layer.mask, clip: CGRect(origin: .zero, size: clip.size),
                                    rtl: edges?.rtl == true)
@@ -198,7 +205,8 @@ final class BackdropStage {
     private lazy var tint: UIView = {
         let tint = UIView(frame: view.bounds)
         tint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tint.backgroundColor = UIColor.red.withAlphaComponent(0.45)
+        // Solid, so even where the art fades out it's red, not art: what shows art there is the page's.
+        tint.backgroundColor = .red
         tint.isUserInteractionEnabled = false
         tint.isHidden = true
         view.addSubview(tint)
@@ -264,7 +272,9 @@ final class BackdropStage {
         placedAt = scrollView?.contentOffset.y
         if tinted { tint.frame = view.bounds }
         // Made again only when its size or fades change: each new title asks again with the same.
-        let maskKey = edges.map { "\(clip.size) \($0.bottom) \($0.start) \($0.rtl)" }
+        // How far in from the clip's start edge the frame starts: its fade is measured from there.
+        let frameAt = edges?.rtl == true ? clip.maxX - box.maxX : box.minX - clip.minX
+        let maskKey = edges.map { "\(clip.size) \($0.bottom) \($0.start) \($0.rtl) \($0.frame) \(frameAt)" }
         if maskKey != self.maskKey || (maskKey != nil && view.layer.mask == nil) {
             ArtLog.note("backdrop mask \(maskKey == nil ? "taken OFF" : "made for \(Int(clip.width))x\(Int(clip.height))")")
             self.maskKey = maskKey
@@ -272,7 +282,8 @@ final class BackdropStage {
             CATransaction.setDisableActions(true)
             view.layer.mask = edges.map {
                 FadeMask.layer(size: clip.size, clip: CGRect(origin: .zero, size: clip.size),
-                               bottom: $0.bottom, start: $0.start, rtl: $0.rtl)
+                               bottom: $0.bottom, start: $0.start, rtl: $0.rtl,
+                               frameEdge: $0.frame > 0 ? (x: frameAt, width: $0.frame) : nil)
             }
             CATransaction.commit()
         }
