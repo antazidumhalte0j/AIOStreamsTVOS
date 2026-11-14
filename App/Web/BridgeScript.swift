@@ -288,8 +288,12 @@ enum BridgeScript {
     );
     // The rotating hero's art and the one following the card in focus (whole window or corner), and a title page's.
     rules.push(
+      // Opacity too, the compositor's own: the copy still showed with visibility alone, its masks
+      // stripped by the rule below, so the art had hard edges over the app's faded one. Only the
+      // pictures, whose own fades are animations, so the copy is back at once as the page scrolls.
       [APP_BACKDROP + "[data-ui='hero-art'] img", APP_BACKDROP + "[data-ui='hero-corner'] img",
-        APP_BACKDROP + "[data-ui='item-backdrop-image']"].join(',') + '{visibility:hidden!important}',
+        APP_BACKDROP + "[data-ui='item-backdrop-image']"].join(',') +
+        '{visibility:hidden!important;opacity:0!important}',
       [APP_BACKDROP + "[data-ui='hero-art']", APP_BACKDROP + "[data-ui='item-backdrop']",
         APP_BACKDROP + "[data-ui='backdrop-frame']", APP_BACKDROP + "[data-ui='hero-corner']",
         APP_BACKDROP + "[data-ui='hero-corner']>div"].join(',') + NO_MASK
@@ -1334,6 +1338,26 @@ enum BridgeScript {
         .concat(document.querySelector('[data-ui="page-background"][data-app-hole]') ? ['data-app-hole'] : [])
         // A trailer the page has mounted, playing or on its way, in the hero or behind a title page.
         .concat(['hero-trailer', 'item-trailer'].filter((name) => document.querySelector(`[data-ui="${name}"]`)))
+        // While the app draws the art, any of the page's own backdrop pictures still drawn, by where
+        // it is and what keeps it on screen: these show with hard edges over the app's.
+        .concat((() => {
+          if (!document.documentElement.hasAttribute('data-app-backdrop')) return [];
+          const shown = [];
+          const pictures = document.querySelectorAll(
+            "[data-ui='hero-backdrop'],[data-ui='item-backdrop-image'],[data-ui='hero-art'] img,[data-ui='hero-art'] canvas," +
+            "[data-ui='hero-corner'] img,[data-ui='item-backdrop'] img,[data-ui='item-backdrop'] canvas");
+          for (const el of new Set(pictures)) {
+            const box = el.getBoundingClientRect();
+            if (box.width < 2 || box.height < 2 || box.bottom <= 0 || box.top >= innerHeight) continue;
+            const style = getComputedStyle(el);
+            if (style.visibility === 'hidden' && Number(style.opacity) === 0) continue;
+            const holder = el.closest('[data-ui]:not([data-ui="hero-backdrop"]):not([data-ui="item-backdrop-image"])');
+            const where = holder ? holder.getAttribute('data-ui') : 'page';
+            shown.push(`copy SHOWN: ${el.getAttribute('data-ui') || el.tagName.toLowerCase()} in ${where}` +
+              ` (visibility ${style.visibility}, opacity ${style.opacity}, ${Math.round(box.width)}x${Math.round(box.height)})`);
+          }
+          return shown.slice(0, 3);
+        })())
         .join(' ') || 'none',
       cardPreview: !!document.querySelector('[data-ui="open-card"]:not(.invisible)'),
       layers: document.querySelectorAll('[data-glide-layer]').length,
