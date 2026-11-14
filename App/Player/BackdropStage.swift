@@ -41,6 +41,8 @@ final class BackdropStage {
 
     /// As the page's own layers fade (`duration-700`, and 400 ms from nothing).
     private static let fadeSeconds: TimeInterval = 0.7
+    /// Putting the art away as the page scrolls: about the frame or two WebKit takes to show its own copy.
+    private static let clearSeconds: TimeInterval = 0.1
     /// The width the app draws a backdrop down to: the 4K screen's.
     private static let width = 3840
 
@@ -134,14 +136,35 @@ final class BackdropStage {
         src = nil
         edges = nil
         maskKey = nil
+        let pictures = [leaving, shown].compactMap { $0 }
+        leaving = nil
+        shown = nil
+        // Faded out on a copy of the view, over the frame WebKit takes to show the page as it is
+        // now (its copy back, the hole closed): gone at once, what's beneath showed through the hole
+        // for that frame. The view itself is free at once for the next ask.
+        if !view.isHidden, view.alpha > 0, !pictures.isEmpty, let container = view.superview {
+            let ghost = UIView(frame: view.frame)
+            ghost.isUserInteractionEnabled = false
+            ghost.clipsToBounds = true
+            ghost.alpha = CGFloat(view.layer.presentation()?.opacity ?? Float(view.alpha))
+            // A layer masks one layer at a time: off the view first.
+            let mask = view.layer.mask
+            view.layer.mask = nil
+            ghost.layer.mask = mask
+            for picture in pictures { ghost.addSubview(picture) }
+            container.insertSubview(ghost, aboveSubview: view)
+            UIView.animate(withDuration: Self.clearSeconds, delay: 0, options: [.curveEaseIn]) {
+                ghost.alpha = 0
+            } completion: { _ in
+                ghost.removeFromSuperview()
+            }
+        } else {
+            for picture in pictures { picture.removeFromSuperview() }
+        }
         view.layer.mask = nil
         view.isHidden = true
         view.layer.removeAnimation(forKey: "opacity")
         view.alpha = 1
-        leaving?.removeFromSuperview()
-        leaving = nil
-        shown?.removeFromSuperview()
-        shown = nil
     }
 
     private func drawn(_ id: Int, _ src: String) {
