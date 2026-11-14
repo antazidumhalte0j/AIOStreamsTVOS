@@ -77,9 +77,7 @@ final class BackdropStage {
     private static let fadeSeconds: TimeInterval = 0.7
     /// As the page's own layers fade in from nothing (`animate-in`, 400 ms).
     private static let appearSeconds: TimeInterval = 0.4
-    /// As a page leaves, under the next one's art coming in.
-    private static let leaveSeconds: TimeInterval = 0.3
-    /// Put away otherwise (the page reloaded): held about the two frames WebKit takes to draw anew.
+    /// Put away: held about the two frames WebKit takes to draw anew.
     private static let clearSeconds: TimeInterval = 2.0 / 60
     /// The width the app draws a backdrop down to: the 4K screen's.
     private static let width = 3840
@@ -96,9 +94,10 @@ final class BackdropStage {
         let id = Int(message.number("id") ?? 0)
         guard let src = message.text("src"), let frame = message.object("frame"),
               let clip = message.object("clip"), let web, let container = view.superview else {
-            // Only the backdrop that asked puts itself away: the next page's can ask first. Its page
-            // closing, it fades out over the next page's art coming in.
-            if owner == nil || owner == id { clear(fadeOut: message.flag("fade") == true) }
+            // Only the backdrop that asked puts itself away: the next page's can ask first. Not faded
+            // out, though the page asks (`fade`): its page is gone at once, and its shades with it, so
+            // the art faded with nothing over it, over the next page coming in.
+            if owner == nil || owner == id { clear() }
             return
         }
         var scale: CGFloat = 1
@@ -115,6 +114,10 @@ final class BackdropStage {
                 from: web
             )
         }
+        // Another page's art, its page left or under this one (the home page stays mounted beneath a
+        // title page, and is put away after it asks, or not at all). Held until this art arrived, the
+        // hero's showed over the title page, unshaded, for as long as the title's took to load.
+        if owner != id, owner != nil, shown != nil { clear() }
         let wasShown = owner == id && !view.isHidden && shown != nil
         owner = id
         box = rect(frame)
@@ -208,8 +211,8 @@ final class BackdropStage {
         decoded.removeAll()
     }
 
-    /// `fadeOut`: its page closed, so it fades out over the next page's art; else held two frames.
-    private func clear(fadeOut: Bool = false) {
+    /// Held the two frames WebKit takes to draw the next page, then gone.
+    private func clear() {
         owner = nil
         src = nil
         edges = nil
@@ -242,13 +245,7 @@ final class BackdropStage {
                 ghost?.removeFromSuperview()
                 if let self, self.leavingGhost === ghost { self.leavingGhost = nil }
             }
-            if fadeOut {
-                UIView.animate(withDuration: Self.leaveSeconds, delay: 0, options: [.curveEaseIn]) {
-                    ghost.alpha = 0
-                } completion: { _ in gone() }
-            } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.clearSeconds, execute: gone)
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.clearSeconds, execute: gone)
         } else {
             picture?.removeFromSuperview()
         }
