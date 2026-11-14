@@ -276,6 +276,7 @@ enum BridgeScript {
      * over the art stay.
      */
     const APP_BACKDROP = 'html[data-app-backdrop] ';
+    const APP_BACKDROP_SOLID = 'html[data-app-backdrop]:not([data-art-wash]) ';
     /*
      * With "Background from artwork" on, the app draws the wash beneath the page and fades each new
      * one in itself (patches/web/0050, WashStage.swift), so the page's background and its root, which
@@ -294,9 +295,13 @@ enum BridgeScript {
       [APP_BACKDROP + "[data-ui='hero-art'] img", APP_BACKDROP + "[data-ui='hero-corner'] img",
         APP_BACKDROP + "[data-ui='item-backdrop-image']"].join(',') +
         '{visibility:hidden!important;opacity:0!important}',
-      [APP_BACKDROP + "[data-ui='hero-art']", APP_BACKDROP + "[data-ui='item-backdrop']",
-        APP_BACKDROP + "[data-ui='backdrop-frame']", APP_BACKDROP + "[data-ui='hero-corner']",
-        APP_BACKDROP + "[data-ui='hero-corner']>div"].join(',') + NO_MASK
+      // Not with "Background from artwork" on, where the masks fade the art into the wash: given
+      // back as the page took over from the app's art, WebKit drew the copy before its masks, so
+      // for a moment after each move the art showed with hard bottom and start edges. They stay,
+      // drawn, while the copy is hidden, as during the page's own scrolls.
+      [APP_BACKDROP_SOLID + "[data-ui='hero-art']", APP_BACKDROP_SOLID + "[data-ui='item-backdrop']",
+        APP_BACKDROP_SOLID + "[data-ui='backdrop-frame']", APP_BACKDROP_SOLID + "[data-ui='hero-corner']",
+        APP_BACKDROP_SOLID + "[data-ui='hero-corner']>div"].join(',') + NO_MASK
     );
     /*
      * Frosted and liquid glass (Theme > Glass surface: the navigation, and with Glass panels on, the

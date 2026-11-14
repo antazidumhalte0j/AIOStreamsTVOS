@@ -53,7 +53,14 @@ final class WashStage {
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.owner == id, self.src == src else { return }
                 guard let image else { return self.drawn(id, src, false) }
-                self.show(image)
+                // A new title's wash is ready at once, from the cache, and its backdrop a moment later,
+                // so the wash around and below the art changed first: a flash there as the art came
+                // in. Over another wash it waits for the art, which the page asks for just before.
+                if self.shown != nil, self.waitForArt() {
+                    self.hold(image)
+                } else {
+                    self.show(image)
+                }
                 self.drawn(id, src, true)
             }
         }
@@ -62,7 +69,37 @@ final class WashStage {
     /// The page reloaded, or its process ended.
     func reset() { clear() }
 
+    /// The backdrop is loading new art (BackdropStage's `awaitingArt`).
+    var waitForArt: () -> Bool = { false }
+    /// A wash waiting for its title's art, and the longest it waits.
+    private var held: UIImage?
+    private var holdEnd: DispatchWorkItem?
+    private static let holdSeconds: TimeInterval = 1
+
+    private func hold(_ image: UIImage) {
+        ArtLog.note("wash waits for the backdrop's new art")
+        held = image
+        holdEnd?.cancel()
+        let end = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.artReady() }
+        }
+        holdEnd = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdSeconds, execute: end)
+    }
+
+    /// The backdrop's new art began to show, or won't come: the wash waiting on it changes now.
+    func artReady() {
+        holdEnd?.cancel()
+        holdEnd = nil
+        guard let image = held else { return }
+        held = nil
+        show(image)
+    }
+
     private func clear() {
+        held = nil
+        holdEnd?.cancel()
+        holdEnd = nil
         owner = nil
         src = nil
         image = nil

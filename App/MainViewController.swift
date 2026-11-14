@@ -53,6 +53,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
         // Beneath the video too: a trailer plays only while the backdrop is put away.
         view.insertSubview(backdrop.view, at: 0)
         backdrop.reply = { [weak self] in self?.sendToPage($0) }
+        // A new title's wash changes with its art, not before it (WashStage's `hold`).
+        backdrop.artShown = { [weak self] in self?.wash.artReady() }
+        wash.waitForArt = { [weak self] in self?.backdrop.awaitingArt ?? false }
         // Beneath everything: the page's background, which it stands in for.
         wash.view.frame = view.bounds
         wash.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

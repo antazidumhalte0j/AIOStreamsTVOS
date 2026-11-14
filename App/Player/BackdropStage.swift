@@ -36,6 +36,10 @@ final class BackdropStage {
         }
     }
     private var scrollWatch: NSKeyValueObservation?
+    /// New art is on its way from the server, which the wash waits for (WashStage's `waitForArt`).
+    var awaitingArt: Bool { loading != nil }
+    /// New art began to show, or won't: the wash for the same title changes with it.
+    var artShown: () -> Void = {}
     /// Where the page was scrolled to as the art was placed, in the scroll view's points.
     private var placedAt: CGFloat?
 
@@ -140,8 +144,11 @@ final class BackdropStage {
         load(src) { [weak self] image in
             guard let self else { return }
             if self.loading == src { self.loading = nil }
-            guard self.owner == id, self.src == src else { return }
-            guard let image else { return ArtLog.note("backdrop #\(id) art failed to load") }
+            guard self.owner == id, self.src == src else { return self.artShown() }
+            guard let image else {
+                ArtLog.note("backdrop #\(id) art failed to load")
+                return self.artShown()
+            }
             ArtLog.note("backdrop #\(id) art loaded")
             self.remember(src, image)
             self.show(image, src: src, fade: fade)
@@ -242,6 +249,8 @@ final class BackdropStage {
         view.isHidden = true
         view.layer.removeAnimation(forKey: "opacity")
         view.alpha = 1
+        // No art coming now: a wash waiting on it changes at once.
+        artShown()
     }
 
     private func drawn(_ id: Int, _ src: String) {
@@ -294,11 +303,13 @@ final class BackdropStage {
         guard fade, let last = shown else {
             shown?.removeFromSuperview()
             shown = next
+            artShown()
             return
         }
         leaving = last
         shown = next
         next.alpha = 0
+        defer { artShown() }
         UIView.animate(withDuration: Self.fadeSeconds, delay: 0, options: [.curveEaseOut]) {
             next.alpha = 1
         } completion: { [weak self, weak last] _ in
