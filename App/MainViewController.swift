@@ -31,6 +31,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private var linksReady = false
     /// A held key's repeat the page hasn't finished with.
     private var repeatInFlight = false
+    /// The page's latest errors (`web-error`), for the app menu.
+    private var pageErrors: [String] = []
+    private static let keptPageErrors = 8
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -355,6 +358,11 @@ final class MainViewController: UIViewController, RemoteReceiver {
             "App commit: \(WebApp.appCommit)",
             "App \(Identity.version) · web app \(WebApp.commit) · \(storage.keyCount) saved keys", "",
         ]
+        if !pageErrors.isEmpty {
+            lines.append("Page errors, newest last:")
+            lines += pageErrors
+            lines.append("")
+        }
         lines += AppAnswers.videoLines(player: engine, window: view.window)
         lines.append("")
         lines += MemoryLog.report
@@ -594,7 +602,12 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // Dictation is on the keyboard's microphone; the page doesn't offer its own here.
             sendToPage(["type": "voice-result", "text": NSNull(), "error": "failed"])
         case "web-error":
-            NSLog("[page] %@", message.text("message") ?? "")
+            let text = message.text("message") ?? ""
+            NSLog("[page] %@", text)
+            // Kept for the app menu: a page stuck on its splash shows nothing else of why.
+            let time = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+            pageErrors.append("\(time): \(text.prefix(600))")
+            if pageErrors.count > Self.keptPageErrors { pageErrors.removeFirst(pageErrors.count - Self.keptPageErrors) }
         case "tvos-backdrop":
             // The hero's or a title page's backdrop, drawn here at 4K, or put away (patches/web/0048).
             backdrop.handle(message)

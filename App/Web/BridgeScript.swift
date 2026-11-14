@@ -1164,6 +1164,27 @@ enum BridgeScript {
   window.addEventListener('unhandledrejection', (e) =>
     send({ type: 'web-error', message: 'Unhandled rejection: ' + String(e.reason?.stack || e.reason) })
   );
+  /*
+   * Errors the page catches itself and only logs, such as one React throws while drawing, which
+   * leaves its error screen under the splash, so only the logo shows. The first few go to the app
+   * menu's report with the uncaught ones above.
+   */
+  try {
+    const consoleError = console.error;
+    let told = 0;
+    console.error = function (...args) {
+      try {
+        if (told < 20) {
+          told++;
+          const text = args
+            .map((a) => (a instanceof Error ? a.stack || a.message : typeof a === 'string' ? a : JSON.stringify(a)))
+            .join(' ');
+          send({ type: 'web-error', message: 'console.error: ' + text.slice(0, 600) });
+        }
+      } catch {}
+      return consoleError.apply(this, args);
+    };
+  } catch {}
 
   /*
    * What the page holds that tvOS counts against its process, as far as the
