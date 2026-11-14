@@ -85,9 +85,9 @@ final class VideoStage {
     private let hole = CAShapeLayer()
     private var frame: VideoFrame?
     private var animator: UIViewPropertyAnimator?
-    /// The last box the page gave was a trailer's behind the page.
-    private var trailerLast = false
-    /// That trailer stopped, and no video has loaded since.
+    /// The video was last in a box the page gave: a trailer behind the page or in a card, or the docked preview.
+    private var boxedLast = false
+    /// That video stopped, and no video has loaded since.
     private var afterTrailer = false
 
     /// As the page's trailer veil fades off a trailer once it plays (`TrailerVeil`, `duration-500`).
@@ -112,8 +112,8 @@ final class VideoStage {
     /// The page's `player-frame`; nil fills the screen again.
     func place(_ next: VideoFrame?) {
         guard next != frame else { return }
-        if let next {
-            trailerLast = Self.behindPage(next)
+        if next != nil {
+            boxedLast = true
             afterTrailer = false
         }
         frame = next
@@ -122,17 +122,18 @@ final class VideoStage {
 
     /// A video loads (`player-load`): the stage shows it again after a trailer's ended.
     func loading() {
-        trailerLast = frame.map(Self.behindPage) ?? false
+        boxedLast = frame != nil
         guard afterTrailer else { return }
         afterTrailer = false
         refresh()
     }
 
-    /// The video stopped (`player-stop`). A trailer behind the page ended: its last picture, or the
-    /// black before one, would fill the screen beneath a page that draws nothing over it as its box
-    /// goes, until the next video loads. A trailer opened over the whole window plays on, unstopped.
+    /// The video stopped (`player-stop`). A boxed one ended: its last picture, or the black before one,
+    /// would fill the screen as its box goes, until the next video loads. Over the app's backdrop and
+    /// wash, which nothing hides then: after a trailer in a card, every title page's art was drawn
+    /// beneath it, and none showed. A trailer opened over the whole window plays on, unstopped.
     func stopped() {
-        guard trailerLast, !afterTrailer else { return }
+        guard boxedLast, !afterTrailer else { return }
         afterTrailer = true
         refresh()
     }
