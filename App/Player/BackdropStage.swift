@@ -35,6 +35,9 @@ final class BackdropStage {
     private var edges: (bottom: CGFloat, start: CGFloat, rtl: Bool)?
     /// What the mask in place was made for, so a new title with the same box keeps it.
     private var maskKey: String?
+    /// The art `shown` holds, and the art on its way from the server.
+    private var shownSrc: String?
+    private var loading: String?
     /// Decoded art by address, the newest last: Back to a title or the hero coming round finds it ready.
     private var decoded: [(src: String, image: UIImage)] = []
     private static let keep = 3
@@ -108,16 +111,23 @@ final class BackdropStage {
             }
         }
         if let image = decoded.first(where: { $0.src == src })?.image {
-            show(image, fade: fade)
+            show(image, src: src, fade: fade)
             drawn(id, src)
             return
         }
+        // Asked again while it loads (the page asks again as its wash is drawn): the load on its way
+        // shows it, where the page now says, with the crossfade the first ask began. A second load
+        // made a second copy, shown at once over the crossfade, which cut it short: a flash.
+        if loading == src { return }
+        loading = src
         load(src) { [weak self] image in
-            guard let self, self.owner == id, self.src == src else { return }
+            guard let self else { return }
+            if self.loading == src { self.loading = nil }
+            guard self.owner == id, self.src == src else { return }
             guard let image else { return ArtLog.note("backdrop #\(id) art failed to load") }
             ArtLog.note("backdrop #\(id) art loaded")
             self.remember(src, image)
-            self.show(image, fade: fade)
+            self.show(image, src: src, fade: fade)
             self.drawn(id, src)
         }
     }
@@ -153,6 +163,8 @@ final class BackdropStage {
         if !pictures.isEmpty { ArtLog.note("backdrop art faded away") }
         leaving = nil
         shown = nil
+        shownSrc = nil
+        loading = nil
         // Faded out on a copy of the view, over the frame WebKit takes to show the page as it is
         // now (its copy back, the hole closed): gone at once, what's beneath showed through the hole
         // for that frame. The view itself is free at once for the next ask.
@@ -185,7 +197,7 @@ final class BackdropStage {
         reply(["type": "tvos-backdrop", "id": id, "src": src, "drawn": true])
     }
 
-    private func show(_ image: UIImage, fade: Bool) {
+    private func show(_ image: UIImage, src: String, fade: Bool) {
         view.frame = clip
         view.isHidden = false
         // Made again only when its size or fades change: each new title asks again with the same.
@@ -211,10 +223,12 @@ final class BackdropStage {
             width: drawn.width,
             height: drawn.height
         )
-        if let shown, shown.image === image {
+        // The same art, already shown or fading in: only moved, whichever copy of it this is.
+        if let shown, shownSrc == src {
             shown.frame = placed
             return
         }
+        shownSrc = src
         ArtLog.note("backdrop art shown \(fade && shown != nil ? "crossfading" : "at once")")
         let next = UIImageView(image: image)
         next.frame = placed
