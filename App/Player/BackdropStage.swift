@@ -59,7 +59,9 @@ final class BackdropStage {
         guard let src = message.text("src"), let frame = message.object("frame"),
               let clip = message.object("clip"), let web, let container = view.superview else {
             // Only the backdrop that asked puts itself away: the next page's can ask first.
-            if owner == nil || owner == id { clear() }
+            let mine = owner == nil || owner == id
+            ArtLog.note("backdrop #\(id) put away\(mine ? "" : " (ignored: #\(owner ?? 0) holds it)")")
+            if mine { clear() }
             return
         }
         var scale: CGFloat = 1
@@ -87,6 +89,9 @@ final class BackdropStage {
              rtl: message.flag("rtl") == true)
         }
         let fade = wasShown && message.flag("quick") != true && src != self.src
+        ArtLog.note("backdrop #\(id) asked: \(src == self.src ? "same art" : "new art \(Self.short(src))")"
+            + ", \(edges.map { _ in "with fades" } ?? "NO fades"), \(wasShown ? "over the last" : "from nothing")"
+            + "\(fade ? ", to crossfade" : "")\(message.flag("hidden") == true ? ", hidden" : "")")
         self.src = src
         // A trailer playing in its place (patches/web/0051): the art fades off it, as the page's did, and
         // back once it ends, kept meanwhile so the page needn't bring its own copy back.
@@ -109,11 +114,18 @@ final class BackdropStage {
         }
         load(src) { [weak self] image in
             guard let self, self.owner == id, self.src == src else { return }
-            guard let image else { return }
+            guard let image else { return ArtLog.note("backdrop #\(id) art failed to load") }
+            ArtLog.note("backdrop #\(id) art loaded")
             self.remember(src, image)
             self.show(image, fade: fade)
             self.drawn(id, src)
         }
+    }
+
+    /// The end of an address, enough to tell titles apart in the log.
+    private static func short(_ src: String) -> String {
+        let path = URLComponents(string: src)?.path ?? src
+        return "…" + String(path.suffix(28))
     }
 
     /// For the app menu: what's drawn, where, and how its edges fade.
@@ -138,6 +150,7 @@ final class BackdropStage {
         edges = nil
         maskKey = nil
         let pictures = [leaving, shown].compactMap { $0 }
+        if !pictures.isEmpty { ArtLog.note("backdrop art faded away") }
         leaving = nil
         shown = nil
         // Faded out on a copy of the view, over the frame WebKit takes to show the page as it is
@@ -178,6 +191,7 @@ final class BackdropStage {
         // Made again only when its size or fades change: each new title asks again with the same.
         let maskKey = edges.map { "\(clip.size) \($0.bottom) \($0.start) \($0.rtl)" }
         if maskKey != self.maskKey || (maskKey != nil && view.layer.mask == nil) {
+            ArtLog.note("backdrop mask \(maskKey == nil ? "taken OFF" : "made for \(Int(clip.width))x\(Int(clip.height))")")
             self.maskKey = maskKey
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -201,6 +215,7 @@ final class BackdropStage {
             shown.frame = placed
             return
         }
+        ArtLog.note("backdrop art shown \(fade && shown != nil ? "crossfading" : "at once")")
         let next = UIImageView(image: image)
         next.frame = placed
         next.contentMode = .scaleToFill

@@ -366,6 +366,11 @@ final class MainViewController: UIViewController, RemoteReceiver {
         // What the app draws beneath the page now, beside the page's marks in the memory lines below.
         lines.append("Backdrop: \(backdrop.summary) · wash: \(wash.view.isHidden ? "none" : "shown")")
         lines.append("Video: \(stage.summary), \(videoView.isHidden ? "video view hidden" : "video view shown")")
+        if !ArtLog.report.isEmpty {
+            lines.append("")
+            lines.append("Art beneath the page, oldest first, each after the one before:")
+            lines += ArtLog.report
+        }
         lines.append("")
         lines += AppAnswers.videoLines(player: engine, window: view.window)
         lines.append("")
@@ -623,6 +628,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
             wash.handle(message)
         case "tvos-page-stats":
             MemoryLog.pageStats(message)
+        case "tvos-art-event":
+            // The page's marks for the art drawn here changing, for the app menu's art log (ArtLog).
+            ArtLog.note(String((message.text("text") ?? "").prefix(200)))
         case "tvos-page-moved":
             MemoryLog.pageMoved(from: message.text("from") ?? "?", to: message.text("to") ?? "?")
         default:

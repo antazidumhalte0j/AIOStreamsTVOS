@@ -37,11 +37,15 @@ final class WashStage {
     func handle(_ message: Message) {
         let id = Int(message.number("id") ?? 0)
         guard let src = message.text("src") else {
-            if owner == nil || owner == id { clear() }
+            if owner == nil || owner == id {
+                if shown != nil { ArtLog.note("wash #\(id) put away") }
+                clear()
+            }
             return
         }
         owner = id
         guard src != self.src || shown == nil else { return drawn(id, src, true) }
+        ArtLog.note("wash #\(id) asked for new art")
         self.src = src
         guard let address = URL(string: src) else { return drawn(id, src, false) }
         ArtWash.make(address) { made in
@@ -68,6 +72,7 @@ final class WashStage {
     }
 
     private func drawn(_ id: Int, _ src: String, _ drawn: Bool) {
+        ArtLog.note(drawn ? "wash #\(id) drawn" : "wash #\(id) COULDN'T be drawn: the page draws its own")
         reply(["type": "tvos-wash", "id": id, "src": src, "drawn": drawn])
     }
 

@@ -1361,6 +1361,30 @@ enum BridgeScript {
   } catch {}
 
   /*
+   * The page's marks for the art the app draws beneath it (patches/web/0048, 0050) as they change,
+   * into the app's art log (ArtLog.swift), beside what the app did: a flash as a backdrop is
+   * replaced lasts only a moment, so the app menu's lines on what's drawn now can't catch it.
+   */
+  try {
+    const ART_MARKS = ['data-app-wash', 'data-app-backdrop', 'data-video-hole', 'data-art-wash', 'data-app-hole'];
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const el = record.target;
+        const on = el.hasAttribute(record.attributeName);
+        // Set again while set, or cleared while clear, changes nothing on screen.
+        if (on === (record.oldValue !== null)) continue;
+        const where = el === document.documentElement ? '' : ' on ' + (el.getAttribute('data-ui') || el.tagName.toLowerCase());
+        send({ type: 'tvos-art-event', text: `page ${on ? 'set' : 'cleared'} ${record.attributeName}${where}` });
+      }
+    }).observe(document.documentElement, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ART_MARKS,
+      attributeOldValue: true,
+    });
+  } catch {}
+
+  /*
    * Each move between pages, such as Back from a title to Home, told to the app
    * as it happens, and the page's counts a second later, once the new page is
    * drawn. An end of the page's process can then be put next to the move that
