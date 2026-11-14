@@ -470,6 +470,18 @@ final class MainViewController: UIViewController, RemoteReceiver {
      * the page, typing straight into the field; passwords and PINs get the
      * alert, which keeps them hidden and sends a PIN's form on Done.
      */
+    /// `rgb(r, g, b)` as the page sends its colour (read off a canvas pixel), or nil.
+    static func pageColor(_ text: String) -> UIColor? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("rgb"), let open = trimmed.firstIndex(of: "("),
+              let close = trimmed.lastIndex(of: ")"), open < close else { return nil }
+        let parts = trimmed[trimmed.index(after: open)..<close]
+            .split(whereSeparator: { $0 == "," || $0 == " " || $0 == "/" })
+            .compactMap { Double($0) }
+        guard parts.count >= 3, parts.prefix(3).allSatisfy({ $0 >= 0 && $0 <= 255 }) else { return nil }
+        return UIColor(red: parts[0] / 255, green: parts[1] / 255, blue: parts[2] / 255, alpha: 1)
+    }
+
     /// The page's colour, and the wash: the page's copy, or the one drawn here beneath it (WashStage).
     private func keyboardLook(_ message: Message) -> KeyboardLook {
         var look = KeyboardLook(background: message.text("background"), wash: message.text("wash"))
@@ -579,6 +591,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // A page that loaded again knows nothing of a frame the last one set.
             stage.place(nil)
             backdrop.reset()
+            view.backgroundColor = .black
             wash.reset()
             web?.focusPage()
             pipButtonShown = false
@@ -657,6 +670,17 @@ final class MainViewController: UIViewController, RemoteReceiver {
         case "tvos-wash":
             // "Background from artwork"'s wash, drawn here beneath the page, or none (patches/web/0050).
             wash.handle(message)
+        case "tvos-page-color":
+            // The page's colour, drawn here beneath the wash, the backdrop and the page, whose own
+            // background is then clear (patches/web/0058), so the backdrop shows through it with no hole.
+            let text = message.text("color")
+            guard let text, let color = Self.pageColor(text) else {
+                view.backgroundColor = .black
+                if text != nil { sendToPage(["type": "tvos-page-color", "color": text ?? "", "drawn": false]) }
+                break
+            }
+            view.backgroundColor = color
+            sendToPage(["type": "tvos-page-color", "color": text, "drawn": true])
         case "tvos-page-stats":
             MemoryLog.pageStats(message)
         case "tvos-art-event":

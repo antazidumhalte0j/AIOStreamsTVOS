@@ -7,11 +7,13 @@ import UIKit
  * a 3840-wide backdrop is 33 MB decoded, and the hero fading from one to the next held two or
  * three at once. Here it counts against the app instead.
  *
- * The page keeps its own copy at 1920 over this one until it's told the app's is drawn; then it
- * cuts a hole in its background over the art and hides its copy. Its text, shades and edges stay
- * drawn over the art by the page, as before. As the page scrolls it shows its copy again and puts
- * this away (`src: null`), as a view here can't follow a scroll frame by frame, and asks again
- * once it has held still.
+ * Since patches/web/0058 the art is drawn here all the time, and follows the page's scroll here,
+ * frame by frame, from WebKit's scroll view: WebKit scrolls the page in this process. The page's
+ * own copy stays hidden (shown only if the art can't load here), and its background is clear, as
+ * the page's colour is drawn here beneath it all (`tvos-page-color`), so the art shows through
+ * with no hole cut for it. The page's text, shades and edges stay drawn over the art by the page.
+ * Swapped with the page's copy each time the page moved, as before, the two were both drawn for
+ * a moment, which flashed at the art's edges.
  */
 @MainActor
 final class BackdropStage {
@@ -31,7 +33,10 @@ final class BackdropStage {
         didSet {
             scrollWatch = scrollView?.observe(\.contentOffset, options: []) { [weak self] scrollView, _ in
                 let y = scrollView.contentOffset.y
-                MainActor.assumeIsolated { self?.scrolled(to: y) }
+                MainActor.assumeIsolated {
+                    self?.lastScrolled = CACurrentMediaTime()
+                    self?.scrolled(to: y)
+                }
             }
         }
     }
@@ -100,7 +105,8 @@ final class BackdropStage {
             // Only the backdrop that asked puts itself away: the next page's can ask first.
             let mine = owner == nil || owner == id
             ArtLog.note("backdrop #\(id) put away\(mine ? "" : " (ignored: #\(owner ?? 0) holds it)")")
-            if mine { clear() }
+            // Its page closing (patches/web/0058): faded out, over the next page's art coming in.
+            if mine { clear(fadeOut: message.flag("fade") == true) }
             return
         }
         var scale: CGFloat = 1
@@ -140,8 +146,21 @@ final class BackdropStage {
         // A trailer playing in its place (patches/web/0051): the art fades off it, as the page's did, and
         // back once it ends, kept meanwhile so the page needn't bring its own copy back.
         pageHidden = message.flag("hidden") == true
-        // From nothing, the page's copy shows over it: unseen until the page has hidden the copy.
-        if message.flag("quick") == true && !wasShown { awaitingReveal = true }
+        // No copy of the page's over it (patches/web/0058): the art fades in from nothing itself. With
+        // one, it's unseen until the page has hidden the copy (0057).
+        let noCopy = message.flag("noCopy") == true
+        if noCopy {
+            awaitingReveal = false
+            if !wasShown { appearing = true }
+        } else if message.flag("quick") == true && !wasShown {
+            awaitingReveal = true
+        }
+        // Where the page was scrolled to as it measured, which the art follows the scroll on from.
+        if let y = message.number("scrollY"), y.isFinite {
+            measuredAt = pageScroll(CGFloat(min(max(y, -1_000_000), 1_000_000)) * scale)
+        } else {
+            measuredAt = nil
+        }
         applyAlpha(animated: wasShown)
         if let image = decoded.first(where: { $0.src == src })?.image {
             show(image, src: src, fade: fade)
@@ -158,7 +177,9 @@ final class BackdropStage {
             if self.loading == src { self.loading = nil }
             guard self.owner == id, self.src == src else { return self.artShown() }
             guard let image else {
-                ArtLog.note("backdrop #\(id) art failed to load")
+                ArtLog.note("backdrop #\(id) art failed to load: the page's own copy shows")
+                // The page shows its own copy in its place (patches/web/0058).
+                self.reply(["type": "tvos-backdrop", "id": id, "src": src, "failed": true])
                 return self.artShown()
             }
             ArtLog.note("backdrop #\(id) art loaded")
@@ -168,7 +189,31 @@ final class BackdropStage {
         }
     }
 
-    /// The page scrolled: the art moves with it, frame by frame, until the page puts it away.
+    /// Fading in from nothing at its next showing, with no copy of the page's over it.
+    private var appearing = false
+    /// The page's scroll as it measured the art, in the scroll view's points.
+    private var measuredAt: CGFloat?
+    /// The scroll view's offset less the page's own scroll position, learned while it's still.
+    private var scrollInset: CGFloat = 0
+    private var lastScrolled: CFTimeInterval = 0
+    /// As the page's own layers fade in from nothing (`animate-in`, 400 ms).
+    private static let appearSeconds: TimeInterval = 0.4
+    /// As a page leaves, under the next one's art coming in.
+    private static let leaveSeconds: TimeInterval = 0.3
+
+    /// The page's scroll position (in the scroll view's points) as WebKit's scroll view has it.
+    private func pageScroll(_ points: CGFloat) -> CGFloat {
+        if let scrollView, CACurrentMediaTime() - lastScrolled > 0.25 {
+            let inset = scrollView.contentOffset.y - points
+            if abs(inset - scrollInset) > 1 {
+                ArtLog.note("WebKit's scroll is \(Int(inset.rounded())) pt from the page's own")
+            }
+            scrollInset = inset
+        }
+        return points + scrollInset
+    }
+
+    /// The page scrolled: the art moves with it, frame by frame.
     private func scrolled(to y: CGFloat) {
         if let ghost = leavingGhost {
             CATransaction.begin()
@@ -178,10 +223,7 @@ final class BackdropStage {
         }
         guard !view.isHidden, let placedAt else { return }
         let moved = y - placedAt
-        guard abs(moved) >= 0.5 || view.frame.origin.y != clip.minY else { return }
-        if abs(moved) >= 0.5, abs(view.frame.origin.y - clip.minY) < 0.5 {
-            ArtLog.note("backdrop following WebKit's scroll ahead of the page")
-        }
+        guard abs(view.frame.origin.y - (clip.minY - moved)) >= 0.25 else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         view.frame = clip.offsetBy(dx: 0, dy: -moved)
@@ -232,7 +274,8 @@ final class BackdropStage {
         decoded.removeAll()
     }
 
-    private func clear() {
+    /// `fadeOut`: its page closed, so it fades out over the next page's art; else held two frames.
+    private func clear(fadeOut: Bool = false) {
         owner = nil
         src = nil
         edges = nil
@@ -244,6 +287,8 @@ final class BackdropStage {
         shownSrc = nil
         loading = nil
         placedAt = nil
+        measuredAt = nil
+        appearing = false
         awaitingReveal = false
         pageHidden = false
         // Held on a copy of the view, over the frame WebKit takes to show the page as it is
@@ -267,9 +312,16 @@ final class BackdropStage {
             leavingGhost = ghost
             // Its frame already follows the scroll to now, so it moves on from where the scroll is.
             ghostAt = (frame: ghost.frame, scroll: scrollView?.contentOffset.y ?? 0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.clearSeconds) { [weak self, weak ghost] in
+            let gone: () -> Void = { [weak self, weak ghost] in
                 ghost?.removeFromSuperview()
                 if let self, self.leavingGhost === ghost { self.leavingGhost = nil }
+            }
+            if fadeOut {
+                UIView.animate(withDuration: Self.leaveSeconds, delay: 0, options: [.curveEaseIn]) {
+                    ghost.alpha = 0
+                } completion: { _ in gone() }
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.clearSeconds, execute: gone)
             }
         } else {
             for picture in pictures { picture.removeFromSuperview() }
@@ -289,9 +341,21 @@ final class BackdropStage {
     private func show(_ image: UIImage, src: String, fade: Bool) {
         view.frame = clip
         view.isHidden = false
-        // Asked only once the page has held still, so this is where its measure was taken.
-        placedAt = scrollView?.contentOffset.y
+        // Where the page measured from; then on to where the scroll is now, if it moved since.
+        placedAt = measuredAt ?? scrollView?.contentOffset.y
+        if let y = scrollView?.contentOffset.y { scrolled(to: y) }
         if tinted { tint.frame = view.bounds }
+        // From nothing, with no copy of the page's over it: faded in, as the page's own layers came in.
+        if appearing {
+            appearing = false
+            if !pageHidden && !awaitingReveal {
+                view.layer.removeAnimation(forKey: "opacity")
+                view.alpha = 0
+                UIView.animate(withDuration: Self.appearSeconds, delay: 0, options: [.curveEaseOut]) { [view] in
+                    view.alpha = 1
+                }
+            }
+        }
         // Made again only when its size or fades change: each new title asks again with the same.
         // How far in from the clip's start edge the frame starts: its fade is measured from there.
         let frameAt = edges?.rtl == true ? clip.maxX - box.maxX : box.minX - clip.minX

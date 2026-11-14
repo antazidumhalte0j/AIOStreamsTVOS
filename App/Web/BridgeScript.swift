@@ -285,7 +285,12 @@ enum BridgeScript {
      */
     rules.push(
       "html[data-app-wash] [data-ui='page-background']{background-color:transparent!important}",
-      'html.see-through[data-app-wash][data-app-wash][data-app-wash]:not(.playing){background-color:transparent!important}'
+      'html.see-through[data-app-wash][data-app-wash][data-app-wash]:not(.playing){background-color:transparent!important}',
+      // The page's colour, drawn by the app beneath everything whether or not the wash is on
+      // (patches/web/0058, `tvos-page-color`), so the app's art shows through the page with no hole
+      // cut for it, and follows the page's scroll there frame by frame.
+      "html[data-app-color] [data-ui='page-background']{background-color:transparent!important}",
+      'html.see-through[data-app-color][data-app-color][data-app-color]:not(.playing){background-color:transparent!important}'
     );
     // The rotating hero's art and the one following the card in focus (whole window or corner), and a title page's.
     rules.push(
