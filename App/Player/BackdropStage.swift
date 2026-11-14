@@ -303,31 +303,43 @@ final class BackdropStage {
             return
         }
         shownSrc = src
-        ArtLog.note("backdrop art shown \(fade && shown != nil ? "crossfading" : "at once")")
-        let next = UIImageView(image: image)
-        next.frame = placed
-        next.contentMode = .scaleToFill
-        view.addSubview(next)
-        if tinted { view.bringSubviewToFront(tint) }
+        let crossfade = fade && shown != nil && !cuts
+        ArtLog.note("backdrop art shown \(crossfade ? "crossfading" : "at once")\(cuts && fade ? " (cuts on)" : "")")
         leaving?.removeFromSuperview()
         leaving = nil
-        guard fade, let last = shown else {
-            shown?.removeFromSuperview()
-            shown = next
+        defer {
+            if tinted { view.bringSubviewToFront(tint) }
             artShown()
+        }
+        guard let shown else {
+            let next = UIImageView(image: image)
+            next.frame = placed
+            next.contentMode = .scaleToFill
+            view.addSubview(next)
+            shown = next
             return
         }
-        leaving = last
-        shown = next
-        next.alpha = 0
-        defer { artShown() }
-        UIView.animate(withDuration: Self.fadeSeconds, delay: 0, options: [.curveEaseOut]) {
-            next.alpha = 1
-        } completion: { [weak self, weak last] _ in
-            last?.removeFromSuperview()
-            if self?.leaving === last { self?.leaving = nil }
+        // One picture view, dissolving from a snapshot of the last art into the new. Two pictures
+        // stacked under the fade mask, the new one fading in over the old, flashed lighter at the
+        // art's edges as a title changed with "Background from artwork" on (not with the art
+        // tinted solid red, so in the pictures themselves).
+        guard crossfade else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            shown.image = image
+            shown.frame = placed
+            CATransaction.commit()
+            return
+        }
+        UIView.transition(with: shown, duration: Self.fadeSeconds,
+                          options: [.transitionCrossDissolve, .curveEaseOut, .beginFromCurrentState]) {
+            shown.image = image
+            shown.frame = placed
         }
     }
+
+    /// From the app menu: a new title's art replaces the last at once, to tell the crossfade's part in a flash.
+    var cuts = false
 
     private func remember(_ src: String, _ image: UIImage) {
         decoded.removeAll { $0.src == src }

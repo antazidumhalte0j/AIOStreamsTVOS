@@ -420,6 +420,15 @@ final class MainViewController: UIViewController, RemoteReceiver {
                     ? "The wash stays as it is while titles change"
                     : "The wash changes with the titles again")
             },
+            // To tell the backdrop's crossfade's part in a flash as a title changes.
+            AppMenu.Action(title: backdrop.cuts ? "Crossfade between backdrops" : "Cut between backdrops",
+                           destructive: false) { [weak self] in
+                guard let self else { return }
+                self.backdrop.cuts.toggle()
+                self.flashStatus(self.backdrop.cuts
+                    ? "A new title's art replaces the last at once"
+                    : "A new title's art crossfades in again")
+            },
             AppMenu.Action(title: "Reset the app's data", destructive: true) { [weak self] in self?.confirmReset() },
             AppMenu.Action(title: "Close", destructive: false) {},
         ])
