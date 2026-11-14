@@ -6,64 +6,72 @@ import UIKit
  * fading into the artwork wash), for when the app draws the wash beneath the page and the page's own
  * background, which the holes were cut in, is clear (WashStage). The two fades multiply, as the
  * page's masks do (`mask-composite: intersect`) and as its two hole edges over the background did.
+ *
+ * Made of Core Animation's own gradients: the bottom fade in the clip, itself masked by the start
+ * fade, so the two multiply. Nothing is drawn by hand, and the fades are smooth at any size.
  */
 enum FadeMask {
-    /// Drawn at a quarter of the size: the fades are smooth, and stretched back they look the same.
-    private static let scale: CGFloat = 0.25
-
     static func layer(size: CGSize, clip: CGRect, bottom: CGFloat, start: CGFloat, rtl: Bool) -> CALayer {
-        let layer = CALayer()
-        // A layer of its own, not a view's, fades its contents in by itself (Core Animation's implicit
-        // actions): as a mask, what it covers would vanish and come back each time it's made.
-        layer.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull(), "frame": NSNull()]
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        let shown = UIColor.black.cgColor
+        let gone = UIColor.black.withAlphaComponent(0).cgColor
+
+        let layer = CALayer()
         layer.frame = CGRect(origin: .zero, size: size)
-        layer.contents = image(size: size, clip: clip, bottom: bottom, start: start, rtl: rtl)
-        CATransaction.commit()
+        layer.actions = still
+
+        // Whole down to where the bottom fade starts, then out to nothing at the clip's bottom.
+        let down = CAGradientLayer()
+        down.actions = still
+        down.frame = clip
+        let b = min(max(bottom, 0), 1)
+        down.colors = [shown, shown, b > 0 ? gone : shown]
+        down.locations = [0, NSNumber(value: Double(1 - b)), 1]
+        down.startPoint = CGPoint(x: 0.5, y: 0)
+        down.endPoint = CGPoint(x: 0.5, y: 1)
+        layer.addSublayer(down)
+
+        // In from nothing at the start edge over its fraction of the width, then whole.
+        let s = min(max(start, 0), 1)
+        if s > 0 {
+            let side = CAGradientLayer()
+            side.actions = still
+            side.frame = down.bounds
+            side.colors = [gone, shown, shown]
+            side.locations = [0, NSNumber(value: Double(s)), 1]
+            side.startPoint = CGPoint(x: rtl ? 1 : 0, y: 0.5)
+            side.endPoint = CGPoint(x: rtl ? 0 : 1, y: 0.5)
+            down.mask = side
+        }
         return layer
     }
 
-    private static func image(size: CGSize, clip: CGRect, bottom: CGFloat, start: CGFloat, rtl: Bool) -> CGImage? {
-        let width = max(1, Int((size.width * scale).rounded(.up)))
-        let height = max(1, Int((size.height * scale).rounded(.up)))
-        let space = CGColorSpaceCreateDeviceRGB()
+    /// No implicit fades as a mask is made or moved: what it covers would vanish and come back.
+    private static let still: [String: CAAction] = [
+        "contents": NSNull(), "bounds": NSNull(), "position": NSNull(), "frame": NSNull(),
+        "colors": NSNull(), "locations": NSNull(), "mask": NSNull(), "sublayers": NSNull(),
+    ]
+
+    /// For the app menu: the mask's alpha in the middle of `clip`, near its bottom and near its start.
+    static func sample(_ mask: CALayer?, clip: CGRect, rtl: Bool) -> String {
+        guard let mask, clip.width >= 4, clip.height >= 4 else { return "no mask" }
+        let w = 64, h = 36
         guard let context = CGContext(
-            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-        // In points, from the top left, as the views are laid out.
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: scale, y: -scale)
-        let shown = UIColor.white.cgColor
-        let gone = UIColor.white.withAlphaComponent(0).cgColor
-        func gradient(_ colors: [CGColor]) -> CGGradient? {
-            CGGradient(colorsSpace: space, colors: colors as CFArray, locations: [0, 1])
+            data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let data = context.data else { return "unreadable" }
+        // The clip drawn into the small bitmap, top left first, as the views are laid out.
+        context.translateBy(x: 0, y: CGFloat(h))
+        context.scaleBy(x: CGFloat(w) / clip.width, y: -CGFloat(h) / clip.height)
+        context.translateBy(x: -clip.minX, y: -clip.minY)
+        mask.render(in: context)
+        let pixels = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        func alpha(_ x: Int, _ y: Int) -> String {
+            String(format: "%.2f", Double(pixels[(y * w + x) * 4 + 3]) / 255)
         }
-        context.saveGState()
-        context.clip(to: clip)
-        let down = clip.height * min(max(bottom, 0), 1)
-        if down > 0, let fade = gradient([shown, gone]) {
-            // Whole above the fade, then out to nothing at the bottom.
-            context.drawLinearGradient(
-                fade, start: CGPoint(x: 0, y: clip.maxY - down), end: CGPoint(x: 0, y: clip.maxY),
-                options: [.drawsBeforeStartLocation]
-            )
-        } else {
-            context.setFillColor(shown)
-            context.fill(clip)
-        }
-        let side = clip.width * min(max(start, 0), 1)
-        if side > 0, let fade = gradient([gone, shown]) {
-            // Kept only where the start's fade lets it be: in from nothing at the start edge.
-            context.setBlendMode(.destinationIn)
-            let edge = rtl ? clip.maxX : clip.minX
-            context.drawLinearGradient(
-                fade, start: CGPoint(x: edge, y: 0), end: CGPoint(x: rtl ? edge - side : edge + side, y: 0),
-                options: [.drawsAfterEndLocation]
-            )
-        }
-        context.restoreGState()
-        return context.makeImage()
+        let startX = rtl ? w - 2 : 1
+        return "mask alpha middle \(alpha(w / 2, h / 2)), near the bottom \(alpha(w / 2, h - 2)), near the start \(alpha(startX, h / 4))"
     }
 }

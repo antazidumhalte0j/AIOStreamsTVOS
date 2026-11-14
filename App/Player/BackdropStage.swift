@@ -121,7 +121,8 @@ final class BackdropStage {
         guard !view.isHidden, shown != nil else { return "none" }
         let fades = edges.map { "fades bottom \($0.bottom), start \($0.start)" } ?? "no fades"
         let place = "\(Int(clip.minX)),\(Int(clip.minY)) \(Int(clip.width))x\(Int(clip.height))"
-        let mask = view.layer.mask == nil ? "no mask" : "masked"
+        let mask = FadeMask.sample(view.layer.mask, clip: CGRect(origin: .zero, size: clip.size),
+                                   rtl: edges?.rtl == true)
         return "shown at \(place), \(fades), \(mask), alpha \(String(format: "%.2f", view.alpha)), \(decoded.count) decoded"
     }
 
