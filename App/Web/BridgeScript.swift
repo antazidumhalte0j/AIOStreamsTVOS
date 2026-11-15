@@ -669,6 +669,44 @@ enum BridgeScript {
       subtree: true,
     });
   } catch {}
+  /*
+   * A picture taken off the page with what held it (a title page closing, a row's cards
+   * replaced) lets go of its image at once. Until the element itself is collected it keeps its
+   * decoded copy, and the collector lags: from title to title three times in 7 s, 879 such
+   * pictures held about 258 MB as the page's process was ended at its 1 GB limit, and emptying
+   * WebKit's memory cache at each move didn't save it, as an image still in use isn't let go of.
+   * One moved rather than removed is back on the page by the time this runs, and is left alone;
+   * one put back later gets its address back.
+   */
+  try {
+    const parked = new WeakMap();
+    const imagesIn = (node, out) => {
+      if (node.nodeType !== 1) return;
+      if (node.tagName === 'IMG') out.push(node);
+      else for (const img of node.getElementsByTagName('img')) out.push(img);
+    };
+    new MutationObserver((records) => {
+      const left = [];
+      const back = [];
+      for (const record of records) {
+        for (const node of record.removedNodes) imagesIn(node, left);
+        for (const node of record.addedNodes) imagesIn(node, back);
+      }
+      for (const img of back) {
+        const src = parked.get(img);
+        if (src === undefined) continue;
+        parked.delete(img);
+        if (img.getAttribute('src') === BLANK) img.setAttribute('src', src);
+      }
+      for (const img of left) {
+        if (img.isConnected) continue;
+        const src = img.getAttribute('src');
+        if (!src || src.startsWith('data:')) continue;
+        parked.set(img, src);
+        img.setAttribute('src', BLANK);
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  } catch {}
 
   const listeners = new Set();
   const post = (message) => handler.postMessage(JSON.stringify(message));
