@@ -450,6 +450,42 @@ async def layers(args) -> None:
         await rsd.close()
 
 
+async def evaluate(args) -> None:
+    """Runs a JavaScript file in the page and prints what it returns, as JSON."""
+    from pymobiledevice3.services.webinspector import WebinspectorService
+    from pymobiledevice3.tunneld.api import get_tunneld_devices
+
+    script = Path(args.file).read_text(encoding="utf-8")
+    rsds = await get_tunneld_devices()
+    if not rsds:
+        sys.exit("No device from tunneld. Is `pymobiledevice3 remote tunneld --protocol tcp` running?")
+    rsd = rsds[0]
+    inspector = WebinspectorService(lockdown=rsd)
+    try:
+        await inspector.connect()
+        async with inspector:
+            ap = await pick_page(inspector, args.match)
+            if ap is None:
+                sys.exit(f"No open page matching {args.match!r}. Open the app on the TV first.")
+            try:
+                session = await asyncio.wait_for(inspector.inspector_session(ap.application, ap.page), 15)
+            except asyncio.TimeoutError:
+                sys.exit("The page didn't open an inspector session in 15 s. Close any other inspector on it, then try again.")
+            session._missing_id_in_message = lambda message: None
+            await session.runtime_enable()
+            # Returned as a JSON string, so the whole value comes back however deep it is.
+            result = await asyncio.wait_for(
+                session.runtime_evaluate(f"JSON.stringify({script.strip().rstrip(';')})", return_by_value=True), 20
+            )
+            try:
+                print(json.dumps(json.loads(result), indent=2))
+            except (TypeError, ValueError):
+                print(result)
+    finally:
+        await inspector.close()
+        await rsd.close()
+
+
 def main() -> None:
     # Print each line at once, also through `| tee` (otherwise Ctrl+C loses what was buffered).
     sys.stdout.reconfigure(line_buffering=True)
@@ -467,7 +503,13 @@ def main() -> None:
     l.add_argument("--step", type=int, default=10, help="MB change that prints a line (default 10)")
     l.add_argument("--match", default="aiostv", help="text to find the page by (default: aiostv)")
     l.add_argument("--css", default="", help="test CSS to add to the page while this runs")
+    e = sub.add_parser("eval", help="run a JavaScript file in the page and print what it returns")
+    e.add_argument("file")
+    e.add_argument("--match", default="aiostv", help="text to find the page by (default: aiostv)")
     args = parser.parse_args()
+    if args.cmd == "eval":
+        asyncio.run(evaluate(args))
+        return
 
     if args.cmd == "analyze":
         print(analyze(json.loads(Path(args.file).read_text(encoding="utf-8")), args.top))

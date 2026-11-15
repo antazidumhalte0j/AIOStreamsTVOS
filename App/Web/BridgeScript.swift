@@ -1147,6 +1147,94 @@ enum BridgeScript {
   };
 
   /*
+   * The top tabs (upstream's components/shell/nav/top-tabs.tsx) lay out as three columns, the logo,
+   * the tabs and the end pill, the two sides kept equal (`1fr auto 1fr`) so the tabs are centred on
+   * the screen. A TV has so many tabs that the end pill's side was 29 px short for it, and kept equal
+   * the grid pushed the pill past the page's edge: the page was 1309 wide, which WebKit shrank to fit
+   * the screen, leaving a strip down the right with none of the page in it, and everything drawn a
+   * little small. Where the centred tabs don't fit, the sides go to their own widths and the tabs
+   * centre in what's left between them (`data-tabs-tight`); centred again once they fit. With the
+   * tabs' names shown they needed 1269 of the bar's 1200 even so, ran into the end pill, so where
+   * they don't fit that way either, the bar is drawn tighter (`data-tabs-tight=compact`): half its
+   * padding at the sides and between its columns, and a named tab's end padding (top-tabs.tsx's
+   * `pe-5`) and the space between its icon and name a little less, about 130 px in all.
+   */
+  try {
+    const TABS_ROW = "[data-ui='top-tabs'] .grid";
+    const COMPACT = TABS_ROW + "[data-tabs-tight='compact']";
+    const tabsStyle = document.createElement('style');
+    tabsStyle.textContent =
+      TABS_ROW + '[data-tabs-tight]{grid-template-columns:auto minmax(0,1fr) auto!important}' +
+      TABS_ROW + '[data-tabs-tight]>:nth-child(2){justify-self:center}' +
+      COMPACT + '{padding-left:1.25rem!important;padding-right:1.25rem!important;column-gap:0.75rem!important}' +
+      COMPACT + " [data-ui='nav-item']{padding-inline-end:0.875rem!important;gap:0.75rem!important}";
+    (document.head || document.documentElement).appendChild(tabsStyle);
+    // The bar's needs at its own spacing, measured while it has it, for whether it'd fit again.
+    let namedTabs = 0;
+    let roomAsIs = 0;
+    let gapAsIs = 0;
+    // What a child's own content spans, rather than the column it's stretched over.
+    const contentWidth = (el) => {
+      let left = Infinity;
+      let right = -Infinity;
+      for (const child of el.children) {
+        const r = child.getBoundingClientRect();
+        if (!r.width) continue;
+        left = Math.min(left, r.left);
+        right = Math.max(right, r.right);
+      }
+      return right > left ? right - left : el.getBoundingClientRect().width;
+    };
+    const fitTabs = () => {
+      const row = document.querySelector(TABS_ROW);
+      if (!row || row.children.length < 3) return;
+      const [start, tabs, end] = row.children;
+      const was = row.getAttribute('data-tabs-tight');
+      // Compact, the bar's spacing isn't upstream's: what it needs is judged from what it had then.
+      if (was !== 'compact') {
+        const s = getComputedStyle(row);
+        roomAsIs = row.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+        gapAsIs = parseFloat(s.columnGap) || 0;
+        namedTabs = tabs.getBoundingClientRect().width;
+      }
+      const logo = contentWidth(start);
+      const endWidth = end.getBoundingClientRect().width;
+      const next =
+        namedTabs + 2 * gapAsIs + 2 * Math.max(logo, endWidth) <= roomAsIs + 0.5
+          ? null
+          : logo + namedTabs + endWidth + 2 * gapAsIs <= roomAsIs + 0.5
+            ? ''
+            : 'compact';
+      if (next === was) return;
+      if (next === null) row.removeAttribute('data-tabs-tight');
+      else row.setAttribute('data-tabs-tight', next);
+    };
+    let tabsFrame = 0;
+    const soonTabs = () => {
+      if (!tabsFrame) tabsFrame = requestAnimationFrame(() => {
+        tabsFrame = 0;
+        fitTabs();
+      });
+    };
+    let watched = null;
+    const sizes = new ResizeObserver(soonTabs);
+    // The bar comes and goes with the navigation setting, and its style remakes the row.
+    new MutationObserver(() => {
+      const row = document.querySelector(TABS_ROW);
+      if (row !== watched) {
+        sizes.disconnect();
+        watched = row;
+        namedTabs = 0;
+        roomAsIs = 0;
+        gapAsIs = 0;
+        if (row) for (const el of [row, ...row.children]) sizes.observe(el);
+      }
+      soonTabs();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+    addEventListener('resize', soonTabs);
+  } catch {}
+
+  /*
    * What the page's own background looks like, for the keyboard's box to be drawn the same, solid:
    * the theme's colour, and with "Background from artwork" on, the artwork wash the page shows
    * (upstream's components/shell/art-wash.tsx), a 320x180 canvas stretched over the screen.
