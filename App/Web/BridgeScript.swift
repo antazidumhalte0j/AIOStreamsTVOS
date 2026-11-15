@@ -1241,25 +1241,26 @@ enum BridgeScript {
    * scrolled, though the page still laid it out at the top (scripts/probes/sidebar-shift.js). A
    * scroll didn't put it back (27a5315, reverted: it kept the shift until the app restarted).
    * Hidden for two frames and shown again, WebKit makes its layer anew, in place
-   * (scripts/probes/sidebar-reset.js). Not at once: two frames after the change (07e2f59) the
-   * layer went stale after, though the page changed nothing more (the wash, its attributes, all in
-   * one go: scripts/probes/sidebar-timing.js); a second after, it stayed in place. Only on a real
-   * change: the page sets `data-art-wash` again with each new wash, and the navigation mustn't
-   * blink at every card.
+   * (scripts/probes/sidebar-reset.js). Only on a real change: the page sets `data-art-wash` again
+   * with each new wash, and the navigation mustn't blink at every card. (Up to 11d20f0, `lookNow`
+   * took an empty attribute for none, so no change was ever seen: the timings tried in builds
+   * until then, two frames and a second, never ran on the TV.)
    */
   try {
     const LOOK = ['data-art-wash', 'data-app-wash', 'data-art-glass'];
-    /** As tried on the TV; two frames was too soon. */
-    const REDRAW_AFTER_MS = 1000;
+    /** After the change, a couple of frames, for WebKit to have remade the page's layers. */
+    const REDRAW_AFTER_MS = 50;
     /*
      * It went stale only with the option turned off just after a keyed scroll, which is WebKit's
-     * own smooth scroll (NATIVE_SCROLLS): the layers remade while that ran. A second after the
-     * change could still be inside a scroll, or one more press of the remote, so it waits for the
-     * page to have held still this long too.
+     * own smooth scroll (NATIVE_SCROLLS): the layers remade while that ran. Scrolled just now, it
+     * waits for the page to have held still this long.
      */
     const SCROLL_STILL_MS = 400;
     const html = document.documentElement;
-    const lookNow = () => LOOK.map((name) => html.getAttribute(name)).join('|');
+    // Set, the attributes are mostly empty (`data-art-wash=""`), which a plain join of their values
+    // can't tell from none: whether each is there, and its value.
+    const lookNow = () =>
+      LOOK.map((name) => (html.hasAttribute(name) ? '=' + html.getAttribute(name) : '-')).join('|');
     let look = lookNow();
     let redrawing = 0;
     let changedAt = 0;
