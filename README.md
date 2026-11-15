@@ -27,6 +27,9 @@ lasts 7 days, with a paid developer account a year.
   prerelease for the newest build of `main` or of a branch built by hand (its notes name which), and
   open it in your sideloading tool.
 
+> [!IMPORTANT]
+> Updates may hang or fail if the app is in the Top Shelf on your Apple TV. This is because the Top Shelf extension always runs, even when the app is closed. If an update hangs or fails, move the app out of the Top Shelf, try the update again, then move it back.
+
 Then sign in to your Jellyfin server in the app, as in AIOStreams' web app. For Dolby Atmos, set
 the Apple TV's **Settings → Video and Audio → Audio Format** to **Auto**, and keep **Continuous
 Audio Connection** off (see Dolby Atmos below).
