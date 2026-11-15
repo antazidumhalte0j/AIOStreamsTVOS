@@ -167,20 +167,6 @@ enum MemoryLog {
     /// The page's last few moves from page to page, newest last, so an end can be put next to one.
     private static var moves: [(at: Date, from: String, to: String)] = []
 
-    /**
-     * A test, from the app menu: WebKit's in-memory cache emptied at each move between pages. A
-     * picture the page let go of may stay decoded in it; if the page stops being ended for memory
-     * with this on, that's where its memory went. Kept across launches, so a session can run with it.
-     */
-    static var clearsMemoryCache: Bool {
-        get { UserDefaults.standard.bool(forKey: "debug.clearMemoryCache") }
-        set { UserDefaults.standard.set(newValue, forKey: "debug.clearMemoryCache") }
-    }
-    private static var cacheClears = 0
-
-    /// WebKit emptied its in-memory cache for `clearsMemoryCache`.
-    static func memoryCacheCleared() { cacheClears += 1 }
-
     /// Full collections of the page's garbage the app asked WebKit for, or nil where it can't ask.
     private static var collections: Int? = 0
     private static var lastCollection: Date?
@@ -199,12 +185,6 @@ enum MemoryLog {
         guard let collections else { return "the page's garbage can't be collected on demand by this WebKit" }
         let last = lastCollection.map { ", last \(seconds($0)) ago" } ?? ""
         return "the page's garbage collected on demand \(collections) times\(last)"
-    }
-
-    private static var cacheText: String {
-        clearsMemoryCache
-            ? "WebKit's memory cache emptied at each move (\(cacheClears) times since launch)"
-            : "WebKit's memory cache left alone"
     }
 
     /// A `tvos-page-moved` message: the page went from one path to another, such as Back to `/`.
@@ -329,7 +309,7 @@ enum MemoryLog {
         lastStats = nil
         lastStatsAt = nil
         moves = []
-        before += "; \(cacheText); \(collectionText)"
+        before += "; \(collectionText)"
         let page = path.map { " on \($0)" } ?? ""
         note("page's web process ended (\(cause(reason)))\(page) \(playing ? "with a video loaded" : "while browsing")\(before)")
     }
@@ -351,7 +331,7 @@ enum MemoryLog {
         var peak = peakWebMB.map { ", the page at most \($0) MB" } ?? ""
         if let gpu = peakGpuMB { peak += ", WebKit graphics at most \(gpu) MB" }
         if let pictures = peakPictureMB { peak += ", the page's pictures at most \(pictures) MB" }
-        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText, cacheText, collectionText]
+        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText, collectionText]
         if let stats = lastStats { head.append("The page now holds \(stats)") }
         return head + lines
     }

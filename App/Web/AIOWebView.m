@@ -503,22 +503,6 @@ static NSString *AIOMimeType(NSString *extension) {
     ((void (*)(id, SEL, id, id, id))objc_msgSend)(store, remove, types, NSDate.distantPast, finished);
 }
 
-- (void)clearMemoryCache:(void (^)(void))done {
-    Class storeClass = NSClassFromString(@"WKWebsiteDataStore");
-    id store = AIOSend0(storeClass, @"defaultDataStore");
-    SEL remove = NSSelectorFromString(@"removeDataOfTypes:modifiedSince:completionHandler:");
-    if (!store || ![store respondsToSelector:remove]) {
-        done();
-        return;
-    }
-    // WKWebsiteDataTypeMemoryCache's value, as WebKit is loaded at run time here.
-    NSSet<NSString *> *types = [NSSet setWithObject:@"WKWebsiteDataTypeMemoryCache"];
-    void (^finished)(void) = ^{
-        dispatch_async(dispatch_get_main_queue(), done);
-    };
-    ((void (*)(id, SEL, id, id, id))objc_msgSend)(store, remove, types, NSDate.distantPast, finished);
-}
-
 #pragma mark Delegate calls
 
 - (void)receiveBody:(id)body {

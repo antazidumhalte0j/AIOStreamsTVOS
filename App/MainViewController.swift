@@ -382,7 +382,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
         lines += MemoryLog.report
         let held = AetherPlayer.heldSourceConnection
         let priming = AudioOutput.primerEnabled
-        let clearing = MemoryLog.clearsMemoryCache
         let report = lines.joined(separator: "\n")
         let menu = AppMenu(title: "AIOStreams", text: report, actions: [
             AppMenu.Action(title: "Open the log on a phone…", destructive: false) { [weak self] in
@@ -403,15 +402,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
                 self?.flashStatus(priming
                     ? "Dolby primer off from the next video"
                     : "Dolby primer on from the next video: for surround that plays as stereo")
-            },
-            AppMenu.Action(
-                title: clearing ? "Stop emptying the memory cache" : "Empty the memory cache on each page",
-                destructive: false
-            ) { [weak self] in
-                MemoryLog.clearsMemoryCache = !clearing
-                self?.flashStatus(clearing
-                    ? "WebKit's memory cache is left alone again"
-                    : "WebKit's memory cache is emptied at each move between pages, a test for the reloads")
             },
             AppMenu.Action(title: "Reset the app's data", destructive: true) { [weak self] in self?.confirmReset() },
             AppMenu.Action(title: "Close", destructive: false) {},
@@ -670,10 +660,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
 
         case "tvos-page-moved":
             MemoryLog.pageMoved(from: message.text("from") ?? "?", to: message.text("to") ?? "?")
-            // The app menu's test: what the page let go of goes from WebKit's memory cache too.
-            if MemoryLog.clearsMemoryCache {
-                web?.clearMemoryCache { MemoryLog.memoryCacheCleared() }
-            }
             collectAfterMoves()
         default:
             // Downloads, keyboard completions and the like have no Apple TV part.
