@@ -111,6 +111,14 @@ jobs:
             echo "$(basename "$bundle"): tvOS $need"
             if newer "$need" "$min"; then echo "$(basename "$bundle") needs tvOS $need, newer than the app's $min"; exit 1; fi
           done
+          # The prebuilt FFmpeg frameworks come out of SwiftPM read-only (r-xr-xr-x), and the zip keeps
+          # that. zsign, which many sideloaders sign with, opens each binary for writing to sign it in
+          # place, so as any user but root it failed on the first framework: "Can't parse BundleExecute
+          # file! .../AetherLibdav1d.framework/AetherLibdav1d". Everything in the app is writable by its owner.
+          chmod -R u+w "$app"
+          if [ -n "$(find "$app" ! -perm -u+w -print -quit)" ]; then
+            echo "Read-only files in the app:"; find "$app" ! -perm -u+w; exit 1
+          fi
           # An ad-hoc signature carrying the App Group the app and its Top Shelf share,
           # which sideloading tools read when they re-sign. Inside out: the frameworks
           # and the extension first, as a bundle can't be signed around unsigned code.
