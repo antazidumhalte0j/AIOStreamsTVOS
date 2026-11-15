@@ -1235,6 +1235,39 @@ enum BridgeScript {
   } catch {}
 
   /*
+   * Turning "Background from artwork" (or Glass) off on a page scrolled down, the settings page
+   * say, takes the wash's canvases, the app's wash and the glass blurs out from under the page at
+   * once, and WebKit then drew the navigation down the side, `position: fixed`, as far down the
+   * screen as the page was scrolled, until another page reset the scroll. The same stale fixed
+   * layer as the sidebar drawn partway down once the page's background was hidden (see the rules
+   * for `data-app-wash` above). A scroll moves WebKit's fixed layers back where they belong, so
+   * once the change has been drawn the page is scrolled a pixel and back, too little to see.
+   */
+  try {
+    const NUDGE_ON = ['data-art-wash', 'data-app-wash', 'data-art-glass'];
+    let nudging = 0;
+    const nudge = () => {
+      if (nudging) return;
+      // After the frame that drew the change, when WebKit has rebuilt its layers.
+      nudging = requestAnimationFrame(() => requestAnimationFrame(() => {
+        nudging = 0;
+        const scroller = document.scrollingElement || document.documentElement;
+        const y = scroller.scrollTop;
+        // At the top, fixed layers sit where they would anyway.
+        if (y <= 0) return;
+        const left = scroller.scrollLeft;
+        // Up a pixel, as at the page's end there's no room to go down.
+        scroller.scrollTo({ left, top: y - 1, behavior: 'instant' });
+        requestAnimationFrame(() => {
+          // Unless something else scrolled the page meanwhile.
+          if (scroller.scrollTop === y - 1) scroller.scrollTo({ left, top: y, behavior: 'instant' });
+        });
+      }));
+    };
+    new MutationObserver(nudge).observe(document.documentElement, { attributeFilter: NUDGE_ON });
+  } catch {}
+
+  /*
    * What the page's own background looks like, for the keyboard's box to be drawn the same, solid:
    * the theme's colour, and with "Background from artwork" on, the artwork wash the page shows
    * (upstream's components/shell/art-wash.tsx), a 320x180 canvas stretched over the screen.
