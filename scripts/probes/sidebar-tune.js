@@ -1,7 +1,7 @@
 // Tries other timings for the app's reset of the side navigation (BridgeScript, `__aioNavRedraws`),
 // on the running page, without a build. Edit the numbers below, run it, then turn "Background from
 // artwork" off just after scrolling to it and watch the sidebar. They last until the page reloads
-// or the app restarts, which puts back the build's own (50, 400, 2).
+// or the app restarts, which puts back the build's own (0, 0, 2).
 //   inspect-memory.py eval scripts/probes/sidebar-tune.js
 (() => {
   // How long after the setting changes it runs, in ms.
@@ -9,7 +9,7 @@
   // After a scroll, how long the page must have held still first, in ms.
   const STILL_MS = 0;
   // How many frames the navigation stays hidden (1 or more).
-  const HIDE_FRAMES = 1;
+  const HIDE_FRAMES = 2;
 
   const r = window.__aioNavRedraws;
   if (!r) return { error: "this build has no reset (no window.__aioNavRedraws)" };

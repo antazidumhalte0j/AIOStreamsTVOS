@@ -1248,14 +1248,16 @@ enum BridgeScript {
    */
   try {
     const LOOK = ['data-art-wash', 'data-app-wash', 'data-art-glass'];
-    /** After the change, a couple of frames, for WebKit to have remade the page's layers. */
-    const REDRAW_AFTER_MS = 50;
     /*
-     * It went stale only with the option turned off just after a keyed scroll, which is WebKit's
-     * own smooth scroll (NATIVE_SCROLLS): the layers remade while that ran. Scrolled just now, it
-     * waits for the page to have held still this long.
+     * No wait: tried on the TV with scripts/probes/sidebar-tune.js, hidden at once and for one
+     * frame put it back even just after a keyed scroll (WebKit's own smooth scroll, NATIVE_SCROLLS,
+     * the only time it went stale). Hidden two frames, to be safe. Both waits stay, at none, for
+     * the probe to try others.
      */
-    const SCROLL_STILL_MS = 400;
+    const REDRAW_AFTER_MS = 0;
+    /** After a scroll, how long the page must have held still first. */
+    const SCROLL_STILL_MS = 0;
+    const HIDE_FRAMES = 2;
     const html = document.documentElement;
     // Set, the attributes are mostly empty (`data-art-wash=""`), which a plain join of their values
     // can't tell from none: whether each is there, and its value.
@@ -1274,7 +1276,7 @@ enum BridgeScript {
       last: '',
       afterMs: REDRAW_AFTER_MS,
       stillMs: SCROLL_STILL_MS,
-      hideFrames: 2,
+      hideFrames: HIDE_FRAMES,
     };
     try {
       Object.defineProperty(window, '__aioNavRedraws', { value: navRedraws });
