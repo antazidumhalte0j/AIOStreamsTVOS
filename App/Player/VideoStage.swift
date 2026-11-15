@@ -12,8 +12,7 @@ struct VideoFrame: Equatable {
     /// The top corners' and the bottom corners'.
     var radius: CGFloat
     var bottomRadius: CGFloat
-    /// Subtitles show in the box. Upstream's trailer previews ask for none, which the bridge script drops,
-    /// so a trailer shows the track picked for it as any video does.
+    /// Subtitles show in the box; trailer previews have none.
     var subtitles: Bool
     /// A trailer behind the page: the part of the box the page's hole shows (patches/web/0050). Over the
     /// app's own wash the page's background is clear, so the video is clipped to it here, and with
