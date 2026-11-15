@@ -1235,6 +1235,53 @@ enum BridgeScript {
   } catch {}
 
   /*
+   * Turning "Background from artwork" (or Glass) off on a page scrolled down, Settings say, took
+   * the wash and the blurs from under the page at once, and WebKit went on drawing the navigation
+   * down the side, `position: fixed`, from a stale layer: as far down the screen as the page was
+   * scrolled, though the page still laid it out at the top (scripts/probes/sidebar-shift.js). A
+   * scroll didn't put it back (27a5315, reverted: it kept the shift until the app restarted).
+   * Hidden for two frames and shown again, WebKit makes its layer anew, in place
+   * (scripts/probes/sidebar-reset.js). Only on a real change: the page sets `data-art-wash` again
+   * with each new wash, and the navigation mustn't blink at every card.
+   */
+  try {
+    const LOOK = ['data-art-wash', 'data-app-wash', 'data-art-glass'];
+    const html = document.documentElement;
+    const lookNow = () => LOOK.map((name) => html.getAttribute(name)).join('|');
+    let look = lookNow();
+    let redrawing = 0;
+    const redrawNav = () => {
+      if (redrawing) return;
+      // After the frame that drew the change, once WebKit has remade the page's layers.
+      redrawing = requestAnimationFrame(() => requestAnimationFrame(() => {
+        redrawing = 0;
+        // At the top, the stale layer is where the navigation belongs anyway.
+        if (scrollY <= 0) return;
+        // The outermost of each: the rail inside the sidebar goes with it.
+        const navs = [...document.querySelectorAll(NAV_SIDE)].filter(
+          (el) => !el.parentElement?.closest(NAV_SIDE) && getComputedStyle(el).position === 'fixed'
+        );
+        if (!navs.length) return;
+        // Hiding the element with focus would drop it; the settings toggle has it, as a rule.
+        const focused = document.activeElement;
+        const hadFocus = navs.some((el) => el.contains(focused));
+        for (const el of navs) el.style.setProperty('display', 'none', 'important');
+        void html.offsetHeight;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          for (const el of navs) el.style.removeProperty('display');
+          if (hadFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+        }));
+      }));
+    };
+    new MutationObserver(() => {
+      const now = lookNow();
+      if (now === look) return;
+      look = now;
+      redrawNav();
+    }).observe(html, { attributeFilter: LOOK });
+  } catch {}
+
+  /*
    * What the page's own background looks like, for the keyboard's box to be drawn the same, solid:
    * the theme's colour, and with "Background from artwork" on, the artwork wash the page shows
    * (upstream's components/shell/art-wash.tsx), a 320x180 canvas stretched over the screen.
