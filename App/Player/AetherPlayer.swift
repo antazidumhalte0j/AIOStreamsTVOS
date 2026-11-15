@@ -680,6 +680,9 @@ final class AetherPlayer {
         if let subtitle = change.subtitle {
             subtitlePickedByPage = true
             if !boxed { fullScreenPick = subtitle }
+            if current?.isTrailer == true {
+                EngineLogBook.note("[player] the page picked the trailer's subtitle: \(subtitle) (\(boxed ? "in its box" : "on the whole screen"))")
+            }
             switch subtitle {
             case .track(let id):
                 if let index = Int(id) { pickSubtitleSettled(index) }
@@ -1094,6 +1097,7 @@ final class AetherPlayer {
         // AVPlayer the captions are AVPlayer's to draw, beyond the app's overlay the page hides there,
         // and it picks them itself by the system's caption settings: that choice is turned off too.
         if request.isTrailer && boxed {
+            EngineLogBook.note("[player] trailer subtitles in its box: none (\(engine.subtitleTracks.count) tracks listed)")
             if request.playsOnAVPlayer { silenceAVPlayerCaptions() }
             engine.clearSubtitle()
             return
@@ -1130,10 +1134,23 @@ final class AetherPlayer {
         case .default:
             pick = preferred() ?? tracks.first { $0.isDefault && !$0.isForced } ?? forced
         }
+        if request.isTrailer {
+            let listed = tracks.map { "\($0.id) \($0.language ?? "no language")\($0.isForced ? " forced" : "")\($0.isDefault ? " default" : "")" }
+            EngineLogBook.note("[player] trailer subtitles on the whole screen: mode \(request.subtitleMode.rawValue), "
+                + "wanted \(wanted.isEmpty ? "none" : wanted.joined(separator: ",")), tracks [\(listed.joined(separator: "; "))], "
+                + "active \(engine.activeSubtitleTrackIndex.map(String.init) ?? "none"), picked \(pick.map { String($0.id) } ?? "none")")
+        }
         if let pick {
             if engine.activeSubtitleTrackIndex != pick.id { engine.selectSubtitleTrack(index: pick.id) }
         } else if engine.activeSubtitleTrackIndex != nil {
             engine.clearSubtitle()
+        }
+        // A trailer on AVPlayer, on the whole screen, with the mode picking nothing: AVPlayer's own pick by
+        // the system's caption settings, as another player shows it. A caption track often has no language,
+        // which the mode goes by, and a box this AVPlayer showed a trailer in turned that pick off (the
+        // engine keeps one AVPlayer from load to load). Subtitles set to None stay off.
+        if pick == nil, request.isTrailer, request.playsOnAVPlayer, request.subtitleMode != .none {
+            restoreAVPlayerCaptions()
         }
     }
 
@@ -1146,7 +1163,10 @@ final class AetherPlayer {
     func framed(_ isBoxed: Bool) {
         guard isBoxed != boxed else { return }
         boxed = isBoxed
-        guard let request = current, request.isTrailer, !ended, loadedAt != nil else { return }
+        guard let request = current, request.isTrailer, !ended else { return }
+        EngineLogBook.note("[player] trailer moved \(isBoxed ? "into a box" : "onto the whole screen")"
+            + "\(loadedAt == nil ? " while loading" : "")\(fullScreenPick.map { ", the page's pick there was \($0)" } ?? "")")
+        guard loadedAt != nil else { return }
         if !isBoxed, let pick = fullScreenPick {
             switch pick {
             case .track(let id):
@@ -1159,6 +1179,21 @@ final class AetherPlayer {
         // The page's last pick was for the other place; on the whole screen the mode picks afresh.
         subtitlePickedByPage = false
         pickSubtitle(request)
+    }
+
+    /// AVPlayer chooses captions by the system's settings again, and picks for the item now.
+    private func restoreAVPlayerCaptions() {
+        guard let player = engine.currentAVPlayer, let item = player.currentItem else { return }
+        player.appliesMediaSelectionCriteriaAutomatically = true
+        Task { @MainActor in
+            guard let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) else {
+                EngineLogBook.note("[player] trailer captions: AVPlayer lists no caption group")
+                return
+            }
+            item.selectMediaOptionAutomatically(in: group)
+            let shown = item.currentMediaSelection.selectedMediaOption(in: group)?.displayName ?? "none"
+            EngineLogBook.note("[player] trailer captions on the whole screen: AVPlayer's own pick by the system's settings, \(shown)")
+        }
     }
 
     /// AVPlayer stops choosing captions by the system's settings, and shows none.
