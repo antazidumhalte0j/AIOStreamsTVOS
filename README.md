@@ -17,6 +17,9 @@ Needs an Apple TV on tvOS 18 or later. The IPA is unsigned, so a sideloading too
 Apple TV signs it with your own Apple ID before installing it; with a free Apple ID the signature
 lasts 7 days, with a paid developer account a year.
 
+> [!IMPORTANT]
+> Updates may hang or fail if the app is in the Top Shelf on your Apple TV. This is because the Top Shelf extension always runs, even when the app is closed. If an update hangs or fails, move the app out of the Top Shelf, try the update again, then move it back.
+
 - **From a sideloading source**: add
   `https://raw.githubusercontent.com/mickey2266/AIOStreamsTVOS/main/altstore/source.json` to an
   Apple TV sideloader that reads AltStore-format sources (FlareStore, for one). It lists every
@@ -26,9 +29,6 @@ lasts 7 days, with a paid developer account a year.
   [release](https://github.com/mickey2266/AIOStreamsTVOS/releases/latest), or the **Nightly**
   prerelease for the newest build of `main` or of a branch built by hand (its notes name which), and
   open it in your sideloading tool.
-
-> [!IMPORTANT]
-> Updates may hang or fail if the app is in the Top Shelf on your Apple TV. This is because the Top Shelf extension always runs, even when the app is closed. If an update hangs or fails, move the app out of the Top Shelf, try the update again, then move it back.
 
 Then sign in to your Jellyfin server in the app, as in AIOStreams' web app. For Dolby Atmos, set
 the Apple TV's **Settings → Video and Audio → Audio Format** to **Auto**, and keep **Continuous
