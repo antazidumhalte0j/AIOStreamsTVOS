@@ -226,12 +226,12 @@ enum MemoryLog {
         }
         // Animations, which WebKit's timeline holds with their element after they end.
         if let animations = message.text("animationsBy") { text += ", animations \(animations)" }
-        // What the page keeps from the server (patches/web/0064), as JSON, which the objects outweigh.
+        // What the page keeps from the server (patches/web/0064), counted by its items.
         if message.number("queries") != nil {
-            text += ", server data \(int("queryMB")) MB as JSON in \(int("queries")) queries"
+            text += ", server data \(int("queryItems")) items in \(int("queries")) queries"
             text += " (\(int("queryPages")) catalog pages"
             if let key = message.text("queryLargest"), !key.isEmpty {
-                text += ", largest \(key) \(int("queryLargestMB")) MB"
+                text += ", largest \(key) with \(int("queryLargestItems")) items"
             }
             text += ")"
         }

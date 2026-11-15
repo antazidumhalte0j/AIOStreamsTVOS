@@ -1,40 +1,56 @@
 diff --git a/packages/web/src/main.tsx b/packages/web/src/main.tsx
-index 42c73322b..978a0159d 100644
+index 42c73322b..6e0757de0 100644
 --- a/packages/web/src/main.tsx
 +++ b/packages/web/src/main.tsx
-@@ -34,6 +34,38 @@ const queryClient = new QueryClient({
+@@ -34,6 +34,54 @@ const queryClient = new QueryClient({
    },
  });
  
++type Listed = { Items?: unknown[] };
++
++/** How many items a query holds: a catalog's across its pages, or a list's. */
++function itemsIn(data: unknown): number {
++  if (!data || typeof data !== 'object') return 0;
++  const paged = (data as { pages?: unknown[] }).pages;
++  if (Array.isArray(paged))
++    return paged.reduce<number>(
++      (n, page) => n + ((page as Listed | undefined)?.Items?.length ?? 0),
++      0
++    );
++  const items = (data as Listed).Items;
++  return Array.isArray(items) ? items.length : 0;
++}
++
 +/**
 + * How much the page keeps from the server, for the Apple TV app's memory log:
 + * its web process is ended for memory with few pictures held, so the rest may
-+ * be this. Sized as JSON, which the objects themselves outweigh, so a floor
-+ * (AIOStreamsTVOS).
++ * be this. Counted, not sized: sized as JSON every 30 s, the whole cache was
++ * written out as text each time, a spike of its own (AIOStreamsTVOS).
 + */
 +Object.defineProperty(window, '__aioQueryStats', {
 +  value: () => {
 +    const queries = queryClient.getQueryCache().getAll();
-+    let bytes = 0;
++    let items = 0;
 +    let pages = 0;
 +    let largest = 0;
 +    let largestKey = '';
 +    for (const query of queries) {
 +      const data = query.state.data as { pages?: unknown[] } | undefined;
 +      if (data && Array.isArray(data.pages)) pages += data.pages.length;
-+      let size = 0;
-+      try {
-+        size = JSON.stringify(data)?.length ?? 0;
-+      } catch {
-+        // A value JSON can't hold, such as one that refers to itself, goes uncounted.
-+      }
-+      bytes += size;
-+      if (size > largest) {
-+        largest = size;
-+        largestKey = String(query.queryKey[0]);
++      const held = itemsIn(data);
++      items += held;
++      if (held > largest) {
++        largest = held;
++        // Named by the first short part of its key past the shared prefix, as `items`.
++        largestKey = String(
++          query.queryKey
++            .slice(1)
++            .find((part) => typeof part === 'string' && part.length < 24) ??
++            query.queryKey[0]
++        );
 +      }
 +    }
-+    return { queries: queries.length, pages, bytes, largest, largestKey };
++    return { queries: queries.length, pages, items, largest, largestKey };
 +  },
 +});
 +

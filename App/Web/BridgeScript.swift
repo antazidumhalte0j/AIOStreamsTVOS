@@ -308,7 +308,19 @@ enum BridgeScript {
       // (patches/web/0058, `tvos-page-color`), so the app's art shows through the page with no hole
       // cut for it, and follows the page's scroll there frame by frame.
       "html[data-app-color] [data-ui='page-background']{background-color:transparent!important}",
-      'html.see-through[data-app-color][data-app-color][data-app-color]:not(.playing){background-color:transparent!important}'
+      'html.see-through[data-app-color][data-app-color][data-app-color]:not(.playing){background-color:transparent!important}',
+      /*
+       * Cleared so, the page's background draws nothing, but as `position: fixed` WebKit still gave
+       * it a layer the screen's size (32 MB at 4K), and everything of the page over it a layer of its
+       * own for overlapping it: the page's `main` and the page itself, each 40-56 MB, made again on
+       * every move. Measured on the TV through Web Inspector's LayerTree, composited memory halved
+       * with it gone (median 185 to 98 MB), and nothing on screen changed. It stays while it draws
+       * the wash itself, when the app couldn't (`data-art-wash` without `data-app-wash`). A trailer's
+       * hole (`HOLE`) is cut in it as a mask, which over a clear background shows nothing either.
+       * The keyboard's probe for the page's colour (`keyboardLook`) still reads it while hidden.
+       */
+      "html[data-app-color]:not([data-art-wash]) [data-ui='page-background']," +
+        "html[data-app-color][data-app-wash] [data-ui='page-background']{display:none!important}"
     );
     // The rotating hero's art and the one following the card in focus (whole window or corner), and a title page's.
     rules.push(
@@ -1533,8 +1545,9 @@ enum BridgeScript {
     }
   } catch {}
   /*
-   * How much the page keeps from the server (patches/web/0064, `__aioQueryStats`), sized as JSON,
-   * a floor for what the objects take. Every 30 s, as sizing it reads through all of it.
+   * How much the page keeps from the server (patches/web/0064, `__aioQueryStats`): its queries,
+   * catalog pages and items, counted rather than written out as JSON, which made a spike of its own.
+   * Every 30 s, as counting still reads through all of it.
    */
   const QUERY_STATS_EVERY = 30000;
   let queryStats = null;
@@ -1783,8 +1796,8 @@ enum BridgeScript {
       ...(queryStats && {
         queries: queryStats.queries || 0,
         queryPages: queryStats.pages || 0,
-        queryMB: mb(queryStats.bytes || 0),
-        queryLargestMB: mb(queryStats.largest || 0),
+        queryItems: queryStats.items || 0,
+        queryLargestItems: queryStats.largest || 0,
         queryLargest: String(queryStats.largestKey || ''),
       }),
     };
