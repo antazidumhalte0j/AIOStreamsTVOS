@@ -26,6 +26,10 @@ import PackageDescription
  *   connection up to what the link delivers in a new request's first-byte time
  *   (8 to 32 MB, was a fixed 8 MB); `prefetchLandings(atSeconds:)`, which holds
  *   the bytes a skip lands on ahead of the skip, from the page's skip segments.
+ * - 22806ef1 (new on this branch): a VOD `.m3u8` / `.m3u` whose loopback open fails, for any
+ *   reason but the origin's refusal, takes the AE#154 reroute onto AVPlayer. Apple's trailer CDN
+ *   (play-edge.itunes.apple.com) answers its playlist differently each time, so the reader caught it
+ *   "answering byte ranges with other bytes" (or FFmpeg read invalid data) before it saw `#EXTM3U`.
  * Back to an upstream version once those are released there.
  *
  * TrueHD Atmos and DTS:X object rendering (`TrueHDObjectAudio`,
@@ -45,7 +49,7 @@ let package = Package(
         .library(name: "AetherHost", targets: ["AetherHost"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mickey2266/AetherEngine", revision: "1e192e6bf42c57b5fa4e9e3274ba40970f078d9e",
+        .package(url: "https://github.com/mickey2266/AetherEngine", revision: "22806ef170c7d26f7b4e354c7637b06a0c606f3d",
                  traits: ["TrueHDObjectAudio", "DTSXObjectAudio", "DolbyVisionFelCurves"]),
     ],
     targets: [

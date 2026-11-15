@@ -624,7 +624,10 @@ branch `aiostreams-7.67.1`, each described there):
 - the silent Atmos stream beside a rendered TrueHD Atmos or DTS:X bed stops while the
   picture-in-picture window shows;
 - a forward seek past the read-ahead reads as far as the link delivers in a new request's
-  first-byte time, and the bytes a skip lands on are fetched ahead of the skip. Lossless surround (TrueHD, DTS-HD) reaches AVPlayer as FLAC. Its FFmpeg comes as
+  first-byte time, and the bytes a skip lands on are fetched ahead of the skip;
+- a finished `.m3u8` that fails to open as a file goes to AVPlayer instead, as the engine sends any
+  finished HLS once it sees a playlist: Apple's trailers answer each request for their playlist
+  differently, which the engine's reader caught as "byte ranges with other bytes" first. Lossless surround (TrueHD, DTS-HD) reaches AVPlayer as FLAC. Its FFmpeg comes as
 dynamic frameworks that Xcode embeds in the app; nothing else in the app may bring an FFmpeg of its
 own, or it takes the engine's symbols.
 
