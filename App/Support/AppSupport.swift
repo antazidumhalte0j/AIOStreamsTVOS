@@ -242,6 +242,8 @@ enum MemoryLog {
             text += ", listeners \(listeners), \(int("intervals")) intervals"
             text += ", \(int("appListeners")) listening to the app"
         }
+        // Animations, which WebKit's timeline holds with their element after they end.
+        if let animations = message.text("animationsBy") { text += ", animations \(animations)" }
         // What the page keeps from the server (patches/web/0064), as JSON, which the objects outweigh.
         if message.number("queries") != nil {
             text += ", server data \(int("queryMB")) MB as JSON in \(int("queries")) queries"

@@ -421,16 +421,59 @@ enum BridgeScript {
     keyframes[0]?.opacity === 0 &&
     keyframes[1]?.opacity === 1 &&
     typeof options?.duration === 'number';
+  /*
+   * Animations started through `animate` (the page's own, and Framer Motion's page entrance on
+   * each page's box), watched weakly. One that ended holding its last frame (`fill: forwards` or
+   * `both`) stays in WebKit's timeline with its element, and with a removed element, its whole
+   * removed page: each page closed was still held, one apiece, the box taken down with them the
+   * page's own. As one's element leaves the page it's cancelled, which lets the timeline let go.
+   */
+  const madeAnimations = [];
+  const ANIMATIONS_WATCHED = 3000;
+  const animationsCancelled = new Map();
+  const animationOn = (el) =>
+    (el.getAttribute && (el.getAttribute('data-page') || el.getAttribute('data-ui'))) ||
+    String(el.tagName || 'element').toLowerCase();
+  const watchAnimation = (animation) => {
+    if (animation && typeof WeakRef === 'function') {
+      madeAnimations.push(new WeakRef(animation));
+      if (madeAnimations.length > ANIMATIONS_WATCHED) madeAnimations.splice(0, madeAnimations.length - ANIMATIONS_WATCHED);
+    }
+    return animation;
+  };
+  /** Each animation whose element is off the page is cancelled, and those cancelled counted by element. */
+  const cancelRemovedAnimations = () => {
+    let kept = 0;
+    for (const ref of madeAnimations) {
+      const animation = ref.deref();
+      if (!animation) continue;
+      madeAnimations[kept++] = ref;
+      const target = animation.effect?.target;
+      if (!target || target.isConnected || animation.playState === 'idle') continue;
+      try {
+        animation.cancel();
+        const on = animationOn(target);
+        animationsCancelled.set(on, (animationsCancelled.get(on) || 0) + 1);
+      } catch {}
+    }
+    madeAnimations.length = kept;
+  };
+  let cancelTimer = 0;
+  /** Soon after removals settle, so an element moved rather than removed is back by then. */
+  const soonCancelRemovedAnimations = () => {
+    clearTimeout(cancelTimer);
+    cancelTimer = setTimeout(cancelRemovedAnimations, 500);
+  };
   try {
     const animate = Element.prototype.animate;
     Element.prototype.animate = function (keyframes, options) {
       if (artFade(this, keyframes, options)) return stepFadeIn(this, options.duration);
       const glide = !!(this.hasAttribute && this.hasAttribute('data-glide-layer'));
-      if (glide && (!SLIDES || holding())) return animate.call(this, keyframes, { duration: 0 });
+      if (glide && (!SLIDES || holding())) return watchAnimation(animate.call(this, keyframes, { duration: 0 }));
       const duration = typeof options === 'number' ? options : options?.duration;
       if (glide && typeof duration === 'number' && duration > 0)
         slidingUntil = Math.max(slidingUntil, performance.now() + duration);
-      return animate.call(this, keyframes, options);
+      return watchAnimation(animate.call(this, keyframes, options));
     };
   } catch {}
   // The page's saved copies of artwork come back as blob URLs too.
@@ -688,7 +731,9 @@ enum BridgeScript {
     new MutationObserver((records) => {
       const left = [];
       const back = [];
+      let removedAny = false;
       for (const record of records) {
+        if (record.removedNodes.length) removedAny = true;
         for (const node of record.removedNodes) {
           const from = left.length;
           imagesIn(node, left);
@@ -719,6 +764,8 @@ enum BridgeScript {
         parked.set(img, src);
         img.setAttribute('src', BLANK);
       }
+      // What was taken down may have animations holding it in WebKit's timeline.
+      if (removedAny) soonCancelRemovedAnimations();
     }).observe(document.documentElement, { childList: true, subtree: true });
   } catch {}
 
@@ -1371,11 +1418,14 @@ enum BridgeScript {
         `${name} ${type}${(typeof options === 'boolean' ? options : !!options?.capture) ? ' capture' : ''}`;
       target.addEventListener = function (type, listener, options) {
         // A bare `addEventListener(...)` in strict code comes with no `this`, and is the window's.
-        if (listener && (this === target || (this == null && target === window))) {
+        // Not one that takes itself off (`once`), which no removal would take out of the count, and so
+        // the count would hold; one taken off by its `signal` leaves the count as it goes.
+        if (listener && !options?.once && (this === target || (this == null && target === window))) {
           const key = keyOf(type, options);
           let set = liveListeners.get(key);
           if (!set) liveListeners.set(key, (set = new Set()));
           set.add(listener);
+          options?.signal?.addEventListener?.('abort', () => set.delete(listener), { once: true });
         }
         return add.call(this, type, listener, options);
       };
@@ -1645,6 +1695,23 @@ enum BridgeScript {
       })(),
       intervals: liveIntervals,
       appListeners: listeners.size,
+      // Animations whose element was taken down: cancelled so WebKit's timeline lets go, and any still alive.
+      animationsBy: (() => {
+        let alive = 0;
+        let removed = 0;
+        for (const ref of madeAnimations) {
+          const animation = ref.deref();
+          if (!animation) continue;
+          alive++;
+          const target = animation.effect?.target;
+          if (target && !target.isConnected) removed++;
+        }
+        const total = [...animationsCancelled.values()].reduce((sum, n) => sum + n, 0);
+        const most = [...animationsCancelled].sort((a, b) => b[1] - a[1]).slice(0, 4)
+          .map(([on, n]) => `${on} ${n}`).join(', ');
+        return `${alive} alive (${removed} on removed elements), ${total} cancelled as their element went` +
+          (most ? ` (most ${most})` : '');
+      })(),
       ...(queryStats && {
         queries: queryStats.queries || 0,
         queryPages: queryStats.pages || 0,
