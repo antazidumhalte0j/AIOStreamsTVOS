@@ -542,7 +542,11 @@ enum BridgeScript {
       /*
        * A picture the app couldn't fetch (one in six once, "Could not connect to the server") is
        * loaded from its own address instead, as the page would have, rather than left missing.
-       * Set past the rewrite above, so it isn't sent to the app again.
+       * Set past the rewrite above, so it isn't sent to the app again. The error stops here, on
+       * the way down to the picture: React listens on the `<img>` itself, and the hero's and a
+       * title page's logos took the app's miss as their own failure (`onError`) and showed the
+       * title's name instead, before the original had a chance. A miss on the original reaches
+       * the page as before.
        */
       document.addEventListener(
         'error',
@@ -553,7 +557,10 @@ enum BridgeScript {
           if (!at.startsWith(fitPrefix)) return;
           try {
             const original = new URL(at).searchParams.get('u');
-            if (original) setAttribute.call(img, 'src', original);
+            if (original) {
+              e.stopPropagation();
+              setAttribute.call(img, 'src', original);
+            }
           } catch {}
         },
         true

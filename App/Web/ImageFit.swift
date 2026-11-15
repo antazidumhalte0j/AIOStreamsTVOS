@@ -86,6 +86,14 @@ enum ImageFit {
                 note(failed: "HTTP \(status)")
                 return done(nil, nil)
             }
+            // A vector picture has no pixels to draw down, and ImageIO can't read it: it goes back
+            // as it came. Answered as missing, the page gave up on a title's SVG logo and showed
+            // its name instead.
+            if isSVG(data, response) {
+                keep(key, data, "image/svg+xml")
+                note(drawn: false)
+                return done(data, "image/svg+xml")
+            }
             queue.async {
                 guard let made = make(data, width: width, blur: blur) else {
                     note(failed: "couldn't read the picture")
@@ -116,6 +124,15 @@ enum ImageFit {
             }
             done(data, response, error)
         }.resume()
+    }
+
+    /// Said so by its server, or by its own start, as a server may send it as anything.
+    private static func isSVG(_ data: Data, _ response: URLResponse?) -> Bool {
+        if response?.mimeType?.lowercased() == "image/svg+xml" { return true }
+        guard let head = String(data: data.prefix(1024), encoding: .utf8)?.lowercased() else { return false }
+        let start = head.drop { $0.isWhitespace || $0 == "\u{feff}" }
+        return start.hasPrefix("<svg") || (start.hasPrefix("<?xml") && head.contains("<svg"))
+            || (start.hasPrefix("<!doctype svg"))
     }
 
     /// How many times narrower a blurred copy is made than the width asked for.
