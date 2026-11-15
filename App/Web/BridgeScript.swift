@@ -1241,19 +1241,24 @@ enum BridgeScript {
    * scrolled, though the page still laid it out at the top (scripts/probes/sidebar-shift.js). A
    * scroll didn't put it back (27a5315, reverted: it kept the shift until the app restarted).
    * Hidden for two frames and shown again, WebKit makes its layer anew, in place
-   * (scripts/probes/sidebar-reset.js). Only on a real change: the page sets `data-art-wash` again
-   * with each new wash, and the navigation mustn't blink at every card.
+   * (scripts/probes/sidebar-reset.js). Not at once: two frames after the change (07e2f59) the
+   * layer went stale after, though the page changed nothing more (the wash, its attributes, all in
+   * one go: scripts/probes/sidebar-timing.js); a second after, it stayed in place. Only on a real
+   * change: the page sets `data-art-wash` again with each new wash, and the navigation mustn't
+   * blink at every card.
    */
   try {
     const LOOK = ['data-art-wash', 'data-app-wash', 'data-art-glass'];
+    /** As tried on the TV; two frames was too soon. */
+    const REDRAW_AFTER_MS = 1000;
     const html = document.documentElement;
     const lookNow = () => LOOK.map((name) => html.getAttribute(name)).join('|');
     let look = lookNow();
     let redrawing = 0;
     const redrawNav = () => {
-      if (redrawing) return;
-      // After the frame that drew the change, once WebKit has remade the page's layers.
-      redrawing = requestAnimationFrame(() => requestAnimationFrame(() => {
+      // From the last change, as the timing probe did.
+      clearTimeout(redrawing);
+      redrawing = setTimeout(() => {
         redrawing = 0;
         // At the top, the stale layer is where the navigation belongs anyway.
         if (scrollY <= 0) return;
@@ -1271,7 +1276,7 @@ enum BridgeScript {
           for (const el of navs) el.style.removeProperty('display');
           if (hadFocus && focused?.isConnected) focused.focus({ preventScroll: true });
         }));
-      }));
+      }, REDRAW_AFTER_MS);
     };
     new MutationObserver(() => {
       const now = lookNow();
