@@ -473,20 +473,29 @@ async def evaluate(args) -> None:
                 sys.exit("The page didn't open an inspector session in 15 s. Close any other inspector on it, then try again.")
             session._missing_id_in_message = lambda message: None
             await session.runtime_enable()
-            # Returned as a JSON string, so the whole value comes back however deep it is, and awaited, so a
-            # probe may be async (one that asks the server).
-            expression = f"Promise.resolve({script.strip().rstrip(';')}).then((v) => JSON.stringify(v))"
-            raw = await asyncio.wait_for(
-                session.send_command(
-                    "Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True
-                ),
-                30,
-            )
-            message = unwrap(raw)
-            outcome = message.get("result", {}) if isinstance(message, dict) else {}
-            if outcome.get("wasThrown") or "exceptionDetails" in outcome:
-                sys.exit(f"The probe threw: {outcome.get('result', {}).get('description', outcome)}")
-            result = outcome.get("result", {}).get("value")
+            body = script.strip().rstrip(';')
+            if args.wait:
+                # Awaited, so a probe may be async (one that asks the server). Not every WebKit answers
+                # an awaited evaluate, so only on asking.
+                expression = f"Promise.resolve({body}).then((v) => JSON.stringify(v))"
+                raw = await asyncio.wait_for(
+                    session.send_command(
+                        "Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True
+                    ),
+                    30,
+                )
+                message = unwrap(raw)
+                outcome = message.get("result", {}) if isinstance(message, dict) else {}
+                if outcome.get("wasThrown") or "exceptionDetails" in outcome:
+                    sys.exit(f"The probe threw: {outcome.get('result', {}).get('description', outcome)}")
+                result = outcome.get("result", {}).get("value")
+            else:
+                # Returned as a JSON string, so the whole value comes back however deep it is.
+                result = await asyncio.wait_for(
+                    session.runtime_evaluate(f"JSON.stringify({body})", return_by_value=True), 20
+                )
+            if result is None or result == "":
+                sys.exit(f"The page returned nothing for the probe (raw answer: {result!r}).")
             try:
                 print(json.dumps(json.loads(result), indent=2))
             except (TypeError, ValueError):
@@ -516,6 +525,7 @@ def main() -> None:
     e = sub.add_parser("eval", help="run a JavaScript file in the page and print what it returns")
     e.add_argument("file")
     e.add_argument("--match", default="aiostv", help="text to find the page by (default: aiostv)")
+    e.add_argument("--wait", action="store_true", help="await a probe that returns a promise")
     args = parser.parse_args()
     if args.cmd == "eval":
         asyncio.run(evaluate(args))
