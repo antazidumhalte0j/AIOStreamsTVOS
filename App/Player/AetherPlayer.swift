@@ -85,6 +85,17 @@ final class AetherPlayer {
      */
     private var liveOnAVPlayer = false
 
+    /**
+     * The page picked a subtitle (or none) for the file that plays, so the app's own pick doesn't
+     * replace it. A trailer on AVPlayer (`LoadRequest.playsOnAVPlayer`) lists its tracks only once
+     * AVPlayer has read them, often after the load returned, and AVPlayer may pick one itself by the
+     * system's caption settings: the app's pick runs again then (`repickLateSubtitles`), unless the
+     * page has picked since.
+     */
+    private var subtitlePickedByPage = false
+    /// The subtitle tracks and the active one when the app last picked, so it picks again only on a change.
+    private var lastPickedOver: (tracks: Int, active: Int?)?
+
     /// Where the page's skips end, in ms (`setSkips`).
     private var skipEnds: [Double] = []
 
@@ -203,6 +214,8 @@ final class AetherPlayer {
         queued = nil
         ended = false
         addedSubtitles = [:]
+        subtitlePickedByPage = false
+        lastPickedOver = nil
         lastBuffered = nil
         // The page sends the next file's skips once it has loaded it.
         skipEnds = []
@@ -289,6 +302,12 @@ final class AetherPlayer {
         options.isLive = live
         // Loaded again for its sound (`liveOnAVPlayer`): AVPlayer reads the live playlist itself.
         if live && liveOnAVPlayer { options.nativeRemoteHLS = true }
+        // A trailer AVPlayer can open plays on AVPlayer from its own address, as another player would:
+        // remuxed by the engine, a trailer's closed captions (CEA-608 in the video, or a caption track)
+        // never reached AVPlayer, as the engine's playlist declares none, and the stream showed no track.
+        // The engine's subtitle styling and audio conversion don't matter for a trailer, and AVPlayer
+        // draws the captions itself (`pickSubtitle` turns them on or off).
+        if request.playsOnAVPlayer { options.nativeRemoteHLS = true }
         // The open's probe budget stays the engine's (60 s of the stream). A 5 s cap on live opens left an
         // IPTV channel's AC-3 tracks unidentified ("Could not find codec parameters ... unspecified sample
         // rate"): the session played the picture with no sound, which other players had (Nov 2026).
@@ -648,6 +667,7 @@ final class AetherPlayer {
             settleAudio(after: 6)
         }
         if let subtitle = change.subtitle {
+            subtitlePickedByPage = true
             switch subtitle {
             case .track(let id):
                 if let index = Int(id) { pickSubtitleSettled(index) }
@@ -1057,6 +1077,15 @@ final class AetherPlayer {
      * always that kind: none in another language.
      */
     private func pickSubtitle(_ request: LoadRequest) {
+        lastPickedOver = (engine.subtitleTracks.count, engine.activeSubtitleTrackIndex)
+        // A trailer playing by itself (the hero, a card, a title page's backdrop) shows no subtitles. On
+        // AVPlayer the captions are AVPlayer's to draw, beyond the app's overlay the page hides there,
+        // and it picks them itself by the system's caption settings: that choice is turned off too.
+        if request.isTrailer && request.framed {
+            if request.playsOnAVPlayer { silenceAVPlayerCaptions() }
+            engine.clearSubtitle()
+            return
+        }
         let tracks = engine.subtitleTracks.filter { !$0.isExternal }
         let audioLanguage = engine.audioTracks.first { $0.id == engine.activeAudioTrackIndex }?.language
         let wanted = request.subtitleLanguages
@@ -1094,6 +1123,29 @@ final class AetherPlayer {
         } else if engine.activeSubtitleTrackIndex != nil {
             engine.clearSubtitle()
         }
+    }
+
+    /// AVPlayer stops choosing captions by the system's settings, and shows none.
+    private func silenceAVPlayerCaptions() {
+        guard let player = engine.currentAVPlayer else { return }
+        player.appliesMediaSelectionCriteriaAutomatically = false
+        guard let item = player.currentItem else { return }
+        Task { @MainActor in
+            guard let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) else { return }
+            item.select(nil, in: group)
+        }
+    }
+
+    /**
+     * A trailer on AVPlayer listed its subtitle tracks, or AVPlayer picked one, after the app's pick at
+     * the load: the app picks again by the page's subtitle mode, unless the page has picked since.
+     */
+    private func repickLateSubtitles() {
+        guard let request = current, !ended, loadedAt != nil, request.playsOnAVPlayer,
+              !subtitlePickedByPage else { return }
+        let now = (tracks: engine.subtitleTracks.count, active: engine.activeSubtitleTrackIndex)
+        if let last = lastPickedOver, last.tracks == now.tracks, last.active == now.active { return }
+        pickSubtitle(request)
     }
 
     /// `en` and `eng`, or `pt` and `pt-BR`, as mpv matches them.
@@ -1220,7 +1272,18 @@ final class AetherPlayer {
             .dropFirst()
             .sink { [weak self] _, _ in
                 // The values arrive before the engine stores them; read them once it has.
-                DispatchQueue.main.async { self?.reportTracks() }
+                DispatchQueue.main.async {
+                    self?.reportTracks()
+                    self?.repickLateSubtitles()
+                }
+            }
+            .store(in: &watching)
+        // AVPlayer's own pick, which the engine mirrors once the item is ready (AE#154).
+        engine.$activeSubtitleTrackIndex
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.repickLateSubtitles() }
             }
             .store(in: &watching)
         engine.$activeAudioTrackIndex

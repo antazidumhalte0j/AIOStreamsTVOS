@@ -294,6 +294,14 @@ TV's display mode rather than switching it for Match Content (the bridge marks s
 app sends the page no taps or drags on the video; the remote's presses reach the page as keys.
 tvOS's **Reduce Motion** stops trailers from starting by themselves, as the page asks.
 
+A trailer plays on **AVPlayer from its own address** wherever AVPlayer can open it (YouTube's HLS,
+or an address naming HLS, MP4, M4V or MOV), as another player would; the page marks a trailer's
+load (`patches/web/0067-tvos-trailers-marked-for-the-app.patch`). Remuxed by the engine, a trailer
+file's closed captions never reached AVPlayer, so the player listed no subtitle track for them. In
+the trailer player the app picks a track by the page's subtitle mode, again once AVPlayer has listed
+its tracks; a trailer playing by itself shows none, with AVPlayer's own pick by the system's caption
+settings turned off too. Matroska, WebM and the like stay on the engine.
+
 The hero's trailer never started, here or in the official apps: the home page's copy of each title
 lists no trailers (`RemoteTrailers: []`), and the page took that empty list for the answer before
 the title's details, which do list them, had come. It now waits for the details unless the row's

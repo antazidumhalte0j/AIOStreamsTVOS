@@ -1,0 +1,15 @@
+diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
+index e6a8e784c..7c00c080e 100644
+--- a/packages/web/src/lib/hosts/shell/player.ts
++++ b/packages/web/src/lib/hosts/shell/player.ts
+@@ -137,6 +137,10 @@ export const appEngine: EngineFactory = (emit, { launched }) => {
+       subtitleLanguages: subtitleLanguages(prefs),
+       // eslint-disable-next-line lingui/no-unlocalized-strings -- Jellyfin's name
+       subtitleMode: SUBTITLE_MODES[prefs.SubtitleMode ?? 'Default'],
++      // A trailer (lib/playback/trailers.ts's `trailerSource`): the Apple TV app plays it on AVPlayer
++      // directly, which reads the captions a trailer file carries (AIOStreamsTVOS).
++      // eslint-disable-next-line lingui/no-unlocalized-strings -- an id prefix
++      ...(played.source.Id?.startsWith('trailer:') && { trailer: true }),
+     });
+   };
+ 
