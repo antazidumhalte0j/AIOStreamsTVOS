@@ -721,6 +721,34 @@ enum BridgeScript {
    * One moved rather than removed is back on the page by the time this runs, and is left alone;
    * one put back later gets its address back.
    */
+  /*
+   * A page taken down (each `[data-page]` box, which the page never puts back) is taken apart,
+   * each element off its parent, once it's still off the page a moment later. Closed pages were
+   * still held, one apiece, after collections on demand, and cancelling their animations didn't
+   * free them; one element held keeps its whole tree through its parent. Apart, whatever holds an
+   * element keeps that element alone.
+   */
+  let pagesLeft = [];
+  let pagesDismantled = 0;
+  let dismantleTimer = 0;
+  const dismantle = () => {
+    const pages = pagesLeft;
+    pagesLeft = [];
+    for (const page of pages) {
+      if (page.isConnected) continue;
+      try {
+        const elements = [...page.getElementsByTagName('*')];
+        // From the deepest up, so each comes off its parent with nothing left under it to keep.
+        for (let i = elements.length - 1; i >= 0; i--) elements[i].remove();
+        page.replaceChildren();
+        pagesDismantled++;
+      } catch {}
+    }
+  };
+  const soonDismantle = () => {
+    clearTimeout(dismantleTimer);
+    dismantleTimer = setTimeout(dismantle, 500);
+  };
   try {
     const parked = new WeakMap();
     const imagesIn = (node, out) => {
@@ -766,6 +794,12 @@ enum BridgeScript {
       }
       // What was taken down may have animations holding it in WebKit's timeline.
       if (removedAny) soonCancelRemovedAnimations();
+      for (const record of records) {
+        for (const node of record.removedNodes) {
+          if (node.nodeType === 1 && node.hasAttribute('data-page')) pagesLeft.push(node);
+        }
+      }
+      if (pagesLeft.length) soonDismantle();
     }).observe(document.documentElement, { childList: true, subtree: true });
   } catch {}
 
@@ -1496,6 +1530,7 @@ enum BridgeScript {
     // The pictures off the page still alive, by what was taken down with them and the page they were made on.
     const offByWhat = new Map();
     const offByRoute = new Map();
+    let offPageReact = 0;
     try {
       let kept = 0;
       for (const ref of madeImages) {
@@ -1506,6 +1541,9 @@ enum BridgeScript {
         offPage++;
         const what = removedFrom.get(img) || 'never on the page';
         offByWhat.set(what, (offByWhat.get(what) || 0) + 1);
+        // React takes its own properties off an element it unmounts; still there, it never finished.
+        if (Object.keys(img).some((key) => key.startsWith('__reactFiber$') || key.startsWith('__reactProps$')))
+          offPageReact++;
         const on = madeOn.get(img) || '?';
         offByRoute.set(on, (offByRoute.get(on) || 0) + 1);
         const w = img.naturalWidth;
@@ -1678,6 +1716,8 @@ enum BridgeScript {
       offPageLoaded,
       offPageMB: mb(offPageBytes),
       offPageRoutes: offByRoute.size,
+      offPageReact,
+      pagesDismantled,
       offPageBy: (() => {
         const top = (map, n) => [...map].sort((a, b) => b[1] - a[1]).slice(0, n);
         // A title's address shortened to its last characters, enough to tell titles apart.

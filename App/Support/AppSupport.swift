@@ -235,7 +235,9 @@ enum MemoryLog {
             if let by = message.text("offPageBy"), !by.isEmpty {
                 text += "; from \(int("offPageRoutes")) pages, \(by)"
             }
-            text += ")"
+            // Still carrying React's own properties: React never finished unmounting them.
+            text += "; \(int("offPageReact")) still tied to React"
+            text += "; \(int("pagesDismantled")) closed pages taken apart)"
         }
         // What may hold closed pages: what the page left listening, and its intervals.
         if let listeners = message.text("listenersBy") {
