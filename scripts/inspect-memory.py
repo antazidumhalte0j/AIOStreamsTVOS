@@ -473,10 +473,20 @@ async def evaluate(args) -> None:
                 sys.exit("The page didn't open an inspector session in 15 s. Close any other inspector on it, then try again.")
             session._missing_id_in_message = lambda message: None
             await session.runtime_enable()
-            # Returned as a JSON string, so the whole value comes back however deep it is.
-            result = await asyncio.wait_for(
-                session.runtime_evaluate(f"JSON.stringify({script.strip().rstrip(';')})", return_by_value=True), 20
+            # Returned as a JSON string, so the whole value comes back however deep it is, and awaited, so a
+            # probe may be async (one that asks the server).
+            expression = f"Promise.resolve({script.strip().rstrip(';')}).then((v) => JSON.stringify(v))"
+            raw = await asyncio.wait_for(
+                session.send_command(
+                    "Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True
+                ),
+                30,
             )
+            message = unwrap(raw)
+            outcome = message.get("result", {}) if isinstance(message, dict) else {}
+            if outcome.get("wasThrown") or "exceptionDetails" in outcome:
+                sys.exit(f"The probe threw: {outcome.get('result', {}).get('description', outcome)}")
+            result = outcome.get("result", {}).get("value")
             try:
                 print(json.dumps(json.loads(result), indent=2))
             except (TypeError, ValueError):
