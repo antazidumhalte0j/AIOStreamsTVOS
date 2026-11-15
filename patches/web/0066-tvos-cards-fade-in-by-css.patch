@@ -1,0 +1,40 @@
+diff --git a/packages/web/src/components/media/media-row.tsx b/packages/web/src/components/media/media-row.tsx
+index 92bf796..07cc07b 100644
+--- a/packages/web/src/components/media/media-row.tsx
++++ b/packages/web/src/components/media/media-row.tsx
+@@ -54,6 +54,27 @@ const reducedMotion =
+     ? matchMedia('(prefers-reduced-motion: reduce)')
+     : null;
+ 
++/*
++ * On an Apple TV, a CSS animation, which WebKit drops with its element. One by `animate`, ended,
++ * stayed alive with its card after the card was taken down, cancelled or not: over two thousand
++ * in one session (AIOStreamsTVOS). Its keyframes are added once, as the first card comes in.
++ */
++const TV_CARD_IN = 'aio-card-in';
++const TV_CARD_FADE = 'aio-card-fade';
++let tvKeyframes = false;
++function tvCardIn(el: HTMLElement, delay: number) {
++  if (!tvKeyframes) {
++    tvKeyframes = true;
++    const style = document.createElement('style');
++    style.textContent =
++      // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS
++      `@keyframes ${TV_CARD_IN}{from{opacity:0;transform:translateY(8px)}}@keyframes ${TV_CARD_FADE}{from{opacity:0}}`;
++    document.head.append(style);
++  }
++  // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS
++  el.style.animation = `${reducedMotion?.matches ? TV_CARD_FADE : TV_CARD_IN} 300ms ease-out ${delay}ms backwards`;
++}
++
+ // Script animations, as CSS ones send each card's start and end through the
+ // page's event handling. Only cards on screen: an unseen start or end still
+ // costs a frame.
+@@ -61,6 +82,7 @@ const CARD_IN = Array.from(
+   { length: 20 },
+   (_, i) => (el: HTMLElement | null) => {
+     if (!el || !onScreen(el)) return;
++    if (appleTv()) return tvCardIn(el, i * 25);
+     el.animate(
+       reducedMotion?.matches
+         ? { opacity: [0, 1] }

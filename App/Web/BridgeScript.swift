@@ -460,6 +460,23 @@ enum BridgeScript {
   };
   let cancelTimer = 0;
   /** Soon after removals settle, so an element moved rather than removed is back by then. */
+  /*
+   * Cards that fade in by CSS on an Apple TV (patches/web/0066), watched weakly as their fade ends,
+   * so the memory log can say whether any outlive their page as the `animate` ones did.
+   */
+  const cardsIn = [];
+  try {
+    if (typeof WeakRef === 'function')
+      document.addEventListener(
+        'animationend',
+        (e) => {
+          if (!String(e.animationName || '').startsWith('aio-card-')) return;
+          cardsIn.push(new WeakRef(e.target));
+          if (cardsIn.length > ANIMATIONS_WATCHED) cardsIn.splice(0, cardsIn.length - ANIMATIONS_WATCHED);
+        },
+        true
+      );
+  } catch {}
   const soonCancelRemovedAnimations = () => {
     clearTimeout(cancelTimer);
     cancelTimer = setTimeout(cancelRemovedAnimations, 500);
@@ -1746,11 +1763,22 @@ enum BridgeScript {
           const target = animation.effect?.target;
           if (target && !target.isConnected) removed++;
         }
+        // Cards faded in by CSS, alive and off the page: these should go with their page.
+        let cardsKept = 0;
+        let cardsOff = 0;
+        for (const ref of cardsIn) {
+          const card = ref.deref();
+          if (!card) continue;
+          cardsIn[cardsKept++] = ref;
+          if (!card.isConnected) cardsOff++;
+        }
+        cardsIn.length = cardsKept;
         const total = [...animationsCancelled.values()].reduce((sum, n) => sum + n, 0);
         const most = [...animationsCancelled].sort((a, b) => b[1] - a[1]).slice(0, 4)
           .map(([on, n]) => `${on} ${n}`).join(', ');
         return `${alive} alive (${removed} on removed elements), ${total} cancelled as their element went` +
-          (most ? ` (most ${most})` : '');
+          (most ? ` (most ${most})` : '') +
+          `; cards faded in by CSS ${cardsKept} alive, ${cardsOff} of them off the page`;
       })(),
       ...(queryStats && {
         queries: queryStats.queries || 0,
