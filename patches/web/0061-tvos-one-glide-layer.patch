@@ -1,0 +1,21 @@
+diff --git a/packages/web/src/lib/input/glide.ts b/packages/web/src/lib/input/glide.ts
+index 5cb2c019b..69afbffb2 100644
+--- a/packages/web/src/lib/input/glide.ts
++++ b/packages/web/src/lib/input/glide.ts
+@@ -29,8 +29,14 @@ let frame = 0;
+  */
+ export const GLIDE_MS = 250;
+ 
+-/** Jumps a scroller's layers carry at once, as a held key's repeats overlap. */
+-export const GLIDE_LAYERS = 3;
++/**
++ * Jumps a scroller's layers carry at once, as a held key's repeats overlap.
++ * One in the Apple TV app, which has a held key's repeats jump: each layer is
++ * drawn whole, the row's or the page's full size, and a press while one eases
++ * takes over what it has left (AIOStreamsTVOS).
++ */
++export const GLIDE_LAYERS =
++  (window as { __aioTVGlideLayers?: number }).__aioTVGlideLayers ?? 3;
+ 
+ /** Each jump takes the next layer, as nested transforms add up and one under way carries on. */
+ interface Eased {

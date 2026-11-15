@@ -20,4 +20,15 @@ enum WebApp {
         let patched = lines.filter { $0.hasPrefix("patched:") }.count
         return patched > 0 ? "\(hash) + \(patched) patches" : hash
     }()
+
+    /// This app's commit the build came from (scripts/fetch-web.sh), its short hash and subject,
+    /// and whether the checkout had uncommitted changes then.
+    static let appCommit: String = {
+        guard let root,
+              let text = try? String(contentsOf: root.appendingPathComponent("app-commit.txt"), encoding: .utf8)
+        else { return "unknown" }
+        let lines = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        let commit = lines.first ?? "unknown"
+        return lines.contains("changed") ? "\(commit) (with uncommitted changes)" : commit
+    }()
 }

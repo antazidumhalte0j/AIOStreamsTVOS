@@ -1,0 +1,815 @@
+diff --git a/packages/web/src/app/item/_components/backdrop.tsx b/packages/web/src/app/item/_components/backdrop.tsx
+index 7e10d61f0..1e4619aec 100644
+--- a/packages/web/src/app/item/_components/backdrop.tsx
++++ b/packages/web/src/app/item/_components/backdrop.tsx
+@@ -4,6 +4,8 @@ import { BackdropFrame } from '@/components/media/hero';
+ import { CachedImage } from '@/components/cached-image';
+ import { DrawnWash } from '@/components/drawn-wash';
+ import { currentHost } from '@/lib/hosts';
++import { useAppBackdrop } from '@/lib/hosts/shell/app-backdrop';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ 
+ /** Art that arrives within this was never seen missing, so it just appears. */
+ const UNSEEN_MS = 250;
+@@ -32,6 +34,13 @@ export function Backdrop({
+   const src = sources[attempt];
+   const loaded = !!src && arrived?.src === src;
+   const wash = attempt >= images.length;
++  // On an Apple TV, the landscape art drawn by the app at 4K once the page's own has shown (AIOStreamsTVOS).
++  const box = React.useRef<HTMLDivElement>(null);
++  // Asked at once, as the page loads no copy of its own while the app draws it; one the app can't
++  // load, the page loads and draws, and on through its other sources as they fail (AIOStreamsTVOS).
++  const { copy } = useAppBackdrop(box, src, !wash && (loaded || appleTv()), {
++    hidden: !!trailer,
++  });
+   // Shown before the first frame when another image already holds it in memory.
+   const held = React.useCallback(
+     (el: HTMLImageElement | null) => {
+@@ -45,7 +54,7 @@ export function Backdrop({
+       key,
+       count: (f.key === key ? f.count : 0) + 1,
+     }));
+-  const image = src && wash && currentHost().tv ? (
++  const image = !copy && !wash ? null : src && wash && currentHost().tv ? (
+     // A CSS blur is drawn again on each frame the page scrolls, which a TV can't keep up with.
+     <DrawnWash
+       key={src}
+@@ -104,6 +113,7 @@ export function Backdrop({
+   );
+   return (
+     <div
++      ref={box}
+       aria-hidden
+       data-ui="item-backdrop"
+       // Fades out at its edge, where some GPUs draw the art's last row past the shade.
+diff --git a/packages/web/src/app/item/_components/trailer.tsx b/packages/web/src/app/item/_components/trailer.tsx
+index 77400d684..cdc149f05 100644
+--- a/packages/web/src/app/item/_components/trailer.tsx
++++ b/packages/web/src/app/item/_components/trailer.tsx
+@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
+ import { LuChevronUp } from 'react-icons/lu';
+ import { cn } from '@aiostreams/ui/core/styling';
+ import { currentHost } from '@/lib/hosts';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { focusOn, keyboardFocus, useAction, usingKeys } from '@/lib/input';
+ import { trailersOf } from '@/lib/playback/trailers';
+ import type { BaseItemDto } from '@/lib/jellyfin/types';
+@@ -168,7 +169,9 @@ export function useItemTrailer(item: BaseItemDto | undefined) {
+           <div
+             className={cn(
+               'absolute inset-0 transition-opacity duration-500',
+-              full && 'opacity-0'
++              // The app draws the art beneath the page, so nothing of the page's covers these
++              // until the trailer plays: they come in as the art goes (AIOStreamsTVOS).
++              (full || (appleTv() && !shown)) && 'opacity-0'
+             )}
+           >
+             <div className="absolute inset-0 bg-gradient-to-r from-[--background] to-transparent rtl:bg-gradient-to-l" />
+diff --git a/packages/web/src/components/media/hero.tsx b/packages/web/src/components/media/hero.tsx
+index 7266365e5..788af574f 100644
+--- a/packages/web/src/components/media/hero.tsx
++++ b/packages/web/src/components/media/hero.tsx
+@@ -12,6 +12,10 @@ import { useSession } from '@/lib/jellyfin/session';
+ import { settings, useSetting } from '@/lib/settings';
+ import { currentHost } from '@/lib/hosts';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
++import {
++  CORNER_FADE,
++  useAppBackdrop,
++} from '@/lib/hosts/shell/app-backdrop';
+ import { usePageShown } from '@/lib/page-shown';
+ import { useFetchNextUp, useItem } from '@/lib/jellyfin/queries';
+ import { focusOn, keyboardFocus, useAction } from '@/lib/input';
+@@ -626,7 +630,15 @@ function HeroTrailer({
+       // Wide, so a trailer's own bars are cropped away, even where that runs past the hero's start.
+       className="pointer-events-none absolute end-0 top-0 aspect-[2.39/1] h-full"
+     >
+-      <div className="absolute -inset-px">
++      <div
++        className={cn(
++          'absolute -inset-px',
++          // The app draws the art beneath the page, so nothing of the page's covers these until the
++          // trailer plays: they come in as the art goes (AIOStreamsTVOS).
++          appleTv() && 'transition-opacity duration-700',
++          appleTv() && !shown && 'opacity-0'
++        )}
++      >
+         {fades && (
+           <>
+             <div className="absolute inset-y-0 start-0 w-2/5 bg-[--background] [mask-image:linear-gradient(to_right,black,rgb(0_0_0/0.6)_30%,transparent)] rtl:[mask-image:linear-gradient(to_left,black,rgb(0_0_0/0.6)_30%,transparent)]" />
+@@ -784,6 +796,15 @@ export function Hero({
+     chosen && (focused || paused) ? (featured[index] ?? null) : null,
+     false
+   );
++  // On an Apple TV, the title's backdrop drawn by the app at 4K (AIOStreamsTVOS).
++  const art = React.useRef<HTMLDivElement>(null);
++  // The page loads no art of its own while the app draws it (AIOStreamsTVOS).
++  const { copy } = useAppBackdrop(
++    art,
++    featured[index] && backdropSrc(client, featured[index]),
++    shown && !loading,
++    { hidden: trailer.shown }
++  );
+ 
+   if (loading) return <HeroSkeleton />;
+   if (!featured[index]) return null;
+@@ -829,6 +850,7 @@ export function Hero({
+     >
+       {trailer.box}
+       <div
++        ref={art}
+         data-ui="hero-art"
+         // Fades out at its edge, where some GPUs draw the art's last row past
+         // the shade. Not on the art's own box, which moves as the page scrolls.
+@@ -848,7 +870,9 @@ export function Hero({
+               className={cn(slideClass(role), role && 'z-[1]')}
+             >
+               <BackdropFrame className="max-w-[calc(26rem*2.6)] sm:max-w-[calc(30rem*2.6)] lg:max-w-[calc(max(36rem,53vh)*2.6)]">
+-                <Backdrops current={backdropSrc(client, item)} fade={!role} />
++                {copy && (
++                  <Backdrops current={backdropSrc(client, item)} fade={!role} />
++                )}
+               </BackdropFrame>
+             </div>
+           ))}
+@@ -939,6 +963,18 @@ function FollowBackdrop({
+     'transition-opacity duration-700',
+     trailer.shown && 'opacity-0'
+   );
++  // On an Apple TV, the card's backdrop drawn by the app at 4K (AIOStreamsTVOS).
++  const shown = usePageShown();
++  const art = React.useRef<HTMLDivElement>(null);
++  // The page loads no art of its own while the app draws it (AIOStreamsTVOS).
++  const { copy } = useAppBackdrop(
++    art,
++    src,
++    shown,
++    corner
++      ? { frame: ':scope > div', fade: CORNER_FADE, hidden: trailer.shown }
++      : { frame: ':scope > [data-ui=backdrop-frame]', hidden: trailer.shown }
++  );
+   const box = (
+     <div className="absolute inset-x-0 top-0 h-[var(--hero-h)]">
+       {trailer.box}
+@@ -952,6 +988,7 @@ function FollowBackdrop({
+           {box}
+         </div>
+         <div
++          ref={art}
+           aria-hidden
+           data-ui="hero-corner"
+           // Masks rather than shades, which leave a seam beside the fading layers.
+@@ -961,7 +998,7 @@ function FollowBackdrop({
+           )}
+         >
+           <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_45%,rgb(0_0_0/0.4)_75%,transparent)]">
+-            <Backdrops current={src} />
++            {copy && <Backdrops current={src} />}
+           </div>
+         </div>
+       </>
+@@ -972,9 +1009,9 @@ function FollowBackdrop({
+       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+     >
+       {box}
+-      <div data-ui="hero-art" className="absolute inset-0">
++      <div ref={art} data-ui="hero-art" className="absolute inset-0">
+         <BackdropFrame className={cn('max-w-[calc(100vh*2.6)]', fade)}>
+-          <Backdrops current={src} />
++          {copy && <Backdrops current={src} />}
+         </BackdropFrame>
+       </div>
+       <Shade />
+diff --git a/packages/web/src/components/shell/art-wash.tsx b/packages/web/src/components/shell/art-wash.tsx
+index a2e18b3a4..19d4a3cea 100644
+--- a/packages/web/src/components/shell/art-wash.tsx
++++ b/packages/web/src/components/shell/art-wash.tsx
+@@ -2,23 +2,107 @@ import React from 'react';
+ import { cn } from '@aiostreams/ui/core/styling';
+ import { currentWash, subscribeWash } from '@/lib/artwork/background';
+ import { WASH_H, WASH_W } from '@/lib/artwork/wash';
++import { appBridge, appleTv } from '@/lib/hosts/shell/bridge';
+ 
+ const FADE_MS = 600;
+ 
+ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+ 
++/** On `<html>` while the app draws the wash beneath the page, which leaves its background clear (BridgeScript). */
++const APP_WASH = 'data-app-wash';
++
++let nextId = 0;
++
++/**
++ * On an Apple TV, the app draws the wash beneath the page and fades each new
++ * one in itself (WashStage.swift): the page's fade made its canvas a layer the
++ * screen's size at 2x while it ran, and every part of the page over it layers
++ * of their own (AIOStreamsTVOS). The page's background is clear once the
++ * app's is drawn; a wash the app can't draw is drawn here instead, unfaded.
++ * Returns whether the app has it, so the canvases stay empty.
++ */
++function useAppWash(
++  frame: ReturnType<typeof currentWash>,
++  drawHere: (frame: NonNullable<ReturnType<typeof currentWash>>) => void,
++  app: boolean
++): boolean {
++  const shell = appBridge();
++  const on = app && !!shell && appleTv();
++  const [id] = React.useState(() => ++nextId);
++  const latest = React.useRef({ frame, drawHere });
++  latest.current = { frame, drawHere };
++  React.useEffect(() => {
++    if (!on || !shell) return;
++    const html = document.documentElement;
++    const unsubscribe = shell.subscribe((m) => {
++      const message = m as unknown as {
++        type: string;
++        id?: number;
++        src?: string;
++        drawn?: boolean;
++      };
++      const { frame: now, drawHere: draw } = latest.current;
++      if (message.type !== 'tvos-wash' || message.id !== id) return;
++      if (!now || message.src !== now.src) return;
++      if (message.drawn) html.setAttribute(APP_WASH, '');
++      else {
++        html.removeAttribute(APP_WASH);
++        draw(now);
++      }
++    });
++    return () => {
++      unsubscribe();
++      html.removeAttribute(APP_WASH);
++      shell.send({ type: 'tvos-wash', id, src: null });
++    };
++  }, [on, shell, id]);
++  React.useEffect(() => {
++    if (!on || !shell) return;
++    if (!frame) document.documentElement.removeAttribute(APP_WASH);
++    shell.send({ type: 'tvos-wash', id, src: frame?.src ?? null });
++  }, [on, shell, id, frame]);
++  return on;
++}
++
+ /**
+  * The artwork wash, each new one fading in over the last. The covered layer
+  * is hidden after, so the screen composites one.
+  */
+-export function ArtWash({ className }: { className?: string }) {
++export function ArtWash({
++  className,
++  app = false,
++}: {
++  className?: string;
++  /**
++   * The one behind the whole page, which the Apple TV app draws. Another, as
++   * the version picker's inside its dialog, is drawn here: given to the app
++   * too, closing it took the page's wash away with it (AIOStreamsTVOS).
++   */
++  app?: boolean;
++}) {
+   const frame = React.useSyncExternalStore(subscribeWash, currentWash);
+   const first = React.useRef<HTMLCanvasElement>(null);
+   const second = React.useRef<HTMLCanvasElement>(null);
+   const front = React.useRef<HTMLCanvasElement | null>(null);
++  // The app's fallback: drawn at once, over whatever was, with no fade.
++  const drawHere = React.useCallback(
++    (shown: NonNullable<ReturnType<typeof currentWash>>) => {
++      const layers = [first.current, second.current];
++      const [next, other] = layers;
++      if (!next || !other) return;
++      next
++        .getContext('2d', { alpha: false })
++        ?.drawImage(shown.image, 0, 0, WASH_W, WASH_H);
++      next.style.visibility = 'visible';
++      other.style.visibility = 'hidden';
++      front.current = next;
++    },
++    []
++  );
++  const inApp = useAppWash(frame, drawHere, app);
+   React.useLayoutEffect(() => {
+     const layers = [first.current!, second.current!];
+-    if (!frame) {
++    if (!frame || inApp) {
+       for (const layer of layers) layer.style.visibility = 'hidden';
+       front.current = null;
+       return;
+@@ -44,7 +128,7 @@ export function ArtWash({ className }: { className?: string }) {
+         easing: 'ease-out',
+       })
+       .finished.then(hide, hide);
+-  }, [frame]);
++  }, [frame, inApp]);
+   return (
+     <div
+       data-ui="art-wash"
+diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
+index 33bf1bbf7..b4ee1bb9d 100644
+--- a/packages/web/src/components/shell/layout.tsx
++++ b/packages/web/src/components/shell/layout.tsx
+@@ -73,6 +73,7 @@ import { useTrailerCovers } from '@/features/trailers/preview';
+ import { PageScroll } from './page-scroll';
+ import { ArtWash } from './art-wash';
+ import { setWashPaused } from '@/lib/artwork/background';
++import { useAppPageColor } from '@/lib/hosts/shell/app-backdrop';
+ import { HistoryButtons } from './history-buttons';
+ import { ConnectionNote } from './unreachable';
+ import { Logo, onBar } from './nav/common';
+@@ -97,6 +98,8 @@ const PAGE_FADE = {
+  * transparent page shows nothing beneath it; the player hides it.
+  */
+ export function PageBackground() {
++  // On an Apple TV, the app draws the page's colour beneath it, and its art through it (AIOStreamsTVOS).
++  useAppPageColor();
+   const [wash] = useSetting(settings.theme.artBackground);
+   const [glass] = useSetting(settings.theme.artGlass);
+   const [surface] = useSetting(settings.theme.glassSurface);
+@@ -113,7 +116,7 @@ export function PageBackground() {
+       data-ui="page-background"
+       className="page-background pointer-events-none fixed inset-0 -z-10 bg-[--background]"
+     >
+-      {wash && <ArtWash />}
++      {wash && <ArtWash app />}
+     </div>
+   );
+ }
+diff --git a/packages/web/src/features/trailers/preview.tsx b/packages/web/src/features/trailers/preview.tsx
+index 86454ba75..e6949ab24 100644
+--- a/packages/web/src/features/trailers/preview.tsx
++++ b/packages/web/src/features/trailers/preview.tsx
+@@ -6,6 +6,7 @@ import { cn } from '@aiostreams/ui/core/styling';
+ import { useSession } from '@/lib/jellyfin/session';
+ import { useItem } from '@/lib/jellyfin/queries';
+ import { currentHost } from '@/lib/hosts';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { settings, useSetting, type TrailerSpot } from '@/lib/settings';
+ import { usePageShown } from '@/lib/page-shown';
+ import { usePlayback } from '@/lib/playback/session';
+@@ -221,6 +222,8 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
+     /* eslint-enable lingui/no-unlocalized-strings */
+     const mask = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+     for (const name of MASK) background.style.setProperty(name, mask);
++    // In place of the app's backdrop's hole, which is cut again once this one goes (app-backdrop.ts).
++    background.removeAttribute('data-app-hole');
+     const html = document.documentElement;
+     html.setAttribute('data-video-hole', '');
+     return () => {
+@@ -233,6 +236,28 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
+ /** How much of a soft trailer's height and width its bottom and start fade over. */
+ const FADE = 0.5;
+ 
++/** Layout effects run before the player's own effects, which load it (AIOStreamsTVOS). */
++const useFrameEffect: typeof React.useEffect = (effect, deps) =>
++  // eslint-disable-next-line react-hooks/rules-of-hooks -- the same on every render, as the host is
++  (appleTv() ? React.useLayoutEffect : React.useEffect)(effect, deps);
++
++/** Whether the Apple TV app draws the artwork wash beneath the page (components/shell/art-wash.tsx). */
++function useAppWashShown(): boolean {
++  const [shown, setShown] = React.useState(() =>
++    document.documentElement.hasAttribute('data-app-wash')
++  );
++  React.useEffect(() => {
++    if (!appleTv()) return;
++    const html = document.documentElement;
++    const update = () => setShown(html.hasAttribute('data-app-wash'));
++    const observer = new MutationObserver(update);
++    observer.observe(html, { attributeFilter: ['data-app-wash'] });
++    update();
++    return () => observer.disconnect();
++  }, []);
++  return shown;
++}
++
+ /** Fades a soft trailer's hole at its bottom and start, for an element drawn over `frame`. */
+ function fadeMask(frame: Box, hole: Box): React.CSSProperties {
+   const rtl = pageRtl();
+@@ -258,6 +283,9 @@ function fadeMask(frame: Box, hole: Box): React.CSSProperties {
+  * page beneath is cut away at once, which would bare its edges.
+  */
+ export function TrailerVeil({ shown }: { shown: boolean }) {
++  // The Apple TV app fades the trailer in itself (`playing` in its frame), and draws the art beneath
++  // the page, where this would cover the art the trailer waits under (AIOStreamsTVOS).
++  if (appleTv()) return null;
+   return (
+     <div
+       className={cn(
+@@ -468,28 +496,45 @@ function PlayedPreview({
+     if (error) failed.current();
+   }, [error, failed]);
+ 
++  // Over the app's own wash the page's background is clear (AIOStreamsTVOS), so its hole no longer
++  // bounds or softens a trailer behind the page: the app clips the video to the hole and fades it.
++  const appWash = useAppWashShown();
+   // Drawn a pixel past the hole, so rounding never leaves a seam.
+-  const placed = React.useMemo<VideoFrame | null>(
+-    () =>
+-      full
+-        ? null
+-        : {
+-            x: frame.x - 1,
+-            y: frame.y - 1,
+-            width: frame.width + 2,
+-            height: frame.height + 2,
+-            draggable: false,
+-            // Over the page only once it plays, as it shows black until then.
+-            hidden: !over || !shown,
+-            animate: false,
+-            radius: over ? radius : 0,
+-            bottomRadius: over ? radius : 0,
+-            subtitles: false,
+-          },
+-    [full, frame, over, shown, radius]
+-  );
++  const placed = React.useMemo<VideoFrame | null>(() => {
++    if (full) return null;
++    const zoom = window.visualViewport?.scale ?? 1;
++    const placed: VideoFrame = {
++      x: frame.x - 1,
++      y: frame.y - 1,
++      width: frame.width + 2,
++      height: frame.height + 2,
++      draggable: false,
++      // Over the page only once it plays, as it shows black until then.
++      hidden: !over || !shown,
++      animate: false,
++      radius: over ? radius : 0,
++      bottomRadius: over ? radius : 0,
++      subtitles: false,
++    };
++    if (over || !appleTv()) return placed;
++    return {
++      ...placed,
++      clip: {
++        x: hole.x * zoom,
++        y: hole.y * zoom,
++        width: hole.width * zoom,
++        height: hole.height * zoom,
++      },
++      fade: soft && appWash ? FADE : 0,
++      rtl: pageRtl(),
++      // The app shows the video only once it plays, as nothing of the page covers it before.
++      playing: shown,
++    } as VideoFrame;
++  }, [full, frame, hole, over, shown, radius, soft, appWash]);
+   const setFrame = useLatest(player.setFrame);
+-  React.useEffect(() => {
++  // On an Apple TV before the player's load, so the app has the box, and holds the video unseen,
++  // before the video view first shows (AIOStreamsTVOS).
++  useFrameEffect(() => {
+     if (host) setFrame.current?.(placed);
+   }, [host, placed, setFrame]);
+   React.useEffect(
+diff --git a/packages/web/src/lib/hosts/shell/app-backdrop.ts b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+new file mode 100644
+index 000000000..74754b031
+--- /dev/null
++++ b/packages/web/src/lib/hosts/shell/app-backdrop.ts
+@@ -0,0 +1,348 @@
++import React from 'react';
++import { appBridge, appleTv } from './bridge';
++
++/*
++ * The Apple TV app draws the backdrop shown, the hero's or a title page's, at
++ * the screen's full 4K in a view beneath the page, rather than WebKit decoding
++ * it: the page's process is ended for memory long before the app runs short
++ * (AIOStreamsTVOS). The app draws it all the time, and follows the page's
++ * scroll itself, frame by frame (WebKit scrolls the page in the app's process).
++ * The page's own copy is hidden from the start, and shows only if the app
++ * can't draw the art: swapped with the app's each time the page moved, the two
++ * were both drawn for a moment, which flashed at the art's edges.
++ *
++ * The app draws the page's colour beneath it all too (`useAppPageColor`), and
++ * the wash with "Background from artwork" on, so the page's background is clear
++ * and the art shows through without a hole cut for it.
++ */
++
++/**
++ * As a page opens: past its entrance (the layout's `PAGE_FADE`, a spring that
++ * moves it 6 px and is still within a tenth of a pixel by 300 ms), which the
++ * app's art doesn't follow, so it's measured again then.
++ */
++const SETTLED_MS = 400;
++/** On `<html>` while the app draws the art, which hides the page's own copy (BridgeScript). */
++const SHOWN = 'data-app-backdrop';
++/** How much of the art's height and width its bottom and start fade over, as the artwork background's masks do. */
++const FADE = 0.5;
++/**
++ * The hero's corner backdrop fades into the page at its start and bottom
++ * whatever the background (its masks in hero.tsx): in by 45% of its width, and
++ * out over its last 55% (AIOStreamsTVOS).
++ */
++export const CORNER_FADE: HoleFade = { bottom: 0.55, start: 0.45 };
++
++interface Rect {
++  x: number;
++  y: number;
++  width: number;
++  height: number;
++}
++
++const rectOf = (r: DOMRect): Rect => ({
++  x: r.left,
++  y: r.top,
++  width: r.width,
++  height: r.height,
++});
++
++function intersect(a: Rect, b: Rect): Rect | null {
++  const x = Math.max(a.x, b.x);
++  const y = Math.max(a.y, b.y);
++  const right = Math.min(a.x + a.width, b.x + b.width);
++  const bottom = Math.min(a.y + a.height, b.y + b.height);
++  return right - x >= 1 && bottom - y >= 1
++    ? { x, y, width: right - x, height: bottom - y }
++    : null;
++}
++
++/** In the page's pixels times its viewport scale, as `player-frame` is (VideoStage). */
++function scaled(r: Rect, scale: number): Rect {
++  return {
++    x: r.x * scale,
++    y: r.y * scale,
++    width: r.width * scale,
++    height: r.height * scale,
++  };
++}
++
++/** How much of the art's height its bottom, and of its width its start, fade out over. */
++export interface HoleFade {
++  bottom: number;
++  start: number;
++}
++
++/** Backdrops the app draws now, which hide the page's copies while any is. */
++let drawing = 0;
++let nextId = 0;
++
++/** Where in `art` the picture lies: the hero's shown slide's frame, or a title page's. */
++const FRAME =
++  '[data-slide="0"] [data-ui=backdrop-frame], :scope > [data-ui=backdrop-frame]';
++
++/**
++ * How far in from its start the backdrop frame fades in (hero.tsx's
++ * `BackdropFrame`, a 12rem mask in landscape or from 1024 px wide), in the
++ * page's pixels; none for another frame. With the artwork background on, the
++ * app's art fades so too, as the page's copy does; off, the page draws that
++ * edge over the art in its own colour (BridgeScript).
++ */
++const frameFadeOf = (target: HTMLElement) =>
++  target.matches('[data-ui=backdrop-frame]') &&
++  matchMedia('(orientation: landscape), (min-width: 1024px)').matches
++    ? 12 *
++      (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
++    : 0;
++
++/**
++ * On an Apple TV, has the app draw `src` where `art`'s `frame` lies, within
++ * `art`, while `on`. Its edges fade out over `fade`, or with the artwork
++ * background on over half its height and width, as that background's masks do.
++ */
++export function useAppBackdrop(
++  art: React.RefObject<HTMLElement | null>,
++  src: string | undefined,
++  on: boolean,
++  {
++    frame: frameSelector = FRAME,
++    fade,
++    hidden = false,
++  }: {
++    frame?: string;
++    fade?: HoleFade;
++    /**
++     * A trailer plays in the art's place: the app fades its art off it and
++     * back after.
++     */
++    hidden?: boolean;
++  } = {}
++) {
++  const options = React.useRef({ frameSelector, fade, hidden });
++  options.current = { frameSelector, fade, hidden };
++  const shell = appBridge();
++  const active = !!shell && appleTv() && on && !!src;
++  // The art the app couldn't load, which the page draws itself instead.
++  const [failedSrc, setFailedSrc] = React.useState<string>();
++  const failedRef = React.useRef(failedSrc);
++  failedRef.current = failedSrc;
++  // Changes of source go to the app as they are, to crossfade there.
++  const latest = React.useRef(src);
++  latest.current = src;
++  const tell = React.useRef<(() => void) | null>(null);
++  React.useEffect(() => {
++    if (!active || !shell) return;
++    const id = ++nextId;
++    const html = document.documentElement;
++    let asked: string | null = null;
++    let drawn = false;
++    /** Counted among the backdrops the app draws, which hides the page's copies. */
++    let holding = false;
++    let frame = 0;
++    const hold = (on: boolean) => {
++      if (on === holding) return;
++      holding = on;
++      if (on && drawing++ === 0) html.setAttribute(SHOWN, '');
++      if (!on && --drawing === 0) html.removeAttribute(SHOWN);
++    };
++    const send = (message: Record<string, unknown>) =>
++      shell.send({ type: 'tvos-backdrop', id, ...message });
++    /** How the art fades into what's beneath: as asked, or as the artwork background's masks do. */
++    const edgesNow = (): HoleFade | null =>
++      options.current.fade ??
++      (html.hasAttribute('data-art-wash')
++        ? { bottom: FADE, start: FADE }
++        : null);
++    const measure = () => {
++      const el = art.current;
++      const target = el?.querySelector<HTMLElement>(
++        options.current.frameSelector
++      );
++      if (!el || !target) return null;
++      // Where the page will be once its entrance ends (the layout's `PAGE_FADE`, which slides it up
++      // from 6 px below by its `top`): placed where it was then, the art sat that low, a gap above
++      // it, until it was measured again as the entrance settled (AIOStreamsTVOS).
++      const page = el.closest<HTMLElement>('[data-page]');
++      const rising = page ? parseFloat(getComputedStyle(page).top) || 0 : 0;
++      const settledRect = (r: DOMRect): Rect => ({
++        ...rectOf(r),
++        y: r.top - rising,
++      });
++      const box = settledRect(target.getBoundingClientRect());
++      // The whole of the art's box, off screen too: the app follows the page's scroll itself, and
++      // the page's masks measure their fades from it.
++      const within = intersect(settledRect(el.getBoundingClientRect()), box);
++      return within ? { box, within, target } : null;
++    };
++    const show = () => {
++      cancelAnimationFrame(frame);
++      const at = measure();
++      const next = latest.current;
++      if (!at || !next) return;
++      // The page draws that one itself; a title page's next source goes to the app again.
++      if (next === failedRef.current) return hold(false);
++      hold(true);
++      if (next !== asked) drawn = false;
++      asked = next;
++      const scale = window.visualViewport?.scale || 1;
++      const fade = edgesNow();
++      send({
++        src: next,
++        frame: scaled(at.box, scale),
++        clip: scaled(at.within, scale),
++        pageWidth: innerWidth * scale,
++        // Where the page was scrolled to as it measured, which the app follows the scroll from.
++        scrollY: (document.scrollingElement?.scrollTop ?? 0) * scale,
++        quick: !drawn,
++        // No copy of the page's shows over it: the app fades it in from nothing itself.
++        noCopy: true,
++        ...(fade && {
++          fade,
++          rtl: html.dir === 'rtl',
++          frameFade: html.hasAttribute('data-art-wash')
++            ? frameFadeOf(at.target) * scale
++            : 0,
++        }),
++        ...(options.current.hidden && { hidden: true }),
++      });
++    };
++    /** Measured again on the next frame, once whatever moved it has. */
++    const later = () => {
++      cancelAnimationFrame(frame);
++      frame = requestAnimationFrame(show);
++    };
++    tell.current = () => {
++      if (asked !== null || !drawn) show();
++    };
++    const unsubscribe = shell.subscribe((m) => {
++      const message = m as unknown as {
++        type: string;
++        id?: number;
++        src?: string | null;
++        drawn?: boolean;
++        failed?: boolean;
++      };
++      if (message.type !== 'tvos-backdrop' || message.id !== id) return;
++      if (message.failed && message.src && message.src === asked) {
++        // The app couldn't load it: the page loads and draws its own copy instead.
++        hold(false);
++        setFailedSrc(message.src);
++        return;
++      }
++      if (message.drawn && message.src === asked) drawn = true;
++    });
++    // A box scrolled inside the page carries the art where the app can't follow: told each frame.
++    const scrolled = (e: Event) => {
++      if (e.target === document) return;
++      const box = e.target;
++      if (box instanceof Node && art.current && box.contains(art.current))
++        later();
++    };
++    const observer = new ResizeObserver(later);
++    if (art.current) observer.observe(art.current);
++    // The artwork background coming or going changes how the art's edges fade.
++    const washes = new MutationObserver((records) => {
++      if (
++        records.some(
++          (r) =>
++            (r.oldValue !== null) !== html.hasAttribute(r.attributeName ?? '')
++        )
++      )
++        show();
++    });
++    washes.observe(html, {
++      attributeFilter: ['data-art-wash'],
++      attributeOldValue: true,
++    });
++    document.addEventListener('scroll', scrolled, {
++      capture: true,
++      passive: true,
++    });
++    addEventListener('resize', later);
++    show();
++    const settled = window.setTimeout(show, SETTLED_MS);
++    return () => {
++      tell.current = null;
++      clearTimeout(settled);
++      cancelAnimationFrame(frame);
++      observer.disconnect();
++      washes.disconnect();
++      document.removeEventListener('scroll', scrolled, { capture: true });
++      removeEventListener('resize', later);
++      unsubscribe();
++      hold(false);
++      // Faded out by the app, over the next page's art coming in.
++      send({ src: null, fade: true });
++    };
++  }, [active, shell, art]);
++  React.useEffect(() => {
++    tell.current?.();
++  }, [src, hidden]);
++  // Off an Apple TV, or for art the app couldn't load, the page draws its own; otherwise it loads
++  // none, as the app draws it (AIOStreamsTVOS).
++  return { copy: !shell || !appleTv() || (!!src && src === failedSrc) };
++}
++
++/** On `<html>` once the app draws the page's colour beneath it (BridgeScript clears the page's own). */
++const COLOR = 'data-app-color';
++
++/**
++ * On an Apple TV, the page's colour drawn by the app beneath everything, so
++ * the page's background is clear and the art the app draws shows through it
++ * without a hole (AIOStreamsTVOS). Read off a probe, as a theme or the user's
++ * CSS may change it, and told again when it does.
++ */
++export function useAppPageColor() {
++  React.useEffect(() => {
++    const shell = appBridge();
++    if (!shell || !appleTv()) return;
++    const html = document.documentElement;
++    const probe = document.createElement('div');
++    probe.dataset.ui = 'page-color-probe';
++    probe.style.cssText =
++      // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS
++      'position: fixed; width: 0; height: 0; pointer-events: none; background-color: var(--background)';
++    document.body.append(probe);
++    let sent = '';
++    let seen = '';
++    // Through a pixel of a canvas, so the app gets plain red, green and blue whatever form the
++    // theme gives the colour in (`oklch()`, `color-mix()`).
++    const canvas = document.createElement('canvas');
++    canvas.width = 1;
++    canvas.height = 1;
++    const pixel = canvas.getContext('2d', { willReadFrequently: true });
++    const check = () => {
++      const css = getComputedStyle(probe).backgroundColor;
++      if (!css || css === seen || !pixel) return;
++      seen = css;
++      pixel.clearRect(0, 0, 1, 1);
++      pixel.fillStyle = css;
++      pixel.fillRect(0, 0, 1, 1);
++      const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data;
++      const color = `rgb(${r}, ${g}, ${b})`;
++      if (color === sent) return;
++      sent = color;
++      shell.send({ type: 'tvos-page-color', color });
++    };
++    const unsubscribe = shell.subscribe((m) => {
++      const message = m as unknown as {
++        type: string;
++        color?: string;
++        drawn?: boolean;
++      };
++      if (message.type !== 'tvos-page-color') return;
++      if (message.drawn && message.color === sent) html.setAttribute(COLOR, '');
++      else if (message.drawn === false) html.removeAttribute(COLOR);
++    });
++    check();
++    // A theme's colours come in a style element the page changes: cheap to read, so read often.
++    const timer = window.setInterval(check, 1000);
++    return () => {
++      clearInterval(timer);
++      unsubscribe();
++      probe.remove();
++      html.removeAttribute(COLOR);
++      shell.send({ type: 'tvos-page-color', color: null });
++    };
++  }, []);
++}

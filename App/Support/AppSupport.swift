@@ -150,7 +150,48 @@ enum MemoryLog {
 
     /// The page's own count of what it holds, from its last `tvos-page-stats`, and the largest picture total seen.
     private static var lastStats: String?
+    private static var lastStatsAt: Date?
+    /// The page's size and WebKit's own drawing scale, before the bridge reports 1 to the page.
+    private static var pageScale: String?
+
+    /// How sharply the screen draws: whether artwork past 1920 wide could show at all.
+    private static var screenText: String {
+        let screen = UIScreen.main
+        let size = screen.nativeBounds.size
+        var text = "Screen: \(Int(size.width))x\(Int(size.height)) pixels, scale \(String(format: "%g", screen.scale)) (native \(String(format: "%g", screen.nativeScale)))"
+        if let page = pageScale { text += "; \(page)" }
+        return text
+    }
     private static var peakPictureMB: Int?
+
+    /// The page's last few moves from page to page, newest last, so an end can be put next to one.
+    private static var moves: [(at: Date, from: String, to: String)] = []
+
+    /// Full collections of the page's garbage the app asked WebKit for, or nil where it can't ask.
+    private static var collections: Int? = 0
+    private static var lastCollection: Date?
+
+    /// The app asked WebKit to collect the page's garbage; `done` is false where WebKit has no way.
+    static func pageGarbageCollected(_ done: Bool) {
+        guard done else {
+            collections = nil
+            return
+        }
+        collections = (collections ?? 0) + 1
+        lastCollection = Date()
+    }
+
+    private static var collectionText: String {
+        guard let collections else { return "the page's garbage can't be collected on demand by this WebKit" }
+        let last = lastCollection.map { ", last \(seconds($0)) ago" } ?? ""
+        return "the page's garbage collected on demand \(collections) times\(last)"
+    }
+
+    /// A `tvos-page-moved` message: the page went from one path to another, such as Back to `/`.
+    static func pageMoved(from: String, to: String) {
+        moves.append((Date(), from, to))
+        if moves.count > 4 { moves.removeFirst(moves.count - 4) }
+    }
 
     /// A `tvos-page-stats` message: the pictures, canvases and elements the page holds, every 5 s.
     static func pageStats(_ message: Message) {
@@ -159,20 +200,71 @@ enum MemoryLog {
         peakPictureMB = max(peakPictureMB ?? 0, pictureMB)
         var text = "pictures \(pictureMB) MB in \(int("pictures"))"
         text += " (artwork \(int("artworkMB")) MB in \(int("artwork")), \(int("released")) released"
-        if let largest = message.text("largest"), !largest.isEmpty { text += ", largest \(largest)" }
+        if let largest = message.text("largest"), !largest.isEmpty {
+            text += ", largest \(largest)"
+            if let from = message.text("largestFrom"), !from.isEmpty { text += " (\(from))" }
+        }
         text += ")"
         if int("canvases") > 0 { text += ", canvases \(int("canvasMB")) MB in \(int("canvases"))" }
         if int("videos") > 0 { text += ", \(int("videos")) videos" }
+        // Loaded but no longer on the page: let go of yet still held, or not yet collected.
+        if int("offPage") > 0 {
+            text += ", \(int("offPageLoaded")) pictures off the page still loaded (\(int("offPageMB")) MB"
+            text += ", \(int("offPage")) off the page in all, \(int("imagesMade")) made since load"
+            // Which closed pages are still held, and with what: a leak keeps one of each.
+            if let by = message.text("offPageBy"), !by.isEmpty {
+                text += "; from \(int("offPageRoutes")) pages, \(by)"
+            }
+            // Still carrying React's own properties: React never finished unmounting them.
+            text += "; \(int("offPageReact")) still tied to React"
+            text += "; \(int("pagesDismantled")) closed pages taken apart)"
+        }
+        // What may hold closed pages: what the page left listening, and its intervals.
+        if let listeners = message.text("listenersBy") {
+            text += ", listeners \(listeners), \(int("intervals")) intervals"
+            text += ", \(int("appListeners")) listening to the app"
+        }
+        // Animations, which WebKit's timeline holds with their element after they end.
+        if let animations = message.text("animationsBy") { text += ", animations \(animations)" }
+        // What the page keeps from the server (patches/web/0064), counted by its items.
+        if message.number("queries") != nil {
+            text += ", server data \(int("queryItems")) items in \(int("queries")) queries"
+            text += " (\(int("queryPages")) catalog pages"
+            if let key = message.text("queryLargest"), !key.isEmpty {
+                text += ", largest \(key) with \(int("queryLargestItems")) items"
+            }
+            text += ")"
+        }
         text += ", \(int("cards")) cards, \(int("elements")) elements"
+        if let most = message.text("mostUi"), !most.isEmpty { text += " (most \(most))" }
+        if let path = message.text("path"), !path.isEmpty { text += " on \(path)" }
         if int("episodes") > 0 { text += ", \(int("episodes")) episodes" }
         if int("layers") > 0 { text += ", \(int("layers")) glide layers" }
+        if int("layerCount") > 0 {
+            text += ", drawing layers about \(int("layerMB")) MB in \(int("layerCount")) near the screen (\(int("blurCount")) blurred)"
+        }
+        if message.flag("artWash") == true { text += ", artwork background shown" }
+        if let marks = message.text("appArt"), !marks.isEmpty { text += " (page marks: \(marks))" }
+        if message.flag("cardPreview") == true { text += ", a card preview open" }
         // The artwork workers decode inside the page's process, outside the picture counts above.
         if int("artWorkers") > 0 {
             text += ", artwork workers \(int("artWorkers")): \(int("artRunning")) running"
             text += " (\(int("artSlow")) slow, most \(int("artPeak"))), \(int("artQueued")) queued"
             text += ", \(int("artKeptMB")) MB kept in \(int("artKept"))"
+        } else {
+            text += ", no artwork workers"
+        }
+        // Pictures the app fitted to the width the page asked for (ImageFit), since launch, and why any weren't.
+        let fits = ImageFit.current
+        if fits.drawn + fits.passed + fits.failed > 0 {
+            text += ", pictures through the app \(fits.drawn) drawn down, \(fits.passed) as sent, \(fits.failed) failed"
+            if !fits.lastError.isEmpty { text += " (last: \(fits.lastError))" }
         }
         lastStats = text
+        lastStatsAt = Date()
+        if let viewport = message.text("viewport") {
+            pageScale = "the page is \(viewport) at a drawing scale of \(message.number("drawScale").map { String(format: "%g", $0) } ?? "?")"
+        }
     }
 
     /// WebKit's word that the page's process stopped answering it, or answers again.
@@ -202,10 +294,22 @@ enum MemoryLog {
         var sizes = lastWebMB.map { "page \($0) MB" } ?? ""
         if let gpu = lastGpuMB { sizes += (sizes.isEmpty ? "" : ", ") + "WebKit graphics \(gpu) MB" }
         if !sizes.isEmpty { before += "; \(sizes) at most 5 s before" }
-        if let stats = lastStats { before += "; the page held \(stats) at most 5 s before" }
+        if let stats = lastStats {
+            let ago = lastStatsAt.map { "\(seconds($0)) before" } ?? "at most 5 s before"
+            before += "; the page held \(stats) \(ago)"
+        }
+        // Whether it ended as it moved between pages, such as Back to Home, and the moves before that.
+        if let last = moves.last {
+            before += "; \(seconds(last.at)) after going from \(last.from) to \(last.to)"
+            let earlier = moves.dropLast().reversed().map { "\($0.from) to \($0.to) \(seconds($0.at)) before" }
+            if !earlier.isEmpty { before += " (earlier: \(earlier.joined(separator: ", ")))" }
+        }
         lastWebMB = nil
         lastGpuMB = nil
         lastStats = nil
+        lastStatsAt = nil
+        moves = []
+        before += "; \(collectionText)"
         let page = path.map { " on \($0)" } ?? ""
         note("page's web process ended (\(cause(reason)))\(page) \(playing ? "with a video loaded" : "while browsing")\(before)")
     }
@@ -227,7 +331,7 @@ enum MemoryLog {
         var peak = peakWebMB.map { ", the page at most \($0) MB" } ?? ""
         if let gpu = peakGpuMB { peak += ", WebKit graphics at most \(gpu) MB" }
         if let pictures = peakPictureMB { peak += ", the page's pictures at most \(pictures) MB" }
-        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", routeText]
+        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText, collectionText]
         if let stats = lastStats { head.append("The page now holds \(stats)") }
         return head + lines
     }

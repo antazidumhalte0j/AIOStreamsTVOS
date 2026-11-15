@@ -1,0 +1,108 @@
+diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
+index 5952027cf..33bf1bbf7 100644
+--- a/packages/web/src/components/shell/layout.tsx
++++ b/packages/web/src/components/shell/layout.tsx
+@@ -36,6 +36,7 @@ import { pageOpening } from '@/lib/page-open';
+ import { navigate, to } from '@/lib/paths';
+ import { currentHost } from '@/lib/hosts';
+ import { shellHost } from '@/lib/hosts/shell';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { useDiscordBrowsing } from '@/lib/discord';
+ import { useServerEvents } from '@/features/remote/server-events';
+ import { downloadsHost, useDownloadRunner } from '@/lib/downloads';
+@@ -117,6 +118,60 @@ export function PageBackground() {
+   );
+ }
+ 
++/** How long Home waits, once the page left is gone, before it's drawn again. */
++const HOME_AFTER_MS = 100;
++
++/**
++ * Whether the kept Home is shown. On an Apple TV, going back to it waits until
++ * the page left has been taken down and a frame drawn without it, so WebKit
++ * can let go of that page before Home's pictures and layers are made again:
++ * both at once ended the page's process (AIOStreamsTVOS).
++ */
++function useHomeShown(onHome: boolean): boolean {
++  const staged = appleTv();
++  const [shown, setShown] = React.useState(onHome);
++  React.useEffect(() => {
++    if (!onHome) {
++      setShown(false);
++      return;
++    }
++    if (!staged) return;
++    let timer = 0;
++    const frame = requestAnimationFrame(() => {
++      timer = window.setTimeout(() => setShown(true), HOME_AFTER_MS);
++    });
++    return () => {
++      cancelAnimationFrame(frame);
++      clearTimeout(timer);
++    };
++  }, [onHome, staged]);
++  return onHome && (!staged || shown);
++}
++
++/**
++ * The page shown other than Home. On an Apple TV a new page waits, as Home
++ * does, until the page it replaces has been taken down and a frame drawn
++ * without it: one title page built as the last was let go, a few in quick
++ * succession, ended the page's process (AIOStreamsTVOS).
++ */
++function useStagedPath(pathname: string): string | undefined {
++  const staged = appleTv();
++  const [shown, setShown] = React.useState(pathname);
++  React.useEffect(() => {
++    if (!staged) return;
++    let timer = 0;
++    const frame = requestAnimationFrame(() => {
++      timer = window.setTimeout(() => setShown(pathname), HOME_AFTER_MS);
++    });
++    return () => {
++      cancelAnimationFrame(frame);
++      clearTimeout(timer);
++    };
++  }, [pathname, staged]);
++  if (!staged) return pathname;
++  return shown === pathname ? pathname : undefined;
++}
++
+ function pageName(pathname: string): string {
+   return pathname.split('/')[1] || 'home';
+ }
+@@ -165,6 +220,8 @@ export function WebLayout() {
+   // starts afresh.
+   const [kept, setKept] = React.useState<string>();
+   if (onHome && kept !== entry) setKept(entry);
++  const homeShown = useHomeShown(onHome);
++  const pageShown = useStagedPath(pathname);
+   const activity: SidebarItem = {
+     id: 'activity',
+     name: t`Activity`,
+@@ -428,20 +485,20 @@ export function WebLayout() {
+                           key={kept}
+                           data-page="home"
+                           {...PAGE_FADE}
+-                          inert={!onHome}
++                          inert={!homeShown}
+                           className={cn(
+                             page,
+-                            !onHome &&
++                            !homeShown &&
+                               'invisible absolute inset-x-0 top-0 [content-visibility:hidden]'
+                           )}
+                         >
+-                          <PageShown.Provider value={onHome}>
++                          <PageShown.Provider value={homeShown}>
+                             <KeptHome />
+                           </PageShown.Provider>
+-                          {onHome && <PageScroll />}
++                          {homeShown && <PageScroll />}
+                         </motion.div>
+                       )}
+-                      {!onHome && !playing && (
++                      {!onHome && !playing && pageShown && (
+                         <motion.div
+                           key={pathname}
+                           data-page={pageName(pathname)}

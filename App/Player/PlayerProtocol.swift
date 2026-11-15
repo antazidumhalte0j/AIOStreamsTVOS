@@ -32,13 +32,28 @@ struct LoadRequest {
     /// page), as the bridge script marks a load the page framed in the same turn (VideoStage). The TV keeps
     /// its mode for it: a muted preview isn't worth the screen blanking for Match Content.
     var framed = false
+    /// The page says it's a trailer (patches/web/0067, its `trailer:` sources).
+    var pageTrailer = false
 
-    /// A trailer, from YouTube (`YouTube.resolve`), whose streams all come from googlevideo.com.
-    var isTrailer: Bool { URL(string: url).map(Self.isTrailerHost) ?? false }
+    /// A trailer: the page says so, or it's from YouTube (`YouTube.resolve`), whose streams all come from
+    /// googlevideo.com.
+    var isTrailer: Bool { pageTrailer || (URL(string: url).map(Self.isTrailerHost) ?? false) }
 
     static func isTrailerHost(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
         return host == "googlevideo.com" || host.hasSuffix(".googlevideo.com")
+    }
+
+    /**
+     * A trailer AVPlayer plays as it is (`AetherPlayer.options`): YouTube's HLS, or an address naming HLS
+     * or a container AVFoundation reads. AVPlayer then reads what the file carries, its closed captions
+     * included, which the engine's remux to a playlist of its own left out (`CLOSED-CAPTIONS=NONE`). A
+     * trailer in Matroska, WebM or the like, which AVPlayer can't open, stays on the engine.
+     */
+    var playsOnAVPlayer: Bool {
+        guard isTrailer, let address = URL(string: url) else { return false }
+        return Self.isTrailerHost(address)
+            || ["m3u8", "m3u", "mp4", "m4v", "mov"].contains(address.pathExtension.lowercased())
     }
 }
 
@@ -110,6 +125,13 @@ struct PlayerSettings: Equatable {
     /// its Anime upscaling, for anything else its Upscale other video (patches/web/0033), or as its
     /// shortcut set it for this video.
     var upscaling = false
+    /// The title is anime, by the page's own test above (patches/web/0038): the engine's line-art scaler
+    /// (Anime4K) then does the upscaling, which suits drawn content only. Anything else, or a page that
+    /// doesn't send it, keeps the automatic scaler.
+    var upscalingAnime = false
+    /// The page's Dolby Vision profile 7 FEL switch (patches/web/0039): fold such a video's enhancement layer into its curves.
+    /// The page sends it false while its Dolby Vision switch is off, and `AetherPlayer.options` checks again.
+    var dolbyVisionFel = false
 }
 
 enum PlayerProtocol {
@@ -130,7 +152,8 @@ enum PlayerProtocol {
             subtitleLanguages: try languages(message["subtitleLanguages"]),
             subtitleMode: message.text("subtitleMode").flatMap(SubtitleMode.init(rawValue:)) ?? .default,
             live: message.flag("live") == true,
-            framed: message.flag("framed") == true
+            framed: message.flag("framed") == true,
+            pageTrailer: message.flag("trailer") == true
         )
     }
 
@@ -195,6 +218,8 @@ enum PlayerProtocol {
         settings.objectAudio = message.flag("objectAudio") == true
         settings.objectAudioLayout = message.text("objectAudioLayout") == "9.1.6" ? .l916 : .l714
         settings.upscaling = message.flag("upscaling") == true
+        settings.upscalingAnime = message.flag("upscalingAnime") == true
+        settings.dolbyVisionFel = message.flag("dolbyVisionFel") == true
         // The page still sends its Cache size (`cacheMb`); the player always buffers as Automatic.
         return settings
     }

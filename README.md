@@ -244,6 +244,15 @@ closes first, Back stops the test video, and the menu reports on it as on any vi
   `dolbyVisionHandling = .baseLayerOnly`): profiles 7, 8.1 and 8.4 as HDR10 (with any HDR10+
   metadata) or HLG, with no profile 7 to 8.1 conversion and no Dolby Vision work for AVPlayer per
   frame. Profile 5 has no base layer and keeps playing as Dolby Vision, tone-mapped by AVPlayer.
+  The **Dolby Vision profile 7 FEL** switch under it (off by default, shown only while Dolby Vision
+  is on, from the next video; `patches/web/0039-tvos-dolby-vision-fel-switch.patch`) folds a
+  profile 7 video's full enhancement layer into the single-layer 8.1 conversion's luma curve per
+  scene, so the TV's Dolby Vision decoder applies most of its effect (AetherEngine's
+  `foldsDolbyVisionFEL`, built in through the `DolbyVisionFelCurves` package trait, where it is on
+  by default and the app turns it off unless the switch is on). The video stays on the native
+  route, so Atmos objects keep playing. The fold holds a group of pictures back, so a start or a
+  seek is 0.5 to 4 s slower on an Apple TV 4K (AE#1018), and the engine pauses it by itself on a
+  TV without Dolby Vision; profile 7 MEL and other profiles play as before.
 
 ### Subtitles
 
@@ -284,6 +293,14 @@ TV's display mode rather than switching it for Match Content (the bridge marks s
 `framed`), so resting on a card never blanks the screen. A TV has no corner card to drag, so the
 app sends the page no taps or drags on the video; the remote's presses reach the page as keys.
 tvOS's **Reduce Motion** stops trailers from starting by themselves, as the page asks.
+
+A trailer plays on **AVPlayer from its own address** wherever AVPlayer can open it (YouTube's HLS,
+or an address naming HLS, MP4, M4V or MOV), as another player would; the page marks a trailer's
+load (`patches/web/0067-tvos-trailers-marked-for-the-app.patch`). Remuxed by the engine, a trailer
+file's closed captions never reached AVPlayer, so the player listed no subtitle track for them. In
+the trailer player the app picks a track by the page's subtitle mode, again once AVPlayer has listed
+its tracks; a trailer playing by itself shows none, with AVPlayer's own pick by the system's caption
+settings turned off too. Matroska, WebM and the like stay on the engine.
 
 The hero's trailer never started, here or in the official apps: the home page's copy of each title
 lists no trailers (`RemoteTrailers: []`), and the page took that empty list for the answer before
@@ -453,13 +470,18 @@ Back behaviour and the bundled-player path. It also means:
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
-- **Anime upscaling** (Settings → Playback → Video) uses AetherEngine's super resolution rather
-  than the official app's anime shaders. The page turns it on only for what it takes for anime (an
-  AniList, Kitsu, MyAnimeList or AniDB id on the title, its season or its show), and the engine then
-  upscales SDR video below 1080p to the display, on its software player, from tvOS 26 (MetalFX from
-  tvOS 27.1). HDR, Dolby Vision, a source as large as the display, AirPlay and live channels play as
-  before; the engine's `[Upscale]` log line says why, and the statistics' Upscaling line says what it
-  did. Turning it on or off during a video, or with its key, reloads the video where it is. The
+- **Anime upscaling** (Settings → Playback → Video) uses AetherEngine's line-art scaler, Anime4K
+  mode A (small), rather than the official app's anime shaders. The page turns it on only for what
+  it takes for anime (an AniList, Kitsu, MyAnimeList or AniDB id on the title, its season or its
+  show) and tells the app which titles those are (`upscalingAnime`,
+  `patches/web/0038-tvos-says-when-the-video-is-anime.patch`), so only they get the line-art
+  scaler; Anime4K is MIT. The engine then upscales SDR video up to 1080p to the display, 10-bit
+  included, on its software player, from tvOS 26. It costs about 15.6 ms a frame for 1080p to
+  2160p on an A15; over its frame budget it drops its restore pass, then a source below 1080p
+  falls back to the system's super resolution (MetalFX from tvOS 27.1) and a 1080p source goes
+  off. HDR, Dolby Vision, a source as large as the display, AirPlay and live channels play as
+  before; the engine's `[Upscale]` log line says why, and the statistics' Upscaling line says what
+  it did. Turning it on or off during a video, or with its key, reloads the video where it is. The
   setting's help says so in place of the official app's description of its shaders
   (`patches/web/0032-tvos-upscaling-help.patch`). **Upscale other video**, a setting of the Apple
   TV app's own under it (off by default), does the same for everything that isn't anime; trailers
@@ -599,16 +621,21 @@ xcodegen generate               # writes AIOStreamsTV.xcodeproj from project.yml
 open AIOStreamsTV.xcodeproj     # Xcode fetches AetherEngine and its FFmpeg build through SwiftPM
 ```
 
-The engine is pinned to one commit in `Packages/AetherHost/Package.swift`: upstream AetherEngine 7.57.0
+The engine is pinned to one commit in `Packages/AetherHost/Package.swift`: upstream AetherEngine 7.67.1
 plus the app's fork's own commits ([mickey2266/AetherEngine](https://github.com/mickey2266/AetherEngine),
-branch `aiostreams-7.57`, each described there):
+branch `aiostreams-7.67.1`, each described there):
 - the engine's software player, which plays interlaced H.264 among others, labels its 7.1 as
   CoreAudio's WAVE_7_1, so the side and rear surrounds play from their own speakers instead of each
   other's;
 - remuxes read 64 MB ahead in 128 MB ranges, a connection running below the video's rate is
   replaced, and the Atmos confirmation runs on the held source connection;
 - the silent Atmos stream beside a rendered TrueHD Atmos or DTS:X bed stops while the
-  picture-in-picture window shows. Lossless surround (TrueHD, DTS-HD) reaches AVPlayer as FLAC. Its FFmpeg comes as
+  picture-in-picture window shows;
+- a forward seek past the read-ahead reads as far as the link delivers in a new request's
+  first-byte time, and the bytes a skip lands on are fetched ahead of the skip;
+- a finished `.m3u8` that fails to open as a file goes to AVPlayer instead, as the engine sends any
+  finished HLS once it sees a playlist: Apple's trailers answer each request for their playlist
+  differently, which the engine's reader caught as "byte ranges with other bytes" first. Lossless surround (TrueHD, DTS-HD) reaches AVPlayer as FLAC. Its FFmpeg comes as
 dynamic frameworks that Xcode embeds in the app; nothing else in the app may bring an FFmpeg of its
 own, or it takes the engine's symbols.
 

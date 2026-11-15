@@ -1,0 +1,28 @@
+diff --git a/packages/web/src/app/calendar/page.tsx b/packages/web/src/app/calendar/page.tsx
+index d59bb93fc..79c2652ca 100644
+--- a/packages/web/src/app/calendar/page.tsx
++++ b/packages/web/src/app/calendar/page.tsx
+@@ -121,6 +121,12 @@ function EpisodeRow({ item }: { item: BaseItemDto }) {
+ }
+ 
+ const SHOWN_PER_DAY = 2;
++/**
++ * The CSS width a 16:9 still is drawn at to cover a day, which is taller than
++ * it is wide (`h-40`, 160 px): asked for at the day's width, it came stretched
++ * about twice over (AIOStreamsTVOS).
++ */
++const DAY_ART_WIDTH = Math.ceil((160 * 16) / 9);
+ 
+ function DayCell({
+   day,
+@@ -178,7 +184,9 @@ function DayCell({
+             >
+               <Artwork
+                 src={(width) =>
+-                  landscapeUrls(client, item, { maxWidth: width })
++                  landscapeUrls(client, item, {
++                    maxWidth: Math.max(width, DAY_ART_WIDTH),
++                  })
+                 }
+                 alt=""
+               />

@@ -27,6 +27,11 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 
 /** False when this tvOS has no WebKit to load. */
 @property (nonatomic, readonly) BOOL available;
+/**
+ * WebKit's scroll view for the page, which its own smooth scrolls move in the app's process ahead
+ * of the page hearing of them; nil without WebKit.
+ */
+@property (nonatomic, readonly, nullable) UIScrollView *scrollView;
 /** A message the page posted to `aiostreamsNative`, parsed from JSON. */
 @property (nonatomic, copy, nullable) void (^onMessage)(NSDictionary<NSString *, id> *message);
 @property (nonatomic, copy, nullable) void (^onLoadFinished)(void);
@@ -47,6 +52,22 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 @property (nonatomic, copy, nullable) void (^onServed)(NSString *path, NSInteger status, NSUInteger bytes);
 /** The JPEG the app serves at a `/thumbnail/` path, or nil; called on the main thread. */
 @property (nonatomic, copy, nullable) NSData *_Nullable (^thumbnailAtPath)(NSString *path);
+/**
+ * The picture at `source` drawn down to `width`, for a `/fit/<width>?u=<address>`
+ * path, blurred by `blur` pixels when it has `&blur=<radius>` (0 for none): `done`
+ * with its bytes and type, or nils. Called on the main thread; `done` may be
+ * called on any.
+ */
+@property (nonatomic, copy, nullable) void (^fitImage)(NSURL *source, NSInteger width, double blur,
+                                                       void (^done)(NSData *_Nullable data, NSString *_Nullable type));
+/**
+ * The artwork background's wash of the art at `source`, for a `/wash?u=<address>` path: `done`
+ * with a PNG and the wash's edge colour and panel shade, or nils. Called on the main thread;
+ * `done` may be called on any.
+ */
+@property (nonatomic, copy, nullable) void (^washImage)(NSURL *source,
+                                                        void (^done)(NSData *_Nullable png, NSString *_Nullable tint,
+                                                                     NSString *_Nullable panel));
 /** In place of WebKit's own user agent. */
 @property (nonatomic, copy, nullable) NSString *userAgent;
 
@@ -83,6 +104,11 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 @property (nonatomic, readonly, copy, nullable) NSString *webProcessRoute;
 /** As `webProcessRoute`, for the last `gpuProcessMB`. */
 @property (nonatomic, readonly, copy, nullable) NSString *gpuProcessRoute;
+/**
+ * Has WebKit collect the page's JavaScript garbage in full now, as it would under memory
+ * pressure, through a private call. NO where this WebKit has no such call.
+ */
+- (BOOL)collectPageGarbage;
 
 @end
 

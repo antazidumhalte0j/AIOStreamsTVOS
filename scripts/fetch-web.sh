@@ -68,4 +68,10 @@ git -C "$src" rev-parse HEAD > "$out/aiostreams-commit.txt" 2>/dev/null || true
 for patch in "${applied[@]}"; do
   echo "patched: $(basename "$patch")" >> "$out/aiostreams-commit.txt"
 done
+# This app's own commit, for the app menu's first line, so builds can be told apart; marked when
+# the checkout had changes not yet committed.
+{
+  git -C "$here" log -1 --format='%h %s' 2>/dev/null || echo unknown
+  if [ -n "$(git -C "$here" status --porcelain -- App Shared TopShelf patches 2>/dev/null)" ]; then echo "changed"; fi
+} > "$out/app-commit.txt"
 echo "Copied the web app into WebBuild ($(head -n 1 "$out/aiostreams-commit.txt" 2>/dev/null || echo 'unknown commit'), ${#applied[@]} patches)"

@@ -13,6 +13,10 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private let subtitleView = SubtitleOverlay(frame: .zero)
     /// The two above, full screen or where the page's mini player and trailer previews put them.
     private lazy var stage = VideoStage(video: videoView, subtitles: subtitleView)
+    /// The hero's or a title page's backdrop at 4K, beneath the page (`tvos-backdrop`, BackdropStage).
+    private let backdrop = BackdropStage()
+    /// "Background from artwork"'s wash, beneath the backdrop (`tvos-wash`, WashStage).
+    private let wash = WashStage()
     private var web: AIOWebView?
     private let status = UILabel()
     private var engine: AetherPlayer?
@@ -27,6 +31,15 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private var linksReady = false
     /// A held key's repeat the page hasn't finished with.
     private var repeatInFlight = false
+    /// The page's latest errors (`web-error`), for the app menu.
+    private var pageErrors: [String] = []
+    private static let keptPageErrors = 8
+    /// The page's garbage collected once its moves between pages settle (`collectPageGarbage`).
+    private var collectTimer: Timer?
+    private var lastCollected = Date.distantPast
+    /// After the last move, so a run of moves isn't held up by a collection's pause.
+    private static let collectAfterMove: TimeInterval = 3
+    private static let collectAtMostEvery: TimeInterval = 10
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -43,6 +56,17 @@ final class MainViewController: UIViewController, RemoteReceiver {
         stage.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(stage.view)
         stage.pictureInPicture = { [weak self] in self?.pip?.active == true }
+        // Beneath the video too: a trailer plays only while the backdrop is put away.
+        view.insertSubview(backdrop.view, at: 0)
+        backdrop.reply = { [weak self] in self?.sendToPage($0) }
+        // A new title's wash changes with its art, not before it (WashStage's `hold`).
+        backdrop.artShown = { [weak self] in self?.wash.artReady() }
+        wash.waitForArt = { [weak self] in self?.backdrop.awaitingArt ?? false }
+        // Beneath everything: the page's background, which it stands in for.
+        wash.view.frame = view.bounds
+        wash.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(wash.view, at: 0)
+        wash.reply = { [weak self] in self?.sendToPage($0) }
 
         status.frame = view.bounds.insetBy(dx: 160, dy: 160)
         status.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -61,6 +85,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
         view.addSubview(status)
         self.web = web
         stage.web = web
+        backdrop.web = web
+        backdrop.scrollView = web.scrollView
         guard web.available else {
             return showStatus("This version of tvOS has no web engine the app can use.")
         }
@@ -106,6 +132,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
             if status != 200 { NSLog("[web] %ld for %@", status, path) }
         }
         web.thumbnailAtPath = { ThumbnailStore.image($0) }
+        web.fitImage = { source, width, blur, done in ImageFit.fit(source, width: width, blur: blur, done: done) }
+        web.washImage = { source, done in ArtWash.make(source) { done($0?.png, $0?.tint, $0?.panel) } }
 
         startPlayer()
         setUpInput()
@@ -175,6 +203,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private func pageEnded(at url: URL?, reason: AIOPageEnd) {
         // The page that set a frame is gone: the video fills the screen and the page is whole again.
         stage.place(nil)
+        backdrop.reset()
+        wash.reset()
         let now = Date()
         pageEnds = pageEnds.filter { now.timeIntervalSince($0) < 10 * Self.quickEnd } + [now]
         var quick = 0
@@ -334,7 +364,19 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private func showAppMenu() {
         guard presentedViewController == nil else { return }
         // In steps: as one expression, the compiler gives up type-checking it.
-        var lines: [String] = ["App \(Identity.version) · web app \(WebApp.commit) · \(storage.keyCount) saved keys", ""]
+        var lines: [String] = [
+            "App commit: \(WebApp.appCommit)",
+            "App \(Identity.version) · web app \(WebApp.commit) · \(storage.keyCount) saved keys", "",
+        ]
+        if !pageErrors.isEmpty {
+            lines.append("Page errors, newest last:")
+            lines += pageErrors
+            lines.append("")
+        }
+        // What the app draws beneath the page now, beside the page's marks in the memory lines below.
+        lines.append("Backdrop: \(backdrop.summary) · wash: \(wash.view.isHidden ? "none" : "shown")")
+        lines.append("Video: \(stage.summary), \(videoView.isHidden ? "video view hidden" : "video view shown")")
+        lines.append("")
         lines += AppAnswers.videoLines(player: engine, window: view.window)
         lines.append("")
         lines += MemoryLog.report
@@ -402,12 +444,32 @@ final class MainViewController: UIViewController, RemoteReceiver {
      * the page, typing straight into the field; passwords and PINs get the
      * alert, which keeps them hidden and sends a PIN's form on Done.
      */
+    /// `rgb(r, g, b)` as the page sends its colour (read off a canvas pixel), or nil.
+    static func pageColor(_ text: String) -> UIColor? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("rgb"), let open = trimmed.firstIndex(of: "("),
+              let close = trimmed.lastIndex(of: ")"), open < close else { return nil }
+        let parts = trimmed[trimmed.index(after: open)..<close]
+            .split(whereSeparator: { $0 == "," || $0 == " " || $0 == "/" })
+            .compactMap { Double($0) }
+        guard parts.count >= 3, parts.prefix(3).allSatisfy({ $0 >= 0 && $0 <= 255 }) else { return nil }
+        return UIColor(red: parts[0] / 255, green: parts[1] / 255, blue: parts[2] / 255, alpha: 1)
+    }
+
+    /// The page's colour, and the wash: the page's copy, or the one drawn here beneath it (WashStage).
+    private func keyboardLook(_ message: Message) -> KeyboardLook {
+        var look = KeyboardLook(background: message.text("background"), wash: message.text("wash"))
+        if look.wash == nil, !wash.view.isHidden { look.wash = wash.image }
+        return look
+    }
+
     private func showKeyboard(_ message: Message) {
         guard presentedViewController == nil else { return }
         if message.flag("secure") == true || message.flag("numeric") == true { return showKeyboardAlert(message) }
         let keyboard = SearchKeyboard(
             text: message.text("value") ?? "",
             prompt: message.text("label") ?? "",
+            look: keyboardLook(message),
             keyboardType: message.flag("email") == true ? .emailAddress : message.flag("url") == true ? .URL : .default,
             onChange: { [weak self] text in
                 guard let self else { return }
@@ -488,6 +550,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
 
     private func receive(_ message: Message) {
         guard let type = message.text("type") else { return }
+        // Before the player shows its picture, or after it stops, so the stage knows a trailer's ended.
+        if type == "player-load" { stage.loading() }
+        if type == "player-stop" { stage.stopped() }
         if player?.handle(type, message) == true {
             // A load, a stop or a new item may show or hide the player's picture-in-picture button.
             updatePipButton()
@@ -499,6 +564,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
             status.isHidden = true
             // A page that loaded again knows nothing of a frame the last one set.
             stage.place(nil)
+            backdrop.reset()
+            view.backgroundColor = .black
+            wash.reset()
             web?.focusPage()
             pipButtonShown = false
             updatePipButton()
@@ -509,6 +577,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // The page's mini player docked in a preview, or a trailer playing by itself in a card, the hero
             // or a title page: the video in that box, or the whole screen again for none (VideoStage).
             stage.place(VideoFrame.from(message, webWidth: web?.bounds.width ?? view.bounds.width))
+            // A trailer that goes from its box to the whole screen, or back, gets its subtitles picked again.
+            player?.framed(message.object("frame") != nil)
         case "app-info":
             sendToPage(AppAnswers.appInfo())
         case "log":
@@ -564,12 +634,57 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // Dictation is on the keyboard's microphone; the page doesn't offer its own here.
             sendToPage(["type": "voice-result", "text": NSNull(), "error": "failed"])
         case "web-error":
-            NSLog("[page] %@", message.text("message") ?? "")
+            let text = message.text("message") ?? ""
+            NSLog("[page] %@", text)
+            // Kept for the app menu: a page stuck on its splash shows nothing else of why.
+            let time = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+            pageErrors.append("\(time): \(text.prefix(600))")
+            if pageErrors.count > Self.keptPageErrors { pageErrors.removeFirst(pageErrors.count - Self.keptPageErrors) }
+        case "tvos-backdrop":
+            // The hero's or a title page's backdrop, drawn here at 4K, or put away (patches/web/0048).
+            backdrop.handle(message)
+        case "tvos-wash":
+            // "Background from artwork"'s wash, drawn here beneath the page, or none (patches/web/0050).
+            wash.handle(message)
+        case "tvos-page-color":
+            // The page's colour, drawn here beneath the wash, the backdrop and the page, whose own
+            // background is then clear (patches/web/0058), so the backdrop shows through it with no hole.
+            let text = message.text("color")
+            guard let text, let color = Self.pageColor(text) else {
+                view.backgroundColor = .black
+                if text != nil { sendToPage(["type": "tvos-page-color", "color": text ?? "", "drawn": false]) }
+                break
+            }
+            view.backgroundColor = color
+            sendToPage(["type": "tvos-page-color", "color": text, "drawn": true])
         case "tvos-page-stats":
             MemoryLog.pageStats(message)
+
+        case "tvos-page-moved":
+            MemoryLog.pageMoved(from: message.text("from") ?? "?", to: message.text("to") ?? "?")
+            collectAfterMoves()
         default:
             // Downloads, keyboard completions and the like have no Apple TV part.
             break
+        }
+    }
+
+    /**
+     * The pages the page took down are collected some seconds after its moves stop, rather than
+     * when JavaScriptCore gets round to it: they piled up by the thousand otherwise, and tvOS ended
+     * the page's process at its own limit before the system was short enough to warn WebKit.
+     */
+    private func collectAfterMoves() {
+        collectTimer?.invalidate()
+        let at = max(Date().addingTimeInterval(Self.collectAfterMove),
+                     lastCollected.addingTimeInterval(Self.collectAtMostEvery))
+        collectTimer = Timer.scheduledTimer(withTimeInterval: max(0, at.timeIntervalSinceNow), repeats: false) {
+            [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let web = self.web else { return }
+                self.lastCollected = Date()
+                MemoryLog.pageGarbageCollected(web.collectPageGarbage())
+            }
         }
     }
 

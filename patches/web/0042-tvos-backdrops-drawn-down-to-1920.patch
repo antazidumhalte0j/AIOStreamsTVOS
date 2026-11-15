@@ -1,0 +1,144 @@
+diff --git a/packages/web/src/app/item/_components/backdrop.tsx b/packages/web/src/app/item/_components/backdrop.tsx
+index b110e3940..7e10d61f0 100644
+--- a/packages/web/src/app/item/_components/backdrop.tsx
++++ b/packages/web/src/app/item/_components/backdrop.tsx
+@@ -73,6 +73,7 @@ export function Backdrop({
+       data-ui="item-backdrop-image"
+       data-wash={wash || undefined}
+       src={src}
++      fit
+       alt=""
+       // Decoded first, as a large image would otherwise appear a moment after it's shown.
+       onLoad={(e) =>
+diff --git a/packages/web/src/components/cached-image.tsx b/packages/web/src/components/cached-image.tsx
+index 3f53049f0..0f0c9b333 100644
+--- a/packages/web/src/components/cached-image.tsx
++++ b/packages/web/src/components/cached-image.tsx
+@@ -1,6 +1,33 @@
+ import React from 'react';
+ import { useSavedSrc } from '@/lib/cache/images';
+ import { useNear } from '@/hooks/use-in-view';
++import { appleTv } from '@/lib/hosts/shell/bridge';
++
++/**
++ * The widest an Apple TV shows a picture, in device pixels: its screen's
++ * 1920. Wider ones are drawn down to it before they're shown (AIOStreamsTVOS).
++ */
++const FIT_PX = 1920;
++
++/**
++ * `src` no wider than the screen, made by the Apple TV app (its ImageFit, at
++ * `/fit/<width>?u=<address>` on the page's own scheme). Some servers send a
++ * backdrop's original, 3000 or more wide, whatever width is asked, and WebKit
++ * holds each decoded at that size; the app decodes it at the smaller size
++ * itself, so neither process holds the whole picture (AIOStreamsTVOS).
++ */
++function fitted(src: string | undefined): string | undefined {
++  if (!src) return src;
++  try {
++    const address = new URL(src, location.href);
++    if (address.protocol !== 'https:' && address.protocol !== 'http:') return src;
++    const fit = new URL(`/fit/${FIT_PX}`, location.href);
++    fit.searchParams.set('u', address.href);
++    return fit.href;
++  } catch {
++    return src;
++  }
++}
+ 
+ /** An `<img>` that shows the device's saved copy, and saves what it loads. */
+ export function CachedImage({
+@@ -8,12 +35,16 @@ export function CachedImage({
+   loading,
+   style,
+   ref,
++  fit = false,
+   ...props
+-}: React.ComponentProps<'img'>) {
++}: React.ComponentProps<'img'> & {
++  /** On an Apple TV, drawn down to the screen's width first when wider, as a backdrop may be. */
++  fit?: boolean;
++}) {
+   // A lazy image waits until it nears the screen, as the browser would.
+   const [view, near] = useNear<HTMLImageElement>('300px', loading !== 'lazy');
+   const saved = useSavedSrc(src, near);
+-  const shown = near ? saved : undefined;
++  const shown = near ? (fit && appleTv() ? fitted(saved) : saved) : undefined;
+   const refs = React.useCallback(
+     (el: HTMLImageElement | null) => {
+       view.current = el;
+diff --git a/packages/web/src/components/media/hero.tsx b/packages/web/src/components/media/hero.tsx
+index 7653961a6..7266365e5 100644
+--- a/packages/web/src/components/media/hero.tsx
++++ b/packages/web/src/components/media/hero.tsx
+@@ -11,6 +11,7 @@ import { useMediaQuery } from '@aiostreams/ui/hooks/media-query';
+ import { useSession } from '@/lib/jellyfin/session';
+ import { settings, useSetting } from '@/lib/settings';
+ import { currentHost } from '@/lib/hosts';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { usePageShown } from '@/lib/page-shown';
+ import { useFetchNextUp, useItem } from '@/lib/jellyfin/queries';
+ import { focusOn, keyboardFocus, useAction } from '@/lib/input';
+@@ -184,6 +185,7 @@ function Backdrops({
+         <CachedImage
+           key={`loading ${loading}`}
+           src={loading}
++          fit
+           alt=""
+           // Decoded before its layer fades in, which would otherwise start with nothing drawn.
+           onLoad={(e) =>
+@@ -200,6 +202,7 @@ function Backdrops({
+           key={layer.id}
+           data-ui="hero-backdrop"
+           src={layer.src}
++          fit
+           alt=""
+           onAnimationEnd={(e) => {
+             if (e.target !== e.currentTarget) return;
+@@ -696,6 +699,25 @@ export function Hero({
+     if (el && swipeable) return claimSideSwipes(el);
+   }, [loading, swipeable]);
+ 
++  /*
++   * On an Apple TV, a move anywhere else on the page starts the wait for the
++   * next title over (AIOStreamsTVOS). A title coming in decodes its backdrop
++   * and fades it across the screen, and a card rested on opens its preview
++   * and the artwork background's next wash: both at once ended the page's
++   * process for memory, so the hero holds still while the rows are browsed.
++   * Kept in a ref, so a move doesn't draw the hero again.
++   */
++  const lastMove = React.useRef(-Infinity);
++  React.useEffect(() => {
++    if (!appleTv()) return;
++    const moved = (e: FocusEvent) => {
++      if (section.current?.contains(e.target as Node)) return;
++      lastMove.current = performance.now();
++    };
++    document.addEventListener('focusin', moved);
++    return () => document.removeEventListener('focusin', moved);
++  }, []);
++
+   React.useEffect(() => setIndex(0), [featured.length]);
+   React.useEffect(() => {
+     if (
+@@ -707,10 +729,16 @@ export function Hero({
+       featured.length < 2
+     )
+       return;
+-    const timer = setTimeout(
+-      () => setIndex((i) => (i + 1) % featured.length),
+-      seconds * 1000
+-    );
++    const quiet = seconds * 1000;
++    let timer: ReturnType<typeof setTimeout>;
++    const wait = (ms: number) => {
++      timer = setTimeout(() => {
++        const since = performance.now() - lastMove.current;
++        if (since < quiet) return wait(quiet - since);
++        setIndex((i) => (i + 1) % featured.length);
++      }, ms);
++    };
++    wait(quiet);
+     return () => clearTimeout(timer);
+   }, [
+     index,

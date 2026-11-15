@@ -185,6 +185,60 @@ static NSString *AIOMimeType(NSString *extension) {
         return;
     }
     if (!self.liveTasks) self.liveTasks = [NSHashTable weakObjectsHashTable];
+    if ([path isEqualToString:@"/wash"]) {
+        // The artwork background's wash, made by the app (patches/web/0043, ArtWash.swift).
+        AIOWebView *owner = self.owner;
+        NSString *address = nil;
+        for (NSURLQueryItem *item in [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO].queryItems) {
+            if ([item.name isEqualToString:@"u"]) address = item.value;
+        }
+        NSURL *source = address ? [NSURL URLWithString:address] : nil;
+        if (!owner.washImage || !source) {
+            [self answer:task url:url path:path data:nil type:nil extra:nil];
+            return;
+        }
+        [self.liveTasks addObject:task];
+        __weak AIOWebKitDelegate *weakSelf = self;
+        owner.washImage(source, ^(NSData *png, NSString *tint, NSString *panel) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                AIOWebKitDelegate *strongSelf = weakSelf;
+                if (!strongSelf || ![strongSelf.liveTasks containsObject:task]) return;
+                [strongSelf.liveTasks removeObject:task];
+                NSDictionary *extra = png && tint && panel ? @{@"X-Wash-Tint": tint, @"X-Wash-Panel": panel} : nil;
+                [strongSelf answer:task url:url path:path data:(extra ? png : nil) type:@"image/png" extra:extra];
+            });
+        });
+        return;
+    }
+    if ([path hasPrefix:@"/fit/"]) {
+        // A picture the page asked the app to draw down (patches/web/0042, ImageFit.swift).
+        AIOWebView *owner = self.owner;
+        NSInteger width = path.lastPathComponent.integerValue;
+        NSString *address = nil;
+        double blur = 0;
+        for (NSURLQueryItem *item in [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO].queryItems) {
+            if ([item.name isEqualToString:@"u"]) address = item.value;
+            // A spoiler's picture, blurred by the app (BridgeScript's SPOILER_ART).
+            if ([item.name isEqualToString:@"blur"]) blur = item.value.doubleValue;
+        }
+        NSURL *source = address ? [NSURL URLWithString:address] : nil;
+        if (!owner.fitImage || !source || width <= 0) {
+            [self answer:task url:url path:path data:nil type:nil];
+            return;
+        }
+        [self.liveTasks addObject:task];
+        __weak AIOWebKitDelegate *weakSelf = self;
+        owner.fitImage(source, width, blur, ^(NSData *data, NSString *type) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                AIOWebKitDelegate *strongSelf = weakSelf;
+                // WebKit throws if a task it stopped is answered.
+                if (!strongSelf || ![strongSelf.liveTasks containsObject:task]) return;
+                [strongSelf.liveTasks removeObject:task];
+                [strongSelf answer:task url:url path:path data:data type:type];
+            });
+        });
+        return;
+    }
     if (!self.fileQueue) {
         self.fileQueue = dispatch_queue_create("io.github.aiostreams.web-files", DISPATCH_QUEUE_CONCURRENT);
     }
@@ -219,14 +273,33 @@ static NSString *AIOMimeType(NSString *extension) {
 
 /** Main thread. A file under `/static/` has its content hash in its name, so it never changes. */
 - (void)answer:(id)task url:(NSURL *)url path:(NSString *)path data:(nullable NSData *)data {
+    [self answer:task url:url path:path data:data type:nil];
+}
+
+/** As above, with the type given rather than taken from the path's extension. */
+- (void)answer:(id)task url:(NSURL *)url path:(NSString *)path data:(nullable NSData *)data type:(nullable NSString *)type {
+    [self answer:task url:url path:path data:data type:type extra:nil];
+}
+
+/** As above, with headers of its own added, such as a wash's colours. */
+- (void)answer:(id)task
+           url:(NSURL *)url
+          path:(NSString *)path
+          data:(nullable NSData *)data
+          type:(nullable NSString *)type
+         extra:(nullable NSDictionary<NSString *, NSString *> *)extra {
     NSInteger status = data ? 200 : 404;
     data = data ?: [NSData data];
     BOOL hashed = status == 200 && [path hasPrefix:@"/static/"];
-    NSDictionary *headers = @{
-        @"Content-Type": data.length ? AIOMimeType(path.pathExtension) : @"text/plain",
+    // A fitted picture's or a wash's address names its source, which doesn't change under it.
+    BOOL fitted = status == 200 && ([path hasPrefix:@"/fit/"] || [path isEqualToString:@"/wash"]);
+    NSMutableDictionary *headers = [@{
+        @"Content-Type": data.length ? (type ?: AIOMimeType(path.pathExtension)) : @"text/plain",
         @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
-        @"Cache-Control": hashed ? @"public, max-age=31536000, immutable" : @"no-cache",
-    };
+        @"Cache-Control": hashed ? @"public, max-age=31536000, immutable"
+                                 : fitted ? @"public, max-age=86400" : @"no-cache",
+    } mutableCopy];
+    if (status == 200 && extra) [headers addEntriesFromDictionary:extra];
     NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:url
                                                               statusCode:status
                                                              HTTPVersion:@"HTTP/1.1"
@@ -263,6 +336,11 @@ static NSString *AIOMimeType(NSString *extension) {
 
 - (BOOL)available {
     return self.webView != nil;
+}
+
+- (nullable UIScrollView *)scrollView {
+    id scrollView = AIOSend0(self.webView, @"scrollView");
+    return [scrollView isKindOfClass:UIScrollView.class] ? scrollView : nil;
 }
 
 - (void)build {
@@ -487,6 +565,24 @@ static uint64_t AIOFootprintOfPid(pid_t pid, NSString **why) {
     }
     if (usage.ri_phys_footprint == 0) *why = [NSString stringWithFormat:@"proc_pid_rusage(%d) gave 0", pid];
     return usage.ri_phys_footprint;
+}
+
+/*
+ * A page taken down (a title page closed) is collected only when JavaScriptCore runs a full
+ * collection, and it judges when by its own heap, which a page's elements barely add to: removed
+ * pages piled up, thousands of their pictures still alive, until tvOS ended the process at its
+ * own limit, with the system far from short and so no memory warning to make WebKit collect.
+ */
+- (BOOL)collectPageGarbage {
+    SEL collect = NSSelectorFromString(@"_garbageCollectJavaScriptObjectsForTesting");
+    id pool = AIOSend0(AIOSend0(self.webView, @"configuration"), @"processPool");
+    Class poolClass = NSClassFromString(@"WKProcessPool");
+    for (id target in @[pool ?: NSNull.null, poolClass ?: NSNull.null]) {
+        if (target == NSNull.null || ![target respondsToSelector:collect]) continue;
+        ((void (*)(id, SEL))objc_msgSend)(target, collect);
+        return YES;
+    }
+    return NO;
 }
 
 /** WebKit's process list, asked of the class and then of the view's own pool. */

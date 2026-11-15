@@ -85,6 +85,26 @@ final class AetherPlayer {
      */
     private var liveOnAVPlayer = false
 
+    /**
+     * The page picked a subtitle (or none) for the file that plays, so the app's own pick doesn't
+     * replace it. A trailer on AVPlayer (`LoadRequest.playsOnAVPlayer`) lists its tracks only once
+     * AVPlayer has read them, often after the load returned, and AVPlayer may pick one itself by the
+     * system's caption settings: the app's pick runs again then (`repickLateSubtitles`), unless the
+     * page has picked since.
+     */
+    private var subtitlePickedByPage = false
+    /// The subtitle tracks and the active one when the app last picked, so it picks again only on a change.
+    private var lastPickedOver: (tracks: Int, active: Int?)?
+    /**
+     * The video plays in a box of the page (`player-frame`), as a trailer playing by itself in the hero,
+     * a card or a title page does, rather than on the whole screen. Such a trailer opened into the
+     * trailer player goes on playing, only on the whole screen: the same load, so its subtitles are
+     * picked again as it moves (`framed`).
+     */
+    private var boxed = false
+    /// What the page picked for the trailer on the whole screen, put back when it comes back there.
+    private var fullScreenPick: Pick?
+
     /// Where the page's skips end, in ms (`setSkips`).
     private var skipEnds: [Double] = []
 
@@ -203,6 +223,10 @@ final class AetherPlayer {
         queued = nil
         ended = false
         addedSubtitles = [:]
+        subtitlePickedByPage = false
+        lastPickedOver = nil
+        boxed = request.framed
+        fullScreenPick = nil
         lastBuffered = nil
         // The page sends the next file's skips once it has loaded it.
         skipEnds = []
@@ -289,6 +313,12 @@ final class AetherPlayer {
         options.isLive = live
         // Loaded again for its sound (`liveOnAVPlayer`): AVPlayer reads the live playlist itself.
         if live && liveOnAVPlayer { options.nativeRemoteHLS = true }
+        // A trailer AVPlayer can open plays on AVPlayer from its own address, as another player would:
+        // remuxed by the engine, a trailer's closed captions (CEA-608 in the video, or a caption track)
+        // never reached AVPlayer, as the engine's playlist declares none, and the stream showed no track.
+        // The engine's subtitle styling and audio conversion don't matter for a trailer, and AVPlayer
+        // draws the captions itself (`pickSubtitle` turns them on or off).
+        if request.playsOnAVPlayer { options.nativeRemoteHLS = true }
         // The open's probe budget stays the engine's (60 s of the stream). A 5 s cap on live opens left an
         // IPTV channel's AC-3 tracks unidentified ("Could not find codec parameters ... unspecified sample
         // rate"): the session played the picture with no sound, which other players had (Nov 2026).
@@ -340,7 +370,12 @@ final class AetherPlayer {
         // engine logs one `[Upscale]` line why. A trailer plays as it is: it's short, mostly full size, and
         // a muted preview in a card.
         options.upscalesLowResolutionVideo = settings.upscaling && !live && !request.isTrailer
+        // Anime plays through the engine's line-art scaler (Anime4K mode A, small, since engine 7.63): it
+        // also takes 1080p and 10-bit SDR, which the automatic route can't. Anything else keeps the
+        // automatic route. It is for drawn content only, so it follows the page's anime test.
+        options.upscaleScaler = settings.upscalingAnime ? .lineArt : .automatic
         loadedUpscaling = options.upscalesLowResolutionVideo
+        loadedLineArt = settings.upscalingAnime
         if !settings.hardwareDecoding { options.preferredDecodePath = .software }
         // Dolby Vision plays as its HDR10 / HLG base layer, HDR10+ metadata included, on a TV without Dolby
         // Vision always and on a Dolby Vision TV when the page's Dolby Vision switch is off: no Profile 7 ->
@@ -349,6 +384,16 @@ final class AetherPlayer {
         if !settings.dolbyVision || !AetherEngine.displayCapabilities.supportsDolbyVision {
             options.dolbyVisionHandling = .baseLayerOnly
         }
+        // The page's Dolby Vision profile 7 FEL switch (patches/web/0039), off by default and only with Dolby
+        // Vision on. A profile 7 video with a full enhancement layer stays on the native route, converted to
+        // single-layer 8.1 as always; with the switch on, the engine also folds the enhancement layer's luma
+        // residual into the 8.1 RPU's luma curve per scene, so the TV's own Dolby Vision decoder applies most
+        // of its effect (`DolbyVisionFelCurves`, AE#988). The fold is on by default in an engine built with
+        // that trait, so the switch has to turn it off. It holds a GOP back between demuxer and segmenter,
+        // so a start or a seek is slower than with it off (AE#1018 measured 0.5 to 4 s on an Apple TV 4K),
+        // and the engine pauses it by itself where the TV can't use it (a display without Dolby Vision).
+        // The audio stays AVPlayer's, so Atmos objects keep playing.
+        options.foldsDolbyVisionFEL = settings.dolbyVision && settings.dolbyVisionFel
         // Always Automatic: the page's Cache size is hidden on tvOS (web patch 0030), and a size saved
         // before then is ignored.
         // Automatic buffers 10 minutes ahead, which a remux needs to ride out a slow stretch of the
@@ -366,6 +411,11 @@ final class AetherPlayer {
             options.sessionCacheByteBudget = 1 << 40
         }
         options.heldSourceConnection = Self.heldSourceConnection
+        // Each VOD segment is served while it is still being written, so playback starts on its first
+        // fragments instead of after the whole segment. The engine measured the first frame at 0.9 s
+        // against 2.2 s over a 6 Mbit/s origin, with fewer early rebuffers. It is off by default in the
+        // engine, and ignored for live, `nativeRemoteHLS` and the software player.
+        options.progressiveSegmentDelivery = !live
         openedHeld = options.heldSourceConnection
         // ASS and SSA cues come as their event lines, for libass (`SubtitleOverlay`); other formats are unaffected.
         options.preserveASSMarkup = true
@@ -628,6 +678,11 @@ final class AetherPlayer {
             settleAudio(after: 6)
         }
         if let subtitle = change.subtitle {
+            subtitlePickedByPage = true
+            if !boxed { fullScreenPick = subtitle }
+            if current?.isTrailer == true {
+                EngineLogBook.note("[player] the page picked the trailer's subtitle: \(subtitle) (\(boxed ? "in its box" : "on the whole screen"))")
+            }
             switch subtitle {
             case .track(let id):
                 if let index = Int(id) { pickSubtitleSettled(index) }
@@ -987,6 +1042,8 @@ final class AetherPlayer {
 
     /// What the playing video was loaded with for `upscalesLowResolutionVideo`.
     private var loadedUpscaling = false
+    /// And whether it asked for the line-art scaler (`upscaleScaler`).
+    private var loadedLineArt = false
 
     /**
      * The page's upscaling changed for what plays (its shortcut, Anime upscaling or Upscale other video,
@@ -997,14 +1054,19 @@ final class AetherPlayer {
     private func applyUpscaling() {
         guard let request = current, !ended, !engine.isLive, !request.isTrailer else { return }
         let wanted = settings.upscaling
-        guard wanted != loadedUpscaling else { return }
+        let lineArt = settings.upscalingAnime
+        guard wanted != loadedUpscaling || (wanted && lineArt != loadedLineArt) else { return }
         loadedUpscaling = wanted
+        loadedLineArt = lineArt
         let generation = generation
         let name = URL(string: request.url).map(Self.shortened) ?? "the video"
-        EngineLogBook.note("[player] upscaling \(wanted ? "on" : "off") for \(name)")
+        EngineLogBook.note("[player] upscaling \(wanted ? (lineArt ? "on, line art" : "on") : "off") for \(name)")
         Task { [weak self] in
             do {
-                try await self?.engine.reloadAtCurrentPosition { $0.upscalesLowResolutionVideo = wanted }
+                try await self?.engine.reloadAtCurrentPosition {
+                    $0.upscalesLowResolutionVideo = wanted
+                    $0.upscaleScaler = lineArt ? .lineArt : .automatic
+                }
                 guard let self, generation == self.generation else { return }
                 if self.paused { self.engine.pause() } else { self.engine.play() }
             } catch is CancellationError {
@@ -1030,6 +1092,16 @@ final class AetherPlayer {
      * always that kind: none in another language.
      */
     private func pickSubtitle(_ request: LoadRequest) {
+        lastPickedOver = (engine.subtitleTracks.count, engine.activeSubtitleTrackIndex)
+        // A trailer playing by itself (the hero, a card, a title page's backdrop) shows no subtitles. On
+        // AVPlayer the captions are AVPlayer's to draw, beyond the app's overlay the page hides there,
+        // and it picks them itself by the system's caption settings: that choice is turned off too.
+        if request.isTrailer && boxed {
+            EngineLogBook.note("[player] trailer subtitles in its box: none (\(engine.subtitleTracks.count) tracks listed)")
+            if request.playsOnAVPlayer { silenceAVPlayerCaptions() }
+            engine.clearSubtitle()
+            return
+        }
         let tracks = engine.subtitleTracks.filter { !$0.isExternal }
         let audioLanguage = engine.audioTracks.first { $0.id == engine.activeAudioTrackIndex }?.language
         let wanted = request.subtitleLanguages
@@ -1062,11 +1134,89 @@ final class AetherPlayer {
         case .default:
             pick = preferred() ?? tracks.first { $0.isDefault && !$0.isForced } ?? forced
         }
+        if request.isTrailer {
+            let listed = tracks.map { "\($0.id) \($0.language ?? "no language")\($0.isForced ? " forced" : "")\($0.isDefault ? " default" : "")" }
+            EngineLogBook.note("[player] trailer subtitles on the whole screen: mode \(request.subtitleMode.rawValue), "
+                + "wanted \(wanted.isEmpty ? "none" : wanted.joined(separator: ",")), tracks [\(listed.joined(separator: "; "))], "
+                + "active \(engine.activeSubtitleTrackIndex.map(String.init) ?? "none"), picked \(pick.map { String($0.id) } ?? "none")")
+        }
         if let pick {
             if engine.activeSubtitleTrackIndex != pick.id { engine.selectSubtitleTrack(index: pick.id) }
         } else if engine.activeSubtitleTrackIndex != nil {
             engine.clearSubtitle()
         }
+        // A trailer on AVPlayer, on the whole screen, with the mode picking nothing: AVPlayer's own pick by
+        // the system's caption settings, as another player shows it. A caption track often has no language,
+        // which the mode goes by, and a box this AVPlayer showed a trailer in turned that pick off (the
+        // engine keeps one AVPlayer from load to load). Subtitles set to None stay off.
+        if pick == nil, request.isTrailer, request.playsOnAVPlayer, request.subtitleMode != .none {
+            restoreAVPlayerCaptions()
+        }
+    }
+
+    /**
+     * The page moved the video into a box of its own or onto the whole screen. A trailer that plays on
+     * (one playing by itself, opened into the trailer player, or that player going back to the page)
+     * shows no subtitles in the box, and on the whole screen what the page picked there before, else
+     * the track the page's subtitle mode picks.
+     */
+    func framed(_ isBoxed: Bool) {
+        guard isBoxed != boxed else { return }
+        boxed = isBoxed
+        guard let request = current, request.isTrailer, !ended else { return }
+        EngineLogBook.note("[player] trailer moved \(isBoxed ? "into a box" : "onto the whole screen")"
+            + "\(loadedAt == nil ? " while loading" : "")\(fullScreenPick.map { ", the page's pick there was \($0)" } ?? "")")
+        guard loadedAt != nil else { return }
+        if !isBoxed, let pick = fullScreenPick {
+            switch pick {
+            case .track(let id):
+                if let index = Int(id) { pickSubtitleSettled(index) }
+            case .off:
+                engine.clearSubtitle()
+            }
+            return
+        }
+        // The page's last pick was for the other place; on the whole screen the mode picks afresh.
+        subtitlePickedByPage = false
+        pickSubtitle(request)
+    }
+
+    /// AVPlayer chooses captions by the system's settings again, and picks for the item now.
+    private func restoreAVPlayerCaptions() {
+        guard let player = engine.currentAVPlayer, let item = player.currentItem else { return }
+        player.appliesMediaSelectionCriteriaAutomatically = true
+        Task { @MainActor in
+            guard let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) else {
+                EngineLogBook.note("[player] trailer captions: AVPlayer lists no caption group")
+                return
+            }
+            item.selectMediaOptionAutomatically(in: group)
+            let shown = item.currentMediaSelection.selectedMediaOption(in: group)?.displayName ?? "none"
+            EngineLogBook.note("[player] trailer captions on the whole screen: AVPlayer's own pick by the system's settings, \(shown)")
+        }
+    }
+
+    /// AVPlayer stops choosing captions by the system's settings, and shows none.
+    private func silenceAVPlayerCaptions() {
+        guard let player = engine.currentAVPlayer else { return }
+        player.appliesMediaSelectionCriteriaAutomatically = false
+        guard let item = player.currentItem else { return }
+        Task { @MainActor in
+            guard let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) else { return }
+            item.select(nil, in: group)
+        }
+    }
+
+    /**
+     * A trailer on AVPlayer listed its subtitle tracks, or AVPlayer picked one, after the app's pick at
+     * the load: the app picks again by the page's subtitle mode, unless the page has picked since.
+     */
+    private func repickLateSubtitles() {
+        guard let request = current, !ended, loadedAt != nil, request.playsOnAVPlayer,
+              !subtitlePickedByPage else { return }
+        let now = (tracks: engine.subtitleTracks.count, active: engine.activeSubtitleTrackIndex)
+        if let last = lastPickedOver, last.tracks == now.tracks, last.active == now.active { return }
+        pickSubtitle(request)
     }
 
     /// `en` and `eng`, or `pt` and `pt-BR`, as mpv matches them.
@@ -1193,7 +1343,18 @@ final class AetherPlayer {
             .dropFirst()
             .sink { [weak self] _, _ in
                 // The values arrive before the engine stores them; read them once it has.
-                DispatchQueue.main.async { self?.reportTracks() }
+                DispatchQueue.main.async {
+                    self?.reportTracks()
+                    self?.repickLateSubtitles()
+                }
+            }
+            .store(in: &watching)
+        // AVPlayer's own pick, which the engine mirrors once the item is ready (AE#154).
+        engine.$activeSubtitleTrackIndex
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.repickLateSubtitles() }
             }
             .store(in: &watching)
         engine.$activeAudioTrackIndex
@@ -1822,6 +1983,14 @@ final class AetherPlayer {
         }
         let from = "\(Int(upscale.sourceSize.width))x\(Int(upscale.sourceSize.height))"
         let to = "\(Int(upscale.targetSize.width))x\(Int(upscale.targetSize.height))"
+        if upscale.scaler == .lineArt {
+            // Anime4K's own networks, 2x, then a resample to the target where 2x doesn't land on it. When
+            // it overruns the frame budget the engine drops its restore pass first, then falls back to
+            // the automatic route or switches off, and `degraded` isn't about MetalFX here.
+            var line = "\(from) to \(to): Anime4K line art 2x"
+            if let reason = upscale.disabledReason { line = "off (\(reason)), was \(line)" }
+            return line
+        }
         var stages: [String] = []
         if let ml = upscale.mlScale { stages.append(String(format: "super resolution %.0fx", ml)) }
         let reached = upscale.mlScale.map { ml in
