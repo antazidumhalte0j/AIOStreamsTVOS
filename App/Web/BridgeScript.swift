@@ -1266,7 +1266,16 @@ enum BridgeScript {
     let changedAt = 0;
     let scrolledAt = 0;
     // What it last did, for scripts/probes/sidebar-watch.js.
-    const navRedraws = { changes: 0, ran: 0, last: '' };
+    // `afterMs`, `stillMs` and `hideFrames` are read at each change, so scripts/probes/sidebar-tune.js
+    // can try others on the TV without a build; they go back to these as the page reloads.
+    const navRedraws = {
+      changes: 0,
+      ran: 0,
+      last: '',
+      afterMs: REDRAW_AFTER_MS,
+      stillMs: SCROLL_STILL_MS,
+      hideFrames: 2,
+    };
     try {
       Object.defineProperty(window, '__aioNavRedraws', { value: navRedraws });
     } catch {}
@@ -1277,7 +1286,7 @@ enum BridgeScript {
       changedAt = performance.now();
       clearTimeout(redrawing);
       const due = () => {
-        const wait = Math.max(changedAt + REDRAW_AFTER_MS, scrolledAt + SCROLL_STILL_MS) - performance.now();
+        const wait = Math.max(changedAt + navRedraws.afterMs, scrolledAt + navRedraws.stillMs) - performance.now();
         if (wait > 0) {
           redrawing = setTimeout(due, wait);
           return;
@@ -1303,12 +1312,16 @@ enum BridgeScript {
         const hadFocus = navs.some((el) => el.contains(focused));
         for (const el of navs) el.style.setProperty('display', 'none', 'important');
         void html.offsetHeight;
-        requestAnimationFrame(() => requestAnimationFrame(() => {
+        const show = () => {
           for (const el of navs) el.style.removeProperty('display');
           if (hadFocus && focused?.isConnected) focused.focus({ preventScroll: true });
-        }));
+        };
+        // Hidden this many frames (at least one, for WebKit to drop the old layer).
+        let frames = Math.max(1, navRedraws.hideFrames);
+        const frame = () => (--frames > 0 ? requestAnimationFrame(frame) : show());
+        requestAnimationFrame(frame);
       };
-      redrawing = setTimeout(due, REDRAW_AFTER_MS);
+      redrawing = setTimeout(due, navRedraws.afterMs);
     };
     new MutationObserver(() => {
       const now = lookNow();
