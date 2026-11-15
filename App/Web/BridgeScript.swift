@@ -689,7 +689,21 @@ enum BridgeScript {
       const left = [];
       const back = [];
       for (const record of records) {
-        for (const node of record.removedNodes) imagesIn(node, left);
+        for (const node of record.removedNodes) {
+          const from = left.length;
+          imagesIn(node, left);
+          // For the memory log: which page, and what was taken down with the picture.
+          if (left.length > from && node.nodeType === 1) {
+            const what =
+              node.getAttribute('data-page') ||
+              node.getAttribute('data-ui') ||
+              node.querySelector?.('[data-ui]')?.getAttribute('data-ui') ||
+              node.tagName.toLowerCase();
+            for (let i = from; i < left.length; i++) {
+              if (!removedFrom.has(left[i])) removedFrom.set(left[i], what);
+            }
+          }
+        }
         for (const node of record.addedNodes) imagesIn(node, back);
       }
       for (const img of back) {
@@ -1340,11 +1354,61 @@ enum BridgeScript {
    * held by something, or not yet collected. tvOS ended the page's process at its 1 GB limit with
    * the pictures on the page about 25 MB, so the rest is somewhere none of the counts here saw.
    */
+  /*
+   * What may hold a page taken down, for the memory log: after collections on demand, removed
+   * pictures still alive went past 1000 browsing titles, so something holds each closed page. A
+   * listener on the window or the document that's never taken off keeps what its function
+   * refers to, so live ones are counted by type, and live intervals too.
+   */
+  const liveListeners = new Map();
+  let liveIntervals = 0;
+  try {
+    for (const target of [window, document]) {
+      const add = target.addEventListener;
+      const remove = target.removeEventListener;
+      const name = target === window ? 'window' : 'document';
+      const keyOf = (type, options) =>
+        `${name} ${type}${(typeof options === 'boolean' ? options : !!options?.capture) ? ' capture' : ''}`;
+      target.addEventListener = function (type, listener, options) {
+        // A bare `addEventListener(...)` in strict code comes with no `this`, and is the window's.
+        if (listener && (this === target || (this == null && target === window))) {
+          const key = keyOf(type, options);
+          let set = liveListeners.get(key);
+          if (!set) liveListeners.set(key, (set = new Set()));
+          set.add(listener);
+        }
+        return add.call(this, type, listener, options);
+      };
+      target.removeEventListener = function (type, listener, options) {
+        if (listener && (this === target || (this == null && target === window)))
+          liveListeners.get(keyOf(type, options))?.delete(listener);
+        return remove.call(this, type, listener, options);
+      };
+    }
+    const setIntervalNative = window.setInterval;
+    const clearIntervalNative = window.clearInterval;
+    const intervals = new Set();
+    window.setInterval = function (...args) {
+      const id = setIntervalNative.apply(this, args);
+      intervals.add(id);
+      liveIntervals = intervals.size;
+      return id;
+    };
+    window.clearInterval = function (id) {
+      intervals.delete(id);
+      liveIntervals = intervals.size;
+      return clearIntervalNative.call(this, id);
+    };
+  } catch {}
+  /** What was taken down with each picture taken off the page, and the route it was made on. */
+  const removedFrom = new WeakMap();
+  const madeOn = new WeakMap();
   const madeImages = [];
   let imagesMade = 0;
   const MADE_WATCHED = 6000;
   const watchImage = (img) => {
     imagesMade++;
+    madeOn.set(img, location.hash.slice(1).split('?')[0] || '/');
     madeImages.push(new WeakRef(img));
     // The oldest go unwatched past this many, so the list stays small.
     if (madeImages.length > MADE_WATCHED) madeImages.splice(0, madeImages.length - MADE_WATCHED);
@@ -1379,6 +1443,9 @@ enum BridgeScript {
     let offPage = 0;
     let offPageLoaded = 0;
     let offPageBytes = 0;
+    // The pictures off the page still alive, by what was taken down with them and the page they were made on.
+    const offByWhat = new Map();
+    const offByRoute = new Map();
     try {
       let kept = 0;
       for (const ref of madeImages) {
@@ -1387,6 +1454,10 @@ enum BridgeScript {
         madeImages[kept++] = ref;
         if (img.isConnected) continue;
         offPage++;
+        const what = removedFrom.get(img) || 'never on the page';
+        offByWhat.set(what, (offByWhat.get(what) || 0) + 1);
+        const on = madeOn.get(img) || '?';
+        offByRoute.set(on, (offByRoute.get(on) || 0) + 1);
         const w = img.naturalWidth;
         const h = img.naturalHeight;
         if (img.complete && w && h && !String(img.getAttribute('src') || '').startsWith('data:')) {
@@ -1556,6 +1627,24 @@ enum BridgeScript {
       offPage,
       offPageLoaded,
       offPageMB: mb(offPageBytes),
+      offPageRoutes: offByRoute.size,
+      offPageBy: (() => {
+        const top = (map, n) => [...map].sort((a, b) => b[1] - a[1]).slice(0, n);
+        // A title's address shortened to its last characters, enough to tell titles apart.
+        const short = (route) => route.replace(/[0-9a-f-]{20,}/gi, (id) => '…' + id.slice(-6));
+        const what = top(offByWhat, 4).map(([w, c]) => `${w} ${c}`).join(', ');
+        const routes = top(offByRoute, 4).map(([r, c]) => `${short(r)} ${c}`).join(', ');
+        return what ? `taken down with ${what}; made on ${routes}` : '';
+      })(),
+      // What may hold a closed page: listeners never taken off, intervals never cleared, the page's subscribers to the app.
+      listenersBy: (() => {
+        const live = [...liveListeners].map(([key, set]) => [key, set.size]).filter(([, n]) => n > 0);
+        const total = live.reduce((sum, [, n]) => sum + n, 0);
+        const most = live.sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} ${n}`).join(', ');
+        return `${total} on the window and document (most ${most})`;
+      })(),
+      intervals: liveIntervals,
+      appListeners: listeners.size,
       ...(queryStats && {
         queries: queryStats.queries || 0,
         queryPages: queryStats.pages || 0,

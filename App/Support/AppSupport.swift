@@ -230,7 +230,17 @@ enum MemoryLog {
         // Loaded but no longer on the page: let go of yet still held, or not yet collected.
         if int("offPage") > 0 {
             text += ", \(int("offPageLoaded")) pictures off the page still loaded (\(int("offPageMB")) MB"
-            text += ", \(int("offPage")) off the page in all, \(int("imagesMade")) made since load)"
+            text += ", \(int("offPage")) off the page in all, \(int("imagesMade")) made since load"
+            // Which closed pages are still held, and with what: a leak keeps one of each.
+            if let by = message.text("offPageBy"), !by.isEmpty {
+                text += "; from \(int("offPageRoutes")) pages, \(by)"
+            }
+            text += ")"
+        }
+        // What may hold closed pages: what the page left listening, and its intervals.
+        if let listeners = message.text("listenersBy") {
+            text += ", listeners \(listeners), \(int("intervals")) intervals"
+            text += ", \(int("appListeners")) listening to the app"
         }
         // What the page keeps from the server (patches/web/0064), as JSON, which the objects outweigh.
         if message.number("queries") != nil {
