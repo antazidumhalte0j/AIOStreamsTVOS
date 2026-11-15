@@ -1,0 +1,30 @@
+diff --git a/packages/web/src/features/trailers/preview.tsx b/packages/web/src/features/trailers/preview.tsx
+index e6949ab24..64b1843d1 100644
+--- a/packages/web/src/features/trailers/preview.tsx
++++ b/packages/web/src/features/trailers/preview.tsx
+@@ -5,6 +5,7 @@ import { useReducedMotion } from 'motion/react';
+ import { cn } from '@aiostreams/ui/core/styling';
+ import { useSession } from '@/lib/jellyfin/session';
+ import { useItem } from '@/lib/jellyfin/queries';
++import { usePlaybackPrefs } from '@/lib/jellyfin/user-config';
+ import { currentHost } from '@/lib/hosts';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { settings, useSetting, type TrailerSpot } from '@/lib/settings';
+@@ -472,12 +473,17 @@ function PlayedPreview({
+   const [fit] = useSetting(settings.video.fit);
+   // Without it, the app's player keeps the last style it was sent.
+   const [subtitleStyle] = useSetting(settings.subtitle.style);
++  // The user's subtitle mode and languages, as the trailer player sends them (app/trailer/page.tsx): a
++  // trailer opened from here into the whole screen plays on, and picked no track in the user's language
++  // without them (AIOStreamsTVOS).
++  const { prefs } = usePlaybackPrefs();
+   const player = usePlayer(engines, {
+     client,
+     item,
+     url,
+     source,
+     subtitleStyle,
++    prefs,
+     startMs: 0,
+     onEnded,
+     fit: full ? undefined : 'crop',
