@@ -877,6 +877,14 @@ enum BridgeScript {
   const send = (message) => {
     if (message && message.type === 'player-frame') {
       framed = !!message.frame;
+      // A trailer playing by itself in a card, the hero or a title page comes framed with no subtitles
+      // (upstream's preview.tsx, `subtitles: false`), which hid the app's subtitles in its box. Its track is
+      // picked as any video's is, by the user's subtitle mode and languages (AetherPlayer's `pickSubtitle`),
+      // so with subtitles on by default a trailer shows them as the full-screen player does.
+      if (message.frame && message.frame.subtitles === false) {
+        const { subtitles, ...frame } = message.frame;
+        message = { ...message, frame };
+      }
       if (message.frame) {
         try {
           const scale = (window.visualViewport && window.visualViewport.scale) || 1;
