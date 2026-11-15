@@ -223,6 +223,24 @@ enum BridgeScript {
       "[data-ui='artwork'],[data-ui='episode-title']>span,p[data-ui='episode-title']," +
       "[data-ui='episode-synopsis'],[data-ui='wide-card-subtitle']";
     /*
+     * A spoiler's text, which upstream blurs with `filter: blur(5px)` (styles.css), is drawn blurred
+     * as a shadow of itself instead, in its own colour, with the letters themselves clear. WebKit
+     * drew each filter into a surface of its own, sized to the text it had: switching seasons gave
+     * the same cards new episodes, and part of a new synopsis showed through a hard edge where the
+     * old one's surface ended. A shadow is drawn with the text, so it has no surface to go stale.
+     * The selector is upstream's for that rule.
+     */
+    rules.push(
+      "html[data-blur-spoilers] :is([data-ui='episode-card'],[data-ui='episode-list-item']," +
+        "[data-ui='player-episode'],[data-row='next-up'] [data-ui='wide-card']," +
+        "[data-row='upcoming'] [data-ui='wide-card'],[data-row='resume'] [data-ui='wide-card']," +
+        "[data-ui='calendar-entry'][data-episode])" +
+        ":not([data-watched],[data-in-progress],[data-current],:hover,:focus-within,[data-menu-open]>*) " +
+        ":is([data-ui='episode-title']>span,p[data-ui='episode-title'],[data-ui='episode-synopsis']," +
+        "[data-ui='wide-card-subtitle'],[data-ui='calendar-entry-subtitle'])" +
+        '{filter:none!important;-webkit-text-fill-color:transparent;text-shadow:0 0 10px currentColor}'
+    );
+    /*
      * A trailer playing by itself in the hero or behind a title page shows through a hole the page
      * cuts in its background with a mask (upstream's `useVideoHole`, features/trailers/preview.tsx),
      * set only while it plays. Stripped, the background covers the app's video: sound, black picture.
