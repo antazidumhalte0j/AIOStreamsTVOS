@@ -583,6 +583,24 @@ static uint64_t AIOFootprintOfPid(pid_t pid, NSString **why) {
     return usage.ri_phys_footprint;
 }
 
+/*
+ * A page taken down (a title page closed) is collected only when JavaScriptCore runs a full
+ * collection, and it judges when by its own heap, which a page's elements barely add to: removed
+ * pages piled up, thousands of their pictures still alive, until tvOS ended the process at its
+ * own limit, with the system far from short and so no memory warning to make WebKit collect.
+ */
+- (BOOL)collectPageGarbage {
+    SEL collect = NSSelectorFromString(@"_garbageCollectJavaScriptObjectsForTesting");
+    id pool = AIOSend0(AIOSend0(self.webView, @"configuration"), @"processPool");
+    Class poolClass = NSClassFromString(@"WKProcessPool");
+    for (id target in @[pool ?: NSNull.null, poolClass ?: NSNull.null]) {
+        if (target == NSNull.null || ![target respondsToSelector:collect]) continue;
+        ((void (*)(id, SEL))objc_msgSend)(target, collect);
+        return YES;
+    }
+    return NO;
+}
+
 /** WebKit's process list, asked of the class and then of the view's own pool. */
 - (nullable NSArray *)webContentProcessInfos:(NSString **)why {
     Class poolClass = NSClassFromString(@"WKProcessPool");

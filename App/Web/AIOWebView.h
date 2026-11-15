@@ -110,6 +110,11 @@ typedef NS_ENUM(NSInteger, AIOPageEnd) {
 @property (nonatomic, readonly, copy, nullable) NSString *webProcessRoute;
 /** As `webProcessRoute`, for the last `gpuProcessMB`. */
 @property (nonatomic, readonly, copy, nullable) NSString *gpuProcessRoute;
+/**
+ * Has WebKit collect the page's JavaScript garbage in full now, as it would under memory
+ * pressure, through a private call. NO where this WebKit has no such call.
+ */
+- (BOOL)collectPageGarbage;
 
 @end
 

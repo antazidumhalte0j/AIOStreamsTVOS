@@ -34,6 +34,12 @@ final class MainViewController: UIViewController, RemoteReceiver {
     /// The page's latest errors (`web-error`), for the app menu.
     private var pageErrors: [String] = []
     private static let keptPageErrors = 8
+    /// The page's garbage collected once its moves between pages settle (`collectPageGarbage`).
+    private var collectTimer: Timer?
+    private var lastCollected = Date.distantPast
+    /// After the last move, so a run of moves isn't held up by a collection's pause.
+    private static let collectAfterMove: TimeInterval = 3
+    private static let collectAtMostEvery: TimeInterval = 10
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -668,9 +674,29 @@ final class MainViewController: UIViewController, RemoteReceiver {
             if MemoryLog.clearsMemoryCache {
                 web?.clearMemoryCache { MemoryLog.memoryCacheCleared() }
             }
+            collectAfterMoves()
         default:
             // Downloads, keyboard completions and the like have no Apple TV part.
             break
+        }
+    }
+
+    /**
+     * The pages the page took down are collected some seconds after its moves stop, rather than
+     * when JavaScriptCore gets round to it: they piled up by the thousand otherwise, and tvOS ended
+     * the page's process at its own limit before the system was short enough to warn WebKit.
+     */
+    private func collectAfterMoves() {
+        collectTimer?.invalidate()
+        let at = max(Date().addingTimeInterval(Self.collectAfterMove),
+                     lastCollected.addingTimeInterval(Self.collectAtMostEvery))
+        collectTimer = Timer.scheduledTimer(withTimeInterval: max(0, at.timeIntervalSinceNow), repeats: false) {
+            [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let web = self.web else { return }
+                self.lastCollected = Date()
+                MemoryLog.pageGarbageCollected(web.collectPageGarbage())
+            }
         }
     }
 

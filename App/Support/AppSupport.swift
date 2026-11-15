@@ -181,6 +181,26 @@ enum MemoryLog {
     /// WebKit emptied its in-memory cache for `clearsMemoryCache`.
     static func memoryCacheCleared() { cacheClears += 1 }
 
+    /// Full collections of the page's garbage the app asked WebKit for, or nil where it can't ask.
+    private static var collections: Int? = 0
+    private static var lastCollection: Date?
+
+    /// The app asked WebKit to collect the page's garbage; `done` is false where WebKit has no way.
+    static func pageGarbageCollected(_ done: Bool) {
+        guard done else {
+            collections = nil
+            return
+        }
+        collections = (collections ?? 0) + 1
+        lastCollection = Date()
+    }
+
+    private static var collectionText: String {
+        guard let collections else { return "the page's garbage can't be collected on demand by this WebKit" }
+        let last = lastCollection.map { ", last \(seconds($0)) ago" } ?? ""
+        return "the page's garbage collected on demand \(collections) times\(last)"
+    }
+
     private static var cacheText: String {
         clearsMemoryCache
             ? "WebKit's memory cache emptied at each move (\(cacheClears) times since launch)"
@@ -295,7 +315,7 @@ enum MemoryLog {
         lastStats = nil
         lastStatsAt = nil
         moves = []
-        before += "; \(cacheText)"
+        before += "; \(cacheText); \(collectionText)"
         let page = path.map { " on \($0)" } ?? ""
         note("page's web process ended (\(cause(reason)))\(page) \(playing ? "with a video loaded" : "while browsing")\(before)")
     }
@@ -317,7 +337,7 @@ enum MemoryLog {
         var peak = peakWebMB.map { ", the page at most \($0) MB" } ?? ""
         if let gpu = peakGpuMB { peak += ", WebKit graphics at most \(gpu) MB" }
         if let pictures = peakPictureMB { peak += ", the page's pictures at most \(pictures) MB" }
-        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText, cacheText]
+        var head = ["Memory: \(now); the page reloaded \(pageEnds) times since launch\(peak)", screenText, routeText, cacheText, collectionText]
         if let stats = lastStats { head.append("The page now holds \(stats)") }
         return head + lines
     }
