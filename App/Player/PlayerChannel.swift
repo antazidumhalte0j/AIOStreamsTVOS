@@ -74,6 +74,11 @@ final class PlayerChannel: PlayerListener {
         player.change(change)
     }
 
+    /// The page put the video in a box of its own, or gave it the whole screen (`player-frame`).
+    func framed(_ boxed: Bool) {
+        player.framed(boxed)
+    }
+
     /// False for a message that isn't the player's.
     func handle(_ type: String, _ message: Message) -> Bool {
         do {

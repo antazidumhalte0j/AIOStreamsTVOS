@@ -577,6 +577,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // The page's mini player docked in a preview, or a trailer playing by itself in a card, the hero
             // or a title page: the video in that box, or the whole screen again for none (VideoStage).
             stage.place(VideoFrame.from(message, webWidth: web?.bounds.width ?? view.bounds.width))
+            // A trailer that goes from its box to the whole screen, or back, gets its subtitles picked again.
+            player?.framed(message.object("frame") != nil)
         case "app-info":
             sendToPage(AppAnswers.appInfo())
         case "log":

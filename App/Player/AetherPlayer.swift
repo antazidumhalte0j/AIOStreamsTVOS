@@ -95,6 +95,15 @@ final class AetherPlayer {
     private var subtitlePickedByPage = false
     /// The subtitle tracks and the active one when the app last picked, so it picks again only on a change.
     private var lastPickedOver: (tracks: Int, active: Int?)?
+    /**
+     * The video plays in a box of the page (`player-frame`), as a trailer playing by itself in the hero,
+     * a card or a title page does, rather than on the whole screen. Such a trailer opened into the
+     * trailer player goes on playing, only on the whole screen: the same load, so its subtitles are
+     * picked again as it moves (`framed`).
+     */
+    private var boxed = false
+    /// What the page picked for the trailer on the whole screen, put back when it comes back there.
+    private var fullScreenPick: Pick?
 
     /// Where the page's skips end, in ms (`setSkips`).
     private var skipEnds: [Double] = []
@@ -216,6 +225,8 @@ final class AetherPlayer {
         addedSubtitles = [:]
         subtitlePickedByPage = false
         lastPickedOver = nil
+        boxed = request.framed
+        fullScreenPick = nil
         lastBuffered = nil
         // The page sends the next file's skips once it has loaded it.
         skipEnds = []
@@ -668,6 +679,7 @@ final class AetherPlayer {
         }
         if let subtitle = change.subtitle {
             subtitlePickedByPage = true
+            if !boxed { fullScreenPick = subtitle }
             switch subtitle {
             case .track(let id):
                 if let index = Int(id) { pickSubtitleSettled(index) }
@@ -1081,7 +1093,7 @@ final class AetherPlayer {
         // A trailer playing by itself (the hero, a card, a title page's backdrop) shows no subtitles. On
         // AVPlayer the captions are AVPlayer's to draw, beyond the app's overlay the page hides there,
         // and it picks them itself by the system's caption settings: that choice is turned off too.
-        if request.isTrailer && request.framed {
+        if request.isTrailer && boxed {
             if request.playsOnAVPlayer { silenceAVPlayerCaptions() }
             engine.clearSubtitle()
             return
@@ -1123,6 +1135,30 @@ final class AetherPlayer {
         } else if engine.activeSubtitleTrackIndex != nil {
             engine.clearSubtitle()
         }
+    }
+
+    /**
+     * The page moved the video into a box of its own or onto the whole screen. A trailer that plays on
+     * (one playing by itself, opened into the trailer player, or that player going back to the page)
+     * shows no subtitles in the box, and on the whole screen what the page picked there before, else
+     * the track the page's subtitle mode picks.
+     */
+    func framed(_ isBoxed: Bool) {
+        guard isBoxed != boxed else { return }
+        boxed = isBoxed
+        guard let request = current, request.isTrailer, !ended, loadedAt != nil else { return }
+        if !isBoxed, let pick = fullScreenPick {
+            switch pick {
+            case .track(let id):
+                if let index = Int(id) { pickSubtitleSettled(index) }
+            case .off:
+                engine.clearSubtitle()
+            }
+            return
+        }
+        // The page's last pick was for the other place; on the whole screen the mode picks afresh.
+        subtitlePickedByPage = false
+        pickSubtitle(request)
     }
 
     /// AVPlayer stops choosing captions by the system's settings, and shows none.
