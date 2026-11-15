@@ -1251,22 +1251,52 @@ enum BridgeScript {
     const LOOK = ['data-art-wash', 'data-app-wash', 'data-art-glass'];
     /** As tried on the TV; two frames was too soon. */
     const REDRAW_AFTER_MS = 1000;
+    /*
+     * It went stale only with the option turned off just after a keyed scroll, which is WebKit's
+     * own smooth scroll (NATIVE_SCROLLS): the layers remade while that ran. A second after the
+     * change could still be inside a scroll, or one more press of the remote, so it waits for the
+     * page to have held still this long too.
+     */
+    const SCROLL_STILL_MS = 400;
     const html = document.documentElement;
     const lookNow = () => LOOK.map((name) => html.getAttribute(name)).join('|');
     let look = lookNow();
     let redrawing = 0;
+    let changedAt = 0;
+    let scrolledAt = 0;
+    // What it last did, for scripts/probes/sidebar-watch.js.
+    const navRedraws = { changes: 0, ran: 0, last: '' };
+    try {
+      Object.defineProperty(window, '__aioNavRedraws', { value: navRedraws });
+    } catch {}
+    addEventListener('scroll', () => (scrolledAt = performance.now()), { capture: true, passive: true });
     const redrawNav = () => {
-      // From the last change, as the timing probe did.
+      navRedraws.changes += 1;
+      navRedraws.last = 'waiting';
+      changedAt = performance.now();
       clearTimeout(redrawing);
-      redrawing = setTimeout(() => {
+      const due = () => {
+        const wait = Math.max(changedAt + REDRAW_AFTER_MS, scrolledAt + SCROLL_STILL_MS) - performance.now();
+        if (wait > 0) {
+          redrawing = setTimeout(due, wait);
+          return;
+        }
         redrawing = 0;
         // At the top, the stale layer is where the navigation belongs anyway.
-        if (scrollY <= 0) return;
+        if (scrollY <= 0) {
+          navRedraws.last = 'skipped: at the top';
+          return;
+        }
         // The outermost of each: the rail inside the sidebar goes with it.
         const navs = [...document.querySelectorAll(NAV_SIDE)].filter(
           (el) => !el.parentElement?.closest(NAV_SIDE) && getComputedStyle(el).position === 'fixed'
         );
-        if (!navs.length) return;
+        if (!navs.length) {
+          navRedraws.last = 'skipped: no fixed navigation';
+          return;
+        }
+        navRedraws.ran += 1;
+        navRedraws.last = `hid ${navs.map((el) => el.dataset.ui).join(', ')} at scrollY ${Math.round(scrollY)}`;
         // Hiding the element with focus would drop it; the settings toggle has it, as a rule.
         const focused = document.activeElement;
         const hadFocus = navs.some((el) => el.contains(focused));
@@ -1276,7 +1306,8 @@ enum BridgeScript {
           for (const el of navs) el.style.removeProperty('display');
           if (hadFocus && focused?.isConnected) focused.focus({ preventScroll: true });
         }));
-      }, REDRAW_AFTER_MS);
+      };
+      redrawing = setTimeout(due, REDRAW_AFTER_MS);
     };
     new MutationObserver(() => {
       const now = lookNow();
