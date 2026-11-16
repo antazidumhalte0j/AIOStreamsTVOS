@@ -1532,12 +1532,16 @@ final class AetherPlayer {
             try? await Task.sleep(nanoseconds: 250_000_000)
             own = ownSubtitleTracks()
         }
-        guard own.count == timelines.count,
-              zip(own, timelines).allSatisfy({ Self.isPictureCodec($0.codec) == $1.isPicture }) else {
-            EngineLogBook.note("[sync] the file's index doesn't pair with the player's subtitles: index "
-                + timelines.map(\.codec).joined(separator: ", ") + "; player "
-                + own.map { "\($0.id) \($0.codec)" }.joined(separator: ", "))
+        let listed = "index " + timelines.map(\.codec).joined(separator: ", ") + "; player "
+            + own.map { "\($0.id) \($0.codec)" }.joined(separator: ", ")
+        // Paired by count alone, as the desktop and Android apps pair theirs.
+        guard own.count == timelines.count else {
+            EngineLogBook.note("[sync] the file's index doesn't pair with the player's subtitles: \(listed)")
             return nil
+        }
+        // Said, as a pairing the kinds disagree on may be off by a track, though it's used as theirs is.
+        if !zip(own, timelines).allSatisfy({ Self.isPictureCodec($0.codec) == $1.isPicture }) {
+            EngineLogBook.note("[sync] the file's index pairs with the player's subtitles by count, their kinds differing: \(listed)")
         }
         return Dictionary(uniqueKeysWithValues: zip(own, timelines).map { ($0.id, $1.lines) })
     }
@@ -1576,7 +1580,8 @@ final class AetherPlayer {
         indexWatch = Task { [weak self] in
             let indexed = await self?.subtitleIndex()?[index]
             guard let self, !Task.isCancelled, self.watchedTrack == index else { return }
-            if let indexed, indexed.count >= Self.fewestIndexedLines {
+            // Any lines the index has, as the desktop and Android apps send them.
+            if let indexed, !indexed.isEmpty {
                 EngineLogBook.note(String(format: "[sync] %d lines of track %d from the file's index sent to the page, %.1f s to %.1f s",
                                           indexed.count, index, (indexed.first?.start ?? 0) / 1000, (indexed.last?.end ?? 0) / 1000))
                 onLines(indexed.map { line -> Message in ["startMs": line.start, "endMs": line.end] })
@@ -1586,9 +1591,6 @@ final class AetherPlayer {
             self.watchDecoded(index: index, pictures: pictures, onLines: onLines)
         }
     }
-
-    /// Fewer lines in the index than this and it isn't the track's: the decode gives them instead.
-    private static let fewestIndexedLines = 10
 
     /// The lines of the file's own track `index` as the engine's second subtitle channel decodes them.
     private func watchDecoded(index: Int, pictures: Bool, onLines: @escaping ([Message]) -> Void) {
