@@ -40,6 +40,10 @@ final class MainViewController: UIViewController, RemoteReceiver {
     /// After the last move, so a run of moves isn't held up by a collection's pause.
     private static let collectAfterMove: TimeInterval = 3
     private static let collectAtMostEvery: TimeInterval = 10
+    /// A newer release found as the app launched (UpdateCheck), until it's offered; and whether the page has loaded since.
+    private var updateFound: String?
+    private var updateChecked = false
+    private var pageReady = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -138,6 +142,13 @@ final class MainViewController: UIViewController, RemoteReceiver {
         startPlayer()
         setUpInput()
         loadPage()
+        // Once a launch: not as the app comes back from the background, nor as the page loads again.
+        UpdateCheck.newer(than: Identity.version) { [weak self] version in
+            guard let self else { return }
+            self.updateFound = version
+            self.updateChecked = true
+            self.offerUpdate()
+        }
     }
 
     /**
@@ -421,6 +432,29 @@ final class MainViewController: UIViewController, RemoteReceiver {
         present(screen, animated: true)
     }
 
+    /**
+     * The newer release found as the app launched, once the page has loaded. Told of once: shown, it
+     * isn't again. With something else on screen by then (a video, a dialog), it waits for the next
+     * launch rather than come up over it.
+     */
+    private func offerUpdate() {
+        guard updateChecked, pageReady else { return }
+        guard let version = updateFound else { return }
+        updateFound = nil
+        guard presentedViewController == nil, player?.playing != true else { return }
+        UpdateCheck.markShown(version)
+        let alert = UIAlertController(
+            title: "Update available",
+            message: "AIOStreams for Apple TV \(version) is out; this is \(Identity.version). "
+                + "Update it in the app you sideload with, or download it from \(UpdateCheck.releases).",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
+            self?.web?.focusPage()
+        })
+        present(alert, animated: true)
+    }
+
     private func confirmReset() {
         let confirm = UIAlertController(
             title: "Reset the app's data?",
@@ -570,6 +604,10 @@ final class MainViewController: UIViewController, RemoteReceiver {
             web?.focusPage()
             pipButtonShown = false
             updatePipButton()
+            if !pageReady {
+                pageReady = true
+                offerUpdate()
+            }
         case "tvos-pip":
             // The player's picture-in-picture button, which the bridge script adds.
             pip?.start()
