@@ -6,8 +6,7 @@ import Foundation
  * build's. Asked once as the app launches; each newer version is told of once, ever.
  *
  * Stable releases only: the source lists only `v*` tags (the workflow's update-source step runs
- * for those alone), never the rolling nightly prerelease, and a version that isn't all numbers,
- * a `1.4.0-beta` say, is passed over. Not GitHub's releases list, which has the nightly in it.
+ * for those alone), and a version that isn't all numbers, a `1.4.0-beta` say, is passed over.
  */
 enum UpdateCheck {
     static let source = URL(string: "https://raw.githubusercontent.com/mickey2266/AIOStreamsTVOS/main/altstore/source.json")!

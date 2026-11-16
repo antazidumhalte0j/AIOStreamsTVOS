@@ -26,9 +26,9 @@ lasts 7 days, with a paid developer account a year.
   release and offers each new one as an update. AltStore and SideStore can add it too, but neither
   installs to an Apple TV.
 - **By hand**: download `AIOStreams.ipa` from the latest
-  [release](https://github.com/mickey2266/AIOStreamsTVOS/releases/latest), or the **Nightly**
-  prerelease for the newest build of `main` or of a branch built by hand (its notes name which), and
-  open it in your sideloading tool.
+  [release](https://github.com/mickey2266/AIOStreamsTVOS/releases/latest), and open it in your
+  sideloading tool. Builds of `main` and of branches are attached to their workflow run as an
+  artifact instead (Actions, the run, Artifacts; downloading one needs a GitHub account).
 
 Then sign in to your Jellyfin server in the app, as in AIOStreams' web app. For Dolby Atmos, set
 the Apple TV's **Settings → Video and Audio → Audio Format** to **Auto**, and keep **Continuous
@@ -590,9 +590,8 @@ to the page; the page saves where you stopped.
 ## Building
 
 The GitHub Actions workflow builds an unsigned `AIOStreams.ipa` for Apple TV hardware. Every run
-attaches it as an artifact, each push to `main` and each run started by hand (Actions → Build →
-Run workflow, on any branch) replaces the **Nightly** release, and a `v*` tag
-publishes a release of its own. Sign it with your own Apple ID using a sideloading tool that
+attaches it as an artifact, whether from a push to `main`, a pull request or a run started by hand (Actions → Build →
+Run workflow, on any branch), and a `v*` tag also publishes a release of its own. Sign it with your own Apple ID using a sideloading tool that
 handles Apple TV; with a free Apple ID the signature lasts 7 days, with a paid account a year.
 
 Its first step compiles the bridge script's JavaScript (`node scripts/check-bridge.mjs`), so a
@@ -606,7 +605,7 @@ Tagged releases are listed in the AltStore-format source in `altstore/source.jso
 Installing). The build workflow adds
 every `v*` release to the source (`scripts/update-source.py`: the version from `project.yml`'s
 `MARKETING_VERSION`, the build the workflow's run number), so a release is tagged after
-`MARKETING_VERSION` is bumped to match. The nightly isn't listed.
+`MARKETING_VERSION` is bumped to match.
 
 Each CI build's `CFBundleVersion` is the workflow's run number, for the app and its Top Shelf
 extension alike, so every build installs as a newer one than the last; the pack step fails if the two
