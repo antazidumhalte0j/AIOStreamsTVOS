@@ -12,8 +12,8 @@ on:
   workflow_dispatch:
     inputs:
       aiostreams_ref:
-        description: AIOStreams branch or tag to take the web app from
-        default: v2.38.1
+        description: AIOStreams branch, tag or commit to take the web app from
+        default: c2563502386405c260e8cafdff2b0b156cbc0d81
 
 permissions:
   contents: write
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build the web app
         env:
-          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'v2.38.1' }}
+          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'c2563502386405c260e8cafdff2b0b156cbc0d81' }}
         run: |
           corepack enable
           bash scripts/fetch-web.sh

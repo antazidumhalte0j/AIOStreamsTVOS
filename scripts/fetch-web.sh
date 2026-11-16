@@ -4,13 +4,14 @@
 # and taken out again after it, so the AIOStreams checkout is left as it was.
 #
 #   AIOSTREAMS_DIR=/path/to/AIOStreams bash scripts/fetch-web.sh   # use a local checkout as it is
-#   AIOSTREAMS_REF=main bash scripts/fetch-web.sh                   # clone this branch or tag into .build/
+#   AIOSTREAMS_REF=main bash scripts/fetch-web.sh                   # fetch this branch, tag or commit into .build/
 #   AIOSTREAMS_PATCHES=0 bash scripts/fetch-web.sh                  # build without the patches
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
-# The web app's release the patches are made against; a branch or another tag in AIOSTREAMS_REF tries another.
-ref="${AIOSTREAMS_REF:-v2.38.1}"
+# The AIOStreams commit the patches are made against (main on 2026-11-16, after v2.38.1); a branch,
+# a tag or another commit in AIOSTREAMS_REF tries another.
+ref="${AIOSTREAMS_REF:-c2563502386405c260e8cafdff2b0b156cbc0d81}"
 repo="${AIOSTREAMS_REPO:-https://github.com/Viren070/AIOStreams.git}"
 src="${AIOSTREAMS_DIR:-}"
 
@@ -21,7 +22,11 @@ if [ -z "$src" ]; then
     # The app's own clone: anything a stopped build left in it goes.
     git -C "$src" checkout --force --detach FETCH_HEAD
   else
-    git clone --depth 1 --branch "$ref" "$repo" "$src"
+    # Fetched rather than cloned with --branch, which takes a branch or tag but not a commit.
+    git init -q "$src"
+    git -C "$src" remote add origin "$repo"
+    git -C "$src" fetch --depth 1 origin "$ref"
+    git -C "$src" checkout --force --detach FETCH_HEAD
   fi
 fi
 

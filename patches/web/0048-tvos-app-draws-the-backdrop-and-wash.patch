@@ -181,10 +181,10 @@ index 7266365e5..788af574f 100644
        </div>
        <Shade />
 diff --git a/packages/web/src/components/shell/art-wash.tsx b/packages/web/src/components/shell/art-wash.tsx
-index a2e18b3a4..19d4a3cea 100644
+index a2e18b3a4..7022aa9f9 100644
 --- a/packages/web/src/components/shell/art-wash.tsx
 +++ b/packages/web/src/components/shell/art-wash.tsx
-@@ -2,23 +2,107 @@ import React from 'react';
+@@ -2,23 +2,114 @@ import React from 'react';
  import { cn } from '@aiostreams/ui/core/styling';
  import { currentWash, subscribeWash } from '@/lib/artwork/background';
  import { WASH_H, WASH_W } from '@/lib/artwork/wash';
@@ -208,12 +208,16 @@ index a2e18b3a4..19d4a3cea 100644
 + * Returns whether the app has it, so the canvases stay empty.
 + */
 +function useAppWash(
-+  frame: ReturnType<typeof currentWash>,
++  shownFrame: ReturnType<typeof currentWash>,
 +  drawHere: (frame: NonNullable<ReturnType<typeof currentWash>>) => void,
-+  app: boolean
++  app: boolean,
++  shown: boolean
 +): boolean {
 +  const shell = appBridge();
 +  const on = app && !!shell && appleTv();
++  // On a page the artwork background is kept from, the app puts its wash away too: hiding the
++  // page's own layer leaves the app's beneath it.
++  const frame = shown ? shownFrame : null;
 +  const [id] = React.useState(() => ++nextId);
 +  const latest = React.useRef({ frame, drawHere });
 +  latest.current = { frame, drawHere };
@@ -258,8 +262,11 @@ index a2e18b3a4..19d4a3cea 100644
 +export function ArtWash({
 +  className,
 +  app = false,
++  shown = true,
 +}: {
 +  className?: string;
++  /** False on a page the artwork background is kept from (`setWashVisible`). */
++  shown?: boolean;
 +  /**
 +   * The one behind the whole page, which the Apple TV app draws. Another, as
 +   * the version picker's inside its dialog, is drawn here: given to the app
@@ -286,7 +293,7 @@ index a2e18b3a4..19d4a3cea 100644
 +    },
 +    []
 +  );
-+  const inApp = useAppWash(frame, drawHere, app);
++  const inApp = useAppWash(frame, drawHere, app, shown);
    React.useLayoutEffect(() => {
      const layers = [first.current!, second.current!];
 -    if (!frame) {
@@ -294,7 +301,7 @@ index a2e18b3a4..19d4a3cea 100644
        for (const layer of layers) layer.style.visibility = 'hidden';
        front.current = null;
        return;
-@@ -44,7 +128,7 @@ export function ArtWash({ className }: { className?: string }) {
+@@ -44,7 +135,7 @@ export function ArtWash({ className }: { className?: string }) {
          easing: 'ease-out',
        })
        .finished.then(hide, hide);
@@ -304,32 +311,34 @@ index a2e18b3a4..19d4a3cea 100644
      <div
        data-ui="art-wash"
 diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
-index 33bf1bbf7..b4ee1bb9d 100644
+index a6a6e9176..c314a69ab 100644
 --- a/packages/web/src/components/shell/layout.tsx
 +++ b/packages/web/src/components/shell/layout.tsx
-@@ -73,6 +73,7 @@ import { useTrailerCovers } from '@/features/trailers/preview';
- import { PageScroll } from './page-scroll';
- import { ArtWash } from './art-wash';
- import { setWashPaused } from '@/lib/artwork/background';
+@@ -78,6 +78,7 @@ import {
+   setWashPaused,
+   setWashVisible,
+ } from '@/lib/artwork/background';
 +import { useAppPageColor } from '@/lib/hosts/shell/app-backdrop';
  import { HistoryButtons } from './history-buttons';
  import { ConnectionNote } from './unreachable';
  import { Logo, onBar } from './nav/common';
-@@ -97,6 +98,8 @@ const PAGE_FADE = {
+@@ -102,6 +103,8 @@ const PAGE_FADE = {
   * transparent page shows nothing beneath it; the player hides it.
   */
- export function PageBackground() {
+ export function PageBackground({ router }: { router: AnyRouter }) {
 +  // On an Apple TV, the app draws the page's colour beneath it, and its art through it (AIOStreamsTVOS).
 +  useAppPageColor();
-   const [wash] = useSetting(settings.theme.artBackground);
+   const [pages] = useSetting(settings.theme.artBackground);
    const [glass] = useSetting(settings.theme.artGlass);
    const [surface] = useSetting(settings.theme.glassSurface);
-@@ -113,7 +116,7 @@ export function PageBackground() {
+@@ -124,7 +127,9 @@ export function PageBackground({ router }: { router: AnyRouter }) {
        data-ui="page-background"
        className="page-background pointer-events-none fixed inset-0 -z-10 bg-[--background]"
      >
--      {wash && <ArtWash />}
-+      {wash && <ArtWash app />}
+-      {pages.length > 0 && <ArtWash className={cn(!shown && 'hidden')} />}
++      {pages.length > 0 && (
++        <ArtWash app shown={shown} className={cn(!shown && 'hidden')} />
++      )}
      </div>
    );
  }
