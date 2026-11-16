@@ -1724,12 +1724,14 @@ final class AetherPlayer {
 
     /**
      * A codec as the page names it: FFmpeg's codec descriptor names, as the desktop and Android apps report
-     * them. The engine's `TrackInfo.codec` is libavcodec's decoder name, the same for text subtitles but not
-     * for picture ones, so the page took a PGS track (`pgssub`) for no subtitle it could match an added one
-     * against, and its automatic subtitle sync never started on a Blu-ray remux.
+     * them. The engine's `TrackInfo.codec` is libavcodec's decoder name, which for most text subtitles is the
+     * same but not for SubRip or the picture ones, so the page took a PGS track (`pgssub`) or an SRT one
+     * (`srt`, Matroska's S_TEXT/UTF8) for no subtitle it could match an added one against, and its automatic
+     * subtitle sync never started: on a Blu-ray remux, and on any file whose own subtitles are SRT.
      */
     static func pageCodec(_ codec: String) -> String {
         switch codec.lowercased() {
+        case "srt": return "subrip"
         case "pgssub": return "hdmv_pgs_subtitle"
         case "dvdsub": return "dvd_subtitle"
         case "dvbsub": return "dvb_subtitle"
