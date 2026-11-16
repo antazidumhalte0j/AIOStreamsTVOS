@@ -9,7 +9,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
-ref="${AIOSTREAMS_REF:-main}"
+# The web app's release the patches are made against; a branch or another tag in AIOSTREAMS_REF tries another.
+ref="${AIOSTREAMS_REF:-v2.38.1}"
 repo="${AIOSTREAMS_REPO:-https://github.com/Viren070/AIOStreams.git}"
 src="${AIOSTREAMS_DIR:-}"
 

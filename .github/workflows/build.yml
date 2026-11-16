@@ -14,7 +14,7 @@ on:
     inputs:
       aiostreams_ref:
         description: AIOStreams branch or tag to take the web app from
-        default: main
+        default: v2.38.1
 
 permissions:
   contents: write
@@ -37,7 +37,7 @@ jobs:
 
       - name: Build the web app
         env:
-          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'main' }}
+          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'v2.38.1' }}
         run: |
           corepack enable
           bash scripts/fetch-web.sh
@@ -148,7 +148,7 @@ jobs:
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/'))
         env:
           GH_TOKEN: ${{ github.token }}
-          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'main' }}
+          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'v2.38.1' }}
         run: |
           gh release delete nightly --yes --cleanup-tag || true
           gh release create nightly AIOStreams.ipa \
