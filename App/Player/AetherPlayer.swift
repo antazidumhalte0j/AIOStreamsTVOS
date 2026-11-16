@@ -1737,9 +1737,14 @@ final class AetherPlayer {
         case "pgssub": return "hdmv_pgs_subtitle"
         case "dvdsub": return "dvd_subtitle"
         case "dvbsub": return "dvb_subtitle"
+        case "libzvbi_teletextdec": return "dvb_teletext"
         // Audio the same way, as the Android app names them: DTS of every kind is "dts" there.
         case "dca": return "dts"
         case "mp3float": return "mp3"
+        case "mp2float": return "mp2"
+        case "mp1float": return "mp1"
+        // Video too: AV1 decoded through dav1d.
+        case "libdav1d": return "av1"
         default: return codec
         }
     }
@@ -2098,6 +2103,10 @@ final class AetherPlayer {
         case "flac": return "audio/flac"
         case "opus": return "audio/opus"
         case "ac4": return "audio/ac4"
+        // The engine names MPEG audio by libavcodec's float decoders; Android's MIME types, as ExoPlayer gives them.
+        case "mp3", "mp3float": return "audio/mpeg"
+        case "mp2", "mp2float": return "audio/mpeg-L2"
+        case "mp1", "mp1float": return "audio/mpeg-L1"
         default: return track.codec.hasPrefix("pcm") ? "audio/raw" : "audio/\(track.codec)"
         }
     }
