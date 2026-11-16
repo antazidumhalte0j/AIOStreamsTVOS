@@ -1294,36 +1294,40 @@ enum BridgeScript {
           return;
         }
         redrawing = 0;
-        // At the top, the stale layer is where the navigation belongs anyway.
-        if (scrollY <= 0) {
-          navRedraws.last = 'skipped: at the top';
-          return;
-        }
-        // The outermost of each: the rail inside the sidebar goes with it.
-        const navs = [...document.querySelectorAll(NAV_SIDE)].filter(
-          (el) => !el.parentElement?.closest(NAV_SIDE) && getComputedStyle(el).position === 'fixed'
-        );
-        if (!navs.length) {
-          navRedraws.last = 'skipped: no fixed navigation';
-          return;
-        }
-        navRedraws.ran += 1;
-        navRedraws.last = `hid ${navs.map((el) => el.dataset.ui).join(', ')} at scrollY ${Math.round(scrollY)}`;
-        // Hiding the element with focus would drop it; the settings toggle has it, as a rule.
-        const focused = document.activeElement;
-        const hadFocus = navs.some((el) => el.contains(focused));
-        for (const el of navs) el.style.setProperty('display', 'none', 'important');
-        void html.offsetHeight;
-        const show = () => {
-          for (const el of navs) el.style.removeProperty('display');
-          if (hadFocus && focused?.isConnected) focused.focus({ preventScroll: true });
-        };
-        // Hidden this many frames (at least one, for WebKit to drop the old layer).
-        let frames = Math.max(1, navRedraws.hideFrames);
-        const frame = () => (--frames > 0 ? requestAnimationFrame(frame) : show());
-        requestAnimationFrame(frame);
+        resetNav(navRedraws.hideFrames);
       };
       redrawing = setTimeout(due, navRedraws.afterMs);
+    };
+    /** Hides the navigation this many frames and shows it again, for WebKit to make its layer anew. */
+    const resetNav = (hideFrames) => {
+      // At the top, the stale layer is where the navigation belongs anyway.
+      if (scrollY <= 0) {
+        navRedraws.last = 'skipped: at the top';
+        return;
+      }
+      // The outermost of each: the rail inside the sidebar goes with it.
+      const navs = [...document.querySelectorAll(NAV_SIDE)].filter(
+        (el) => !el.parentElement?.closest(NAV_SIDE) && getComputedStyle(el).position === 'fixed'
+      );
+      if (!navs.length) {
+        navRedraws.last = 'skipped: no fixed navigation';
+        return;
+      }
+      navRedraws.ran += 1;
+      navRedraws.last = `hid ${navs.map((el) => el.dataset.ui).join(', ')} at scrollY ${Math.round(scrollY)}`;
+      // Hiding the element with focus would drop it; the settings toggle has it, as a rule.
+      const focused = document.activeElement;
+      const hadFocus = navs.some((el) => el.contains(focused));
+      for (const el of navs) el.style.setProperty('display', 'none', 'important');
+      void html.offsetHeight;
+      const show = () => {
+        for (const el of navs) el.style.removeProperty('display');
+        if (hadFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+      };
+      // Hidden this many frames (at least one, for WebKit to drop the old layer).
+      let frames = Math.max(1, hideFrames);
+      const frame = () => (--frames > 0 ? requestAnimationFrame(frame) : show());
+      requestAnimationFrame(frame);
     };
     new MutationObserver(() => {
       const now = lookNow();
@@ -1331,6 +1335,38 @@ enum BridgeScript {
       look = now;
       redrawNav();
     }).observe(html, { attributeFilter: LOOK });
+    /*
+     * The same stale layer, with a title page scrolled while its trailer plays behind it: the page's
+     * background is cut with a mask for the video then (upstream's `useVideoHole`, which marks
+     * `data-video-hole` on the root), and WebKit drew the fixed navigation partway down the screen
+     * (see the note on `data-app-color` above). From the page it can't be seen to be out of place
+     * (it lays out at the top), so while a trailer shows, each scroll away from the top resets it.
+     * The hero's trailer cuts the same hole (it isn't `over` the page), so the home page is reset
+     * too while it plays, though it wasn't seen to shift there.
+     * Tried on the TV with scripts/probes/sidebar-trailer-tune.js: hidden one frame, it's shown again
+     * before WebKit draws one, so it never blinks; the timeout only gathers a frame's scroll events
+     * into one reset. Only with a trailer: at every scroll on every page, each reset's layout and
+     * new layer (and Glass's blur) would compete with the rows drawn in as the page scrolls.
+     * `trailerSettleMs` and `trailerHideFrames` can be tried on the TV through `__aioNavRedraws`.
+     */
+    navRedraws.trailerSettleMs = 0;
+    navRedraws.trailerHideFrames = 1;
+    navRedraws.trailerResets = 0;
+    let settling = 0;
+    addEventListener(
+      'scroll',
+      () => {
+        if (!html.hasAttribute('data-video-hole')) return;
+        clearTimeout(settling);
+        settling = setTimeout(() => {
+          settling = 0;
+          if (scrollY <= 0 || !html.hasAttribute('data-video-hole')) return;
+          navRedraws.trailerResets += 1;
+          resetNav(navRedraws.trailerHideFrames);
+        }, navRedraws.trailerSettleMs);
+      },
+      { capture: true, passive: true }
+    );
   } catch {}
 
   /*
