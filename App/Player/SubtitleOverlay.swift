@@ -9,6 +9,9 @@ import UIKit
  * ASS and SSA tracks go to libass (`AssRenderer`), as mpv drew them, with the
  * file's own styles. When the page forces its style on them, libass puts it on
  * their dialogue, as mpv and the Android app do, and signs keep their own.
+ * Text tracks (SubRip, WebVTT) go to libass too, made into ASS with the page's
+ * look forced on them, as the Android app's AssText makes them. The overlay
+ * draws pictures (PGS, DVB, DVD), and ASS lines that came without a header.
  *
  * Cues carry the source's own timestamps, so they're matched against the
  * engine's source clock, less the page's subtitle delay. The page's sizes are
@@ -43,6 +46,14 @@ final class SubtitleOverlay: UIView {
     private lazy var ass = AssRenderer()
     private var assLoaded = false
     private let assView = UIImageView()
+    /**
+     * The selected track is text (SubRip, WebVTT and the like), which libass draws too, made into ASS on a
+     * plain style with the page's look forced on it, as the Android app's AssText does. Known once its cues
+     * come; pictures (PGS, DVB, DVD) stay the overlay's.
+     */
+    private var textTrack = false
+    /// The cues libass has had, by id, so a re-published list costs a lookup for each it has.
+    private var givenIDs = Set<Int>()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -57,8 +68,28 @@ final class SubtitleOverlay: UIView {
 
     func setCues(_ cues: [SubtitleCue]) {
         self.cues = cues
-        if assLoaded { ass.add(Self.events(cues)) }
+        if !rawASS, !textTrack, cues.contains(where: Self.isText), !cues.contains(where: Self.isImage) {
+            textTrack = true
+            updateASS()
+        }
+        if assLoaded { giveCues() }
         refresh()
+    }
+
+    private static func isText(_ cue: SubtitleCue) -> Bool {
+        if case .image = cue.body { return false }
+        return true
+    }
+
+    private static func isImage(_ cue: SubtitleCue) -> Bool { !isText(cue) }
+
+    /// Hands libass the cues it hasn't had, by id, as ASS event lines.
+    private func giveCues() {
+        var events: [SubtitleCueEvent] = []
+        for cue in cues where givenIDs.insert(cue.id).inserted {
+            if let event = rawASS ? Self.event(cue) : Self.assText(cue) { events.append(event) }
+        }
+        if !events.isEmpty { ass.add(events) }
     }
 
     func setTime(_ seconds: Double) {
@@ -82,6 +113,7 @@ final class SubtitleOverlay: UIView {
         assTrackID = id
         rawASS = raw
         assHeader = header
+        textTrack = false
         // Another track's events and styles: start over.
         if assLoaded {
             assLoaded = false
@@ -111,20 +143,23 @@ final class SubtitleOverlay: UIView {
         refresh()
     }
 
-    /// libass draws when the track is ASS with its header, whether or not the page forces its style.
-    private var drawsWithLibass: Bool {
-        rawASS && assHeader != nil
+    /// The header libass draws the track with: an ASS track's own, or the one text is made into ASS on.
+    private var libassHeader: String? {
+        if rawASS { return assHeader }
+        return textTrack ? Self.assTextHeader : nil
     }
 
     /// Loads or drops the libass track to match what should draw it.
     private func updateASS() {
-        if drawsWithLibass, let assHeader {
+        if let header = libassHeader {
             guard !assLoaded else { return }
             assLoaded = true
-            ass.load(header: assHeader)
-            ass.add(Self.events(cues))
+            givenIDs.removeAll()
+            ass.load(header: header)
+            giveCues()
         } else if assLoaded {
             assLoaded = false
+            givenIDs.removeAll()
             ass.unload()
         }
         assView.image = nil
@@ -185,7 +220,8 @@ final class SubtitleOverlay: UIView {
     /**
      * libass draws over the whole view, with the picture's edges as its
      * margins, so a script's positions land on the picture and, cropped, its
-     * dialogue stays on the screen. Pixels at the screen's scale, up to 2.
+     * dialogue stays on the screen. Pixels at the screen's scale, up to 2, and
+     * no more than 1080p's.
      */
     private func renderASS() {
         let picture = videoRect()
@@ -193,10 +229,14 @@ final class SubtitleOverlay: UIView {
             assView.isHidden = true
             return
         }
-        let scale = min(2, max(1, traitCollection.displayScale))
+        // At most a 1080p picture, as the Android app renders: drawn larger, subtitles only cost more to
+        // blend, and the screen scales the picture up.
+        let fits1080p = (Self.maxPixels / Double(bounds.width * bounds.height)).squareRoot()
+        let scale = min(2, max(1, traitCollection.displayScale), max(0.25, CGFloat(fits1080p)))
         func pixels(_ value: CGFloat) -> Int32 { Int32((value * scale).rounded()) }
         let video = videoSize()
-        let forced = look?.forceStyle == true ? forcedStyle() : nil
+        // Text made into ASS always takes the page's look, as the Android app's does.
+        let forced = (look?.forceStyle == true || !rawASS) ? forcedStyle() : nil
         var fontScale = look?.scale ?? 1
         if forced != nil {
             // Sized to the screen rather than the picture, as the text drawing is and as the Android app does
@@ -285,12 +325,102 @@ final class SubtitleOverlay: UIView {
         return red << 24 | green << 16 | blue << 8 | (255 - alpha)
     }
 
-    /// The text cues' event lines, for libass.
-    private static func events(_ cues: [SubtitleCue]) -> [SubtitleCueEvent] {
-        cues.compactMap { cue in
-            guard case .text(let text) = cue.body else { return nil }
-            return SubtitleCueEvent(text: text, start: cue.startTime, end: cue.endTime)
+    /// The Android app's 1080p: what libass draws at most, in pixels.
+    private static let maxPixels = 1920.0 * 1080.0
+
+    /// An ASS cue's event lines, for libass.
+    private static func event(_ cue: SubtitleCue) -> SubtitleCueEvent? {
+        guard case .text(let text) = cue.body else { return nil }
+        return SubtitleCueEvent(text: text, start: cue.startTime, end: cue.endTime)
+    }
+
+    // MARK: Text made into ASS
+
+    /**
+     * The Android app's AssText script: FFmpeg's size for converted text, 384 by 288, and a plain default
+     * style the page's look is forced on. Unplaced lines sit at the bottom, where libass lifts them.
+     */
+    private static let assTextWidth = 384.0
+    private static let assTextHeight = 288.0
+    private static let assTextHeader = """
+        [Script Info]
+        ScriptType: v4.00+
+        PlayResX: 384
+        PlayResY: 288
+        ScaledBorderAndShadow: yes
+        WrapStyle: 0
+
+        [V4+ Styles]
+        Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+        Style: Default,sans-serif,16,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,8,8,14,1
+
+        [Events]
+        Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+
+        """
+
+    /// A text cue as a Matroska ASS event line, its place and styling as override tags.
+    private static func assText(_ cue: SubtitleCue) -> SubtitleCueEvent? {
+        let body: String
+        switch cue.body {
+        case .image:
+            return nil
+        case .text(let text):
+            body = escaped(text)
+        case .richText(let runs):
+            body = tagged(runs)
         }
+        guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let line = "\(cue.id),0,Default,,0,0,0,,\(placement(cue.placement))\(body)"
+        return SubtitleCueEvent(text: line, start: cue.startTime, end: cue.endTime)
+    }
+
+    /// `\an` for a cue placed off the bottom centre, and `\pos` where it names a point.
+    private static func placement(_ placement: SubtitleTextPlacement?) -> String {
+        guard let placement else { return "" }
+        let alignment = placement.alignment.flatMap { (1...9).contains($0) ? $0 : nil } ?? 2
+        if let at = placement.position {
+            let x = String(format: "%.1f", Double(at.x) * assTextWidth)
+            let y = String(format: "%.1f", Double(at.y) * assTextHeight)
+            return "{\\an\(alignment)\\pos(\(x),\(y))}"
+        }
+        return alignment == 2 ? "" : "{\\an\(alignment)}"
+    }
+
+    /// The runs, each change of styling as tags; a colour's end goes back to the style's.
+    private static func tagged(_ runs: [SubtitleTextRun]) -> String {
+        var out = ""
+        var bold = false, italic = false, underline = false, strike = false
+        var color: SubtitleColor?
+        for run in runs {
+            var tags = ""
+            if run.isBold != bold { tags += run.isBold ? "\\b1" : "\\b0"; bold = run.isBold }
+            if run.isItalic != italic { tags += run.isItalic ? "\\i1" : "\\i0"; italic = run.isItalic }
+            if run.isUnderlined != underline { tags += run.isUnderlined ? "\\u1" : "\\u0"; underline = run.isUnderlined }
+            if run.isStruckThrough != strike { tags += run.isStruckThrough ? "\\s1" : "\\s0"; strike = run.isStruckThrough }
+            if run.color != color {
+                tags += run.color.map { String(format: "\\c&H%02X%02X%02X&", $0.b, $0.g, $0.r) } ?? "\\c"
+                color = run.color
+            }
+            if !tags.isEmpty { out += "{\(tags)}" }
+            out += escaped(run.text)
+        }
+        return out
+    }
+
+    /// Text as ASS reads it: line breaks as `\N`, braces escaped, and a backslash kept as text.
+    private static func escaped(_ text: String) -> String {
+        var out = ""
+        for character in text {
+            switch character {
+            case "\n": out += "\\N"
+            case "{", "}": out += "\\" + String(character)
+            // A word joiner, so `\N` or `\h` written in the text stays text.
+            case "\\": out += "\\\u{2060}"
+            default: out.append(character)
+            }
+        }
+        return out
     }
 
     /**
