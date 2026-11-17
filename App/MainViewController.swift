@@ -472,7 +472,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             self.storage.clear()
             // The artwork the app kept and the cache settings it remembered go too; off the main thread,
             // as it deletes files, before the page loads again and sends its defaults.
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 ArtworkCache.reset()
                 DispatchQueue.main.async { [weak self] in
                     self?.web?.removeAllWebData { [weak self] in self?.loadPage() }
@@ -686,7 +686,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             sendToPage(["type": "tvos-artwork-cache-reply", "id": message.number("id") ?? 0, "bytes": ArtworkCache.bytes])
         case "tvos-artwork-cache-clear":
             let id = message.number("id") ?? 0
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 ArtworkCache.clear()
                 DispatchQueue.main.async { [weak self] in
                     self?.sendToPage(["type": "tvos-artwork-cache-reply", "id": id, "bytes": ArtworkCache.bytes])

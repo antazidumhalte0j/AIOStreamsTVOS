@@ -122,7 +122,7 @@ final class AssRenderer: @unchecked Sendable {
         // libass's errors in the log, as the Android app keeps them (levels 0 and 1); its notes, as each
         // font it picks, would fill it.
         ass_set_message_cb(library, { level, format, arguments, _ in
-            guard level <= 1, let format else { return }
+            guard level <= 1, let format, let arguments else { return }
             var text = [CChar](repeating: 0, count: 512)
             let message = text.withUnsafeMutableBufferPointer { buffer -> String in
                 _ = vsnprintf(buffer.baseAddress, buffer.count, format, arguments)
