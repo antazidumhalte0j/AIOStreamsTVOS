@@ -1,8 +1,8 @@
 diff --git a/packages/web/src/app/settings/playback.tsx b/packages/web/src/app/settings/playback.tsx
-index 4b15ab0..5cae2af 100644
+index c63d0c6b7..b0c271d01 100644
 --- a/packages/web/src/app/settings/playback.tsx
 +++ b/packages/web/src/app/settings/playback.tsx
-@@ -422,6 +422,7 @@ export function PlaybackSection() {
+@@ -429,6 +429,7 @@ export function PlaybackSection() {
              value={dolbyVision}
              onValueChange={setDolbyVision}
            />
@@ -10,7 +10,7 @@ index 4b15ab0..5cae2af 100644
            {canUpscale() && <UpscalingSwitch />}
            {appleTv() && <OtherUpscalingSwitch />}
            {androidTv && (
-@@ -540,6 +541,23 @@ function OtherUpscalingSwitch() {
+@@ -577,6 +578,23 @@ function OtherUpscalingSwitch() {
    );
  }
  
@@ -35,7 +35,7 @@ index 4b15ab0..5cae2af 100644
    const [player, setPlayer] = useSetting(settings.player.choice);
    const [link, setLink] = useSetting(settings.player.link);
 diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
-index 5fda57d..e6a8e78 100644
+index 247a2f8b8..1d1c840ac 100644
 --- a/packages/web/src/lib/hosts/shell/player.ts
 +++ b/packages/web/src/lib/hosts/shell/player.ts
 @@ -553,6 +553,8 @@ export function playerSettings() {
@@ -48,10 +48,10 @@ index 5fda57d..e6a8e78 100644
      ...(android
        ? {
 diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
-index 8ee5d70..6fc297d 100644
+index 58403be06..6b1b6a732 100644
 --- a/packages/web/src/lib/settings/index.ts
 +++ b/packages/web/src/lib/settings/index.ts
-@@ -645,6 +645,8 @@ export const settings = {
+@@ -692,6 +692,8 @@ export const settings = {
      upscaling: device<boolean>('aiostreams-web-video-upscaling', false),
      /** The Apple TV app's upscaling of everything that isn't anime (AIOStreamsTVOS). */
      upscalingOther: device<boolean>('aiostreams-web-video-upscaling-other', false),

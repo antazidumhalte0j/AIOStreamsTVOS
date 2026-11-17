@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/app/settings/audio.tsx b/packages/web/src/app/settings/audio.tsx
-index 9e652dbf..e1031b28 100644
+index a26077c5a..835b9bc7b 100644
 --- a/packages/web/src/app/settings/audio.tsx
 +++ b/packages/web/src/app/settings/audio.tsx
 @@ -5,6 +5,7 @@ import { Switch } from '@aiostreams/ui/switch';
@@ -10,7 +10,7 @@ index 9e652dbf..e1031b28 100644
  import { useAudioDevices } from '@/lib/hosts/shell/desktop';
  import { audioTypes, type AudioType } from '@/lib/playback/audio-tracks';
  import {
-@@ -136,7 +137,9 @@ function OutputCard() {
+@@ -138,7 +139,9 @@ function OutputCard() {
    const [formats, setFormats] = useSetting(settings.audio.passthroughFormats);
    const [ac3Encode, setAc3Encode] = useSetting(settings.audio.ac3Encode);
    const info = useShellInfo();
@@ -21,7 +21,7 @@ index 9e652dbf..e1031b28 100644
    return (
      <SettingsCard name="output" title={t`Output`} description={onDevice()}>
        {!android && <AudioDeviceSelect />}
-@@ -150,7 +153,7 @@ function OutputCard() {
+@@ -152,7 +155,7 @@ function OutputCard() {
          value={audioChannels}
          onValueChange={(v) => setAudioChannels(v as AudioChannels)}
        />
@@ -31,7 +31,7 @@ index 9e652dbf..e1031b28 100644
            label={t`Pass surround audio through`}
            help={passthroughHelp(passthrough)}
 diff --git a/packages/web/src/app/settings/page.tsx b/packages/web/src/app/settings/page.tsx
-index 2a61c77a..1c42e094 100644
+index b0dbac65c..44db01e7a 100644
 --- a/packages/web/src/app/settings/page.tsx
 +++ b/packages/web/src/app/settings/page.tsx
 @@ -28,7 +28,7 @@ import { DonationModal } from '@aiostreams/ui/shared/donation-modal';
@@ -54,7 +54,7 @@ index 2a61c77a..1c42e094 100644
            {
              id: 'android',
 diff --git a/packages/web/src/app/settings/playback.tsx b/packages/web/src/app/settings/playback.tsx
-index 2e7bd378..7d7ac74c 100644
+index 3f226d711..86a5ab339 100644
 --- a/packages/web/src/app/settings/playback.tsx
 +++ b/packages/web/src/app/settings/playback.tsx
 @@ -7,6 +7,7 @@ import { TextInput } from '@aiostreams/ui/text-input';
@@ -65,14 +65,14 @@ index 2e7bd378..7d7ac74c 100644
  import {
    shellHost,
    chooseExternalPlayer,
-@@ -147,10 +148,14 @@ export function PlaybackSection() {
-   const [engine] = useSetting(settings.player.engine);
-   const [frameRate, setFrameRate] = useSetting(settings.video.frameRate);
-   const [tunneling, setTunneling] = useSetting(settings.video.tunneling);
--  const androidTv = currentHost().name === 'android-app' && !!currentHost().tv;
+@@ -155,11 +156,14 @@ export function PlaybackSection() {
+   const [gpuSubtitles, setGpuSubtitles] = useSetting(
+     settings.video.gpuSubtitles
+   );
+-  const android = currentHost().name === 'android-app';
 +  // The Apple TV app plays with neither engine, and tvOS matches the frame rate itself.
-+  const androidTv =
-+    currentHost().name === 'android-app' && !!currentHost().tv && !appleTv();
++  const android = currentHost().name === 'android-app' && !appleTv();
+   const androidTv = android && !!currentHost().tv;
    // ExoPlayer decodes with the hardware it picks itself; `auto` may still use mpv.
    const decoding =
 -    shell && !(currentHost().name === 'android-app' && engine === 'exoplayer');
@@ -82,7 +82,7 @@ index 2e7bd378..7d7ac74c 100644
  
    return (
      <>
-@@ -622,7 +627,7 @@ function PlayerCard() {
+@@ -674,7 +678,7 @@ function PlayerCard() {
          )}
        {shellHost() && !launched && !preset && player !== CUSTOM_LINK && (
          <>
@@ -92,10 +92,10 @@ index 2e7bd378..7d7ac74c 100644
                label={t`Engine`}
                help={engineHelp(engine)}
 diff --git a/packages/web/src/lib/hosts/shell/bridge.ts b/packages/web/src/lib/hosts/shell/bridge.ts
-index 23668b87..cc4a302d 100644
+index 39f60cb8d..159d102a7 100644
 --- a/packages/web/src/lib/hosts/shell/bridge.ts
 +++ b/packages/web/src/lib/hosts/shell/bridge.ts
-@@ -197,6 +197,12 @@ interface ShellBridge {
+@@ -202,6 +202,12 @@ interface ShellBridge {
    gamepadButtons?: boolean;
    /** The system's 12- or 24-hour clock, where the app can tell. */
    hours24?: boolean;
@@ -108,7 +108,7 @@ index 23668b87..cc4a302d 100644
    /** The device's name. */
    device: string;
    /** The app's own id for this device, where it keeps one. */
-@@ -215,6 +221,9 @@ export function appBridge(): ShellBridge | undefined {
+@@ -220,6 +226,9 @@ export function appBridge(): ShellBridge | undefined {
    return window.aiostreamsApp;
  }
  
