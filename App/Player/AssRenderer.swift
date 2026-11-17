@@ -40,8 +40,33 @@ final class AssRenderer: @unchecked Sendable {
         var videoWidth: Int32
         var videoHeight: Int32
 
+        /// The page's look, when it forces its style on the file's (mpv's `sub-ass-override=force`); nil keeps the file's.
+        var forced: ForcedStyle?
+
         var pictureWidth: Int32 { frameWidth - left - right }
         var pictureHeight: Int32 { frameHeight - top - bottom }
+    }
+
+    /**
+     * The page's look as libass's override style, as the Android app's ExoPlayer path and mpv force it:
+     * font, sizes, colours, border and blur, on dialogue only. libass leaves an event placed by the script
+     * (`\pos`, `\move` and the like) its own style, so signs keep theirs where the script put them.
+     */
+    struct ForcedStyle: Equatable {
+        /// A family libass finds: the device's through CoreText, or one of the app's (`SubtitleFonts.files`).
+        var fontName: String
+        var bold: Bool
+        /// ASS's colours: `RRGGBBAA`, the alpha byte as transparency.
+        var color: UInt32
+        var outlineColor: UInt32
+        /// The box's colour with a box; the shadow's otherwise, as ASS draws the shadow in it.
+        var backColor: UInt32
+        var boxed: Bool
+        /// In units of a 720-line screen, the page's and the text drawing's own.
+        var fontSize: Double
+        var outline: Double
+        var shadow: Double
+        var margin: Double
     }
 
     enum Output {
@@ -108,11 +133,13 @@ final class AssRenderer: @unchecked Sendable {
         // Fonts a script carries in its own [Fonts] section.
         ass_set_extract_fonts(library, 1)
         // The fonts the file carries as attachments, as mpv gives libass a Matroska's: the signs and
-        // typesetting of anime releases name families only these have. libass copies the bytes.
-        for font in fonts {
+        // typesetting of anime releases name families only these have; and the app's own faces, which the
+        // page's style can force (Casual, Cursive), as tvOS has none of its own. libass copies the bytes.
+        let all = fonts.map { (name: $0.filename, data: $0.data) } + SubtitleFonts.fileData
+        for font in all {
             var bytes = [CChar](repeating: 0, count: font.data.count)
             bytes.withUnsafeMutableBytes { target in _ = font.data.copyBytes(to: target) }
-            font.filename.withCString { name in
+            font.name.withCString { name in
                 let name = strdup(name)
                 defer { free(name) }
                 bytes.withUnsafeMutableBufferPointer { buffer in
@@ -258,6 +285,7 @@ final class AssRenderer: @unchecked Sendable {
             ass_set_use_margins(renderer, layout.useMargins ? 1 : 0)
             ass_set_font_scale(renderer, layout.fontScale)
             ass_set_line_position(renderer, layout.linePosition)
+            override(layout.forced, renderer: renderer)
         }
         var changed: Int32 = 0
         let started = DispatchTime.now().uptimeNanoseconds
@@ -269,6 +297,42 @@ final class AssRenderer: @unchecked Sendable {
                    pixels: composed.map { Int($0.rect.width * $0.rect.height) } ?? 0)
         guard let composed else { return .empty }
         return .frame(composed.image, composed.rect)
+    }
+
+    /// Queue only. The font scale always sizes dialogue alone; forced, the page's look goes on it too.
+    private func override(_ forced: ForcedStyle?, renderer: OpaquePointer) {
+        var bits = ASS_OVERRIDE_BIT_SELECTIVE_FONT_SCALE.rawValue
+        if let forced {
+            bits |= ASS_OVERRIDE_BIT_FONT_NAME.rawValue | ASS_OVERRIDE_BIT_FONT_SIZE_FIELDS.rawValue
+                | ASS_OVERRIDE_BIT_COLORS.rawValue | ASS_OVERRIDE_BIT_BORDER.rawValue
+            // The Android app also forces the blur (ASS_OVERRIDE_BIT_BLUR), which libass 0.17.3 doesn't have.
+            // libass reads the override style as set for a 288-line script, the page's sizes being 720 lines'.
+            let units = 288.0 / 720.0
+            var style = ASS_Style()
+            style.FontSize = forced.fontSize * units
+            style.PrimaryColour = forced.color
+            style.SecondaryColour = forced.color
+            style.OutlineColour = forced.outlineColor
+            style.BackColour = forced.backColor
+            style.Bold = forced.bold ? 1 : 0
+            style.ScaleX = 1
+            style.ScaleY = 1
+            // mpv's outline-and-shadow and background box.
+            style.BorderStyle = forced.boxed ? 4 : 1
+            style.Outline = forced.outline * units
+            style.Shadow = forced.shadow * units
+            style.Alignment = 2
+            let margin = Int32((forced.margin * units).rounded())
+            style.MarginL = margin
+            style.MarginR = margin
+            style.MarginV = margin
+            // libass keeps its own copy of the name.
+            forced.fontName.withCString { name in
+                style.FontName = UnsafeMutablePointer(mutating: name)
+                ass_set_selective_style_override(renderer, &style)
+            }
+        }
+        ass_set_selective_style_override_enabled(renderer, Int32(bits))
     }
 
     // MARK: Timings
