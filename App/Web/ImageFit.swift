@@ -67,9 +67,11 @@ enum ImageFit {
     /**
      * The picture at `source` no wider than `width`, as `done(data, type)`, or `done(nil, nil)`.
      * With `blur`, blurred by that radius in pixels of a picture `width` wide.
+     * A `width` of 0 (`/fit/full`, an address that names none) keeps it as it is: it comes through
+     * here only to be kept in the artwork cache (ArtworkCache).
      */
     static func fit(_ source: URL, width: Int, blur: Double = 0, done: @escaping (Data?, String?) -> Void) {
-        guard ["http", "https"].contains(source.scheme?.lowercased() ?? ""), width > 0 else {
+        guard ["http", "https"].contains(source.scheme?.lowercased() ?? ""), width >= 0 else {
             note(failed: "not a web address")
             return done(nil, nil)
         }
@@ -150,6 +152,8 @@ enum ImageFit {
         let png = (CGImageSourceGetType(source) as String?) == "public.png"
         let type = png ? "image/png" : mime(CGImageSourceGetType(source) as String?)
         let blurring = blur > 0
+        // No width asked: as wide as it is.
+        let width = width > 0 ? width : pixelsWide
         if pixelsWide <= width, !blurring { return (data, type, false) }
         let target = blurring ? max(16, min(width, pixelsWide) / blurShrink) : width
         // ImageIO sizes a thumbnail by its longer side; the width is what's capped.

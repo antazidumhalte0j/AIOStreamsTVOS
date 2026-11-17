@@ -537,7 +537,9 @@ enum BridgeScript {
         try {
           const address = new URL(value);
           const width = parseInt(address.searchParams.get('maxWidth') || address.searchParams.get('fillWidth') || '', 10);
-          return width > 0 ? fitPrefix + width + '?u=' + encodeURIComponent(value) : value;
+          // One whose address names no width comes through the app too, kept as it is (`full`), so
+          // the artwork cache the page's settings decide (ArtworkCache.swift) holds every picture.
+          return fitPrefix + (width > 0 ? width : 'full') + '?u=' + encodeURIComponent(value);
         } catch {
           return value;
         }
@@ -983,7 +985,8 @@ enum BridgeScript {
     let told = '';
     const tell = () => {
       const on = setting(CACHE_ON, true) && setting(CACHE_ARTWORK, true);
-      const limit = Math.max(0, Math.round(setting(CACHE_SIZE, 500) * 1e6 - pageBytes));
+      // In whole megabytes down, so each page the page saves doesn't move it.
+      const limit = Math.max(0, Math.floor((setting(CACHE_SIZE, 500) * 1e6 - pageBytes) / 1e6) * 1e6);
       const message = { type: 'tvos-artwork-cache', on, limit };
       const text = JSON.stringify(message);
       if (text === told) return;

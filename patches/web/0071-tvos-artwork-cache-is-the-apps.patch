@@ -22,7 +22,7 @@ index 7c687f679..288d0ce44 100644
  
  /**
 diff --git a/packages/web/src/lib/cache/index.ts b/packages/web/src/lib/cache/index.ts
-index 1f112a1db..50ff27057 100644
+index 1f112a1db..7f1afa628 100644
 --- a/packages/web/src/lib/cache/index.ts
 +++ b/packages/web/src/lib/cache/index.ts
 @@ -9,6 +9,7 @@ import { isReachable } from '@/lib/jellyfin/connection';
@@ -72,7 +72,7 @@ index 1f112a1db..50ff27057 100644
    return (
      settings.cache.enabled.read() && settings.cache.categories[category].read()
    );
-@@ -76,10 +97,14 @@ export function pruneCache(): Promise<void> {
+@@ -76,12 +97,18 @@ export function pruneCache(): Promise<void> {
        counted = total;
        savedSince -= before;
        for (const id of removed) savedArtwork?.delete(id);
@@ -86,8 +86,12 @@ index 1f112a1db..50ff27057 100644
 +
  export function schedulePrune(bytes: number): void {
    savedSince += bytes;
++  // As it grows, so the app's room and this together stay within Space to use.
++  if (counted !== null) appArtwork()?.pageBytes(counted + savedSince);
    if (counted !== null && counted + savedSince <= maxBytes()) return;
-@@ -232,13 +257,26 @@ export function forgetUser(base: string, userId: string | undefined): void {
+   clearTimeout(pruneTimer);
+   pruneTimer = setTimeout(() => void pruneCache(), 10_000);
+@@ -232,13 +259,26 @@ export function forgetUser(base: string, userId: string | undefined): void {
  export async function clearCategory(category: CacheCategory): Promise<void> {
    if (category === 'account') forgetSavedUsers();
    if (category === 'artwork') savedArtwork = new Set();
