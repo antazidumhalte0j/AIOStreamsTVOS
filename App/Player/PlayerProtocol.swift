@@ -132,6 +132,9 @@ struct PlayerSettings: Equatable {
     /// The page's Dolby Vision profile 7 FEL switch (patches/web/0039): fold such a video's enhancement layer into its curves.
     /// The page sends it false while its Dolby Vision switch is off, and `AetherPlayer.options` checks again.
     var dolbyVisionFel = false
+    /// The page's HDR10 tone mapping (patches/web/0072): the display peak in nits an HDR10 video brighter
+    /// than it is mapped down to, 0 for off (`AetherPlayer.options`).
+    var hdrToneMapNits = 0.0
 }
 
 enum PlayerProtocol {
@@ -220,6 +223,9 @@ enum PlayerProtocol {
         settings.upscaling = message.flag("upscaling") == true
         settings.upscalingAnime = message.flag("upscalingAnime") == true
         settings.dolbyVisionFel = message.flag("dolbyVisionFel") == true
+        // Only the page's own choices; anything else is off.
+        let toneMapNits = message.number("hdrToneMapNits") ?? 0
+        settings.hdrToneMapNits = hdrToneMapPeaks.contains(toneMapNits) ? toneMapNits : 0
         // The page still sends its Cache size (`cacheMb`); the player always buffers as Automatic.
         return settings
     }
@@ -233,6 +239,8 @@ enum PlayerProtocol {
     private static let colourPattern = "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
     private static let languagePattern = "^[A-Za-z0-9-]{1,16}$"
     private static let passthroughFormats: Set<String> = ["ac3", "eac3", "dts", "dts-hd", "truehd"]
+    /// The peaks the page's HDR10 tone mapping offers (`HDR_TONE_MAPS` in patches/web/0072).
+    private static let hdrToneMapPeaks: Set<Double> = [200, 300, 400, 600, 800, 1000, 1500, 2000]
     private static let headerNameCharacters = CharacterSet(
         charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&'*+-.^_`|~"
     )

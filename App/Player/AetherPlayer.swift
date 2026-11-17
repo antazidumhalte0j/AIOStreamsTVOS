@@ -398,6 +398,15 @@ final class AetherPlayer {
         // and the engine pauses it by itself where the TV can't use it (a display without Dolby Vision).
         // The audio stays AVPlayer's, so Atmos objects keep playing.
         options.foldsDolbyVisionFEL = settings.dolbyVision && settings.dolbyVisionFel
+        // The page's HDR10 tone mapping (patches/web/0072), off by default: an HDR10 video whose declared
+        // peak is above the chosen one plays on the engine's software player, each frame tone mapped
+        // (BT.2390) to that peak, and the TV is told it, so it doesn't tone map again (#957, engine 7.68).
+        // That costs AVPlayer's picture-in-picture and plays E-AC-3 Atmos as its bed. Dolby Vision, HDR10+,
+        // HLG, SDR, a title within the peak or without metadata keep their route, and the engine logs one
+        // `[VideoProcessing]` line why. A trailer plays as it is: it's short, and a muted preview in a card.
+        if settings.hdrToneMapNits > 0 && !request.isTrailer {
+            options.videoProcessing = VideoProcessingOptions(targetPeakNits: settings.hdrToneMapNits)
+        }
         // Always Automatic: the page's Cache size is hidden on tvOS (web patch 0030), and a size saved
         // before then is ignored.
         // Automatic buffers 10 minutes ahead, which a remux needs to ride out a slow stretch of the

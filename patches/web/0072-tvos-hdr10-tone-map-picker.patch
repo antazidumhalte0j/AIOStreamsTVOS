@@ -1,0 +1,100 @@
+diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
+index e4c1da48..97089d1b 100644
+--- a/packages/web/src/app/settings/player.tsx
++++ b/packages/web/src/app/settings/player.tsx
+@@ -45,7 +45,9 @@ import {
+   SEEK_STEPS,
+   VOLUME_STEPS,
+   CACHE_SIZES,
++  HDR_TONE_MAPS,
+   type CacheSize,
++  type HdrToneMap,
+   type PlayerBack,
+   type PlayerEngine,
+   type PipWindow,
+@@ -473,6 +475,7 @@ function VideoCard() {
+         />
+       )}
+       {shell && appleTv() && dolbyVision && <DolbyVisionFelSwitch />}
++      {shell && appleTv() && <HdrToneMapSelect />}
+       {(shell ? canUpscale() : webGpu) && (
+         <Switch
+           side="right"
+@@ -590,6 +593,26 @@ function DolbyVisionFelSwitch() {
+   );
+ }
+ 
++/**
++ * The Apple TV app's HDR10 tone mapping (`settings.video.hdrToneMap`, AIOStreamsTVOS): the engine maps an
++ * HDR10 video brighter than the chosen peak down to it. In English only, as the help above.
++ */
++function HdrToneMapSelect() {
++  const [toneMap, setToneMap] = useSetting(settings.video.hdrToneMap);
++  return (
++    <Select
++      label="HDR10 tone mapping"
++      help="Maps HDR10 videos mastered brighter than your TV down to its peak brightness, so highlights keep their detail instead of clipping. Choose the peak your TV reaches. Dolby Vision, HDR10+ and HLG videos, and videos already within the peak, stay as they are. A tone-mapped video has no picture-in-picture and plays Dolby Digital Plus Atmos without its heights."
++      options={HDR_TONE_MAPS.map((v) => ({
++        value: v,
++        label: v === 'off' ? 'Off' : `${v} nits`,
++      }))}
++      value={toneMap}
++      onValueChange={(v) => setToneMap(v as HdrToneMap)}
++    />
++  );
++}
++
+ const videoOutputs = (output: VideoOutput): { label: string; help: string } =>
+   ({
+     mpv: {
+diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
+index 8d8d2a66..40e51064 100644
+--- a/packages/web/src/lib/hosts/shell/player.ts
++++ b/packages/web/src/lib/hosts/shell/player.ts
+@@ -559,6 +559,8 @@ export function playerSettings() {
+       upscalingAnime: upscalingAnime(),
+       // Only with Dolby Vision on: the switch is hidden without it, and a stored choice is ignored.
+       dolbyVisionFel: video.dolbyVision.read() && video.dolbyVisionFel.read(),
++      // The display peak HDR10 videos are tone mapped to, in nits, 0 for off.
++      hdrToneMapNits: Number(video.hdrToneMap.read()) || 0,
+     }),
+     ...(android
+       ? {
+diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
+index 05132030..9260d675 100644
+--- a/packages/web/src/lib/settings/index.ts
++++ b/packages/web/src/lib/settings/index.ts
+@@ -201,6 +201,20 @@ export type AudioChannels = (typeof AUDIO_CHANNELS)[number];
+ export const OBJECT_AUDIO_LAYOUTS = ['7.1.4', '9.1.6'] as const;
+ export type ObjectAudioLayout = (typeof OBJECT_AUDIO_LAYOUTS)[number];
+ 
++/** The display peaks, in nits, the Apple TV app can tone map HDR10 videos to; `off` leaves them as they are. */
++export const HDR_TONE_MAPS = [
++  'off',
++  '200',
++  '300',
++  '400',
++  '600',
++  '800',
++  '1000',
++  '1500',
++  '2000',
++] as const;
++export type HdrToneMap = (typeof HDR_TONE_MAPS)[number];
++
+ /** What plays versions inside the Android app. */
+ /** `auto` is the browser's own player in a browser. */
+ export const PLAYER_ENGINES = [
+@@ -697,6 +711,12 @@ export const settings = {
+     ),
+     /** The Apple TV app folds a Dolby Vision profile 7 FEL video's enhancement layer into its curves (AIOStreamsTVOS). */
+     dolbyVisionFel: device<boolean>('aiostreams-web-video-dolby-vision-fel', false),
++    /** The peak the Apple TV app tone maps brighter HDR10 videos to, in nits, or off (AIOStreamsTVOS). */
++    hdrToneMap: device<HdrToneMap>(
++      'aiostreams-web-video-hdr-tone-map',
++      'off',
++      HDR_TONE_MAPS
++    ),
+     hdrOutput: device<boolean>('aiostreams-web-video-hdr-output', false),
+   },
+   audio: {

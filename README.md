@@ -256,6 +256,14 @@ closes first, Back stops the test video, and the menu reports on it as on any vi
   route, so Atmos objects keep playing. The fold holds a group of pictures back, so a start or a
   seek is 0.5 to 4 s slower on an Apple TV 4K (AE#1018), and the engine pauses it by itself on a
   TV without Dolby Vision; profile 7 MEL and other profiles play as before.
+- **HDR10 tone mapping** (Settings › Player › Video, Off by default, or 200, 300, 400, 600, 800,
+  1000, 1500 or 2000 nits, from the next video; `patches/web/0072-tvos-hdr10-tone-map-picker.patch`): an
+  HDR10 video whose declared peak is above the chosen one plays on the engine's software player,
+  each frame tone mapped (BT.2390) to that peak, with HDR10 metadata that says it, so the TV doesn't
+  tone map a second time (AetherEngine's `LoadOptions.videoProcessing`, #957). Such a video has no
+  AVPlayer picture-in-picture and plays E-AC-3 Atmos as its channel bed. Dolby Vision, HDR10+, HLG,
+  SDR, trailers, and titles within the peak or without metadata keep their route; the engine logs
+  one `[VideoProcessing]` line why, and turns the tone map off for a video the Apple TV falls behind on.
 
 ### Subtitles
 
