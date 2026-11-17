@@ -34,6 +34,12 @@ final class AssRenderer: @unchecked Sendable {
         /// picture that dialogue without a position of its own moves up from the bottom, 0 leaving it.
         var linePosition: Double
 
+        /// The video's own size, as it's stored (anamorphic too), as mpv and the Android app give libass its
+        /// storage size: `\blur`, and borders and shadows with `ScaledBorderAndShadow: no`, scale from it.
+        /// 0 when not known yet: the picture's size on screen stands in.
+        var videoWidth: Int32
+        var videoHeight: Int32
+
         var pictureWidth: Int32 { frameWidth - left - right }
         var pictureHeight: Int32 { frameHeight - top - bottom }
     }
@@ -88,6 +94,17 @@ final class AssRenderer: @unchecked Sendable {
             NSLog("[subtitles] libass did not start")
             return
         }
+        // libass's errors in the log, as the Android app keeps them (levels 0 and 1); its notes, as each
+        // font it picks, would fill it.
+        ass_set_message_cb(library, { level, format, arguments, _ in
+            guard level <= 1, let format else { return }
+            var text = [CChar](repeating: 0, count: 512)
+            let message = text.withUnsafeMutableBufferPointer { buffer -> String in
+                _ = vsnprintf(buffer.baseAddress, buffer.count, format, arguments)
+                return String(cString: buffer.baseAddress!)
+            }
+            NSLog("[subtitles] libass: %@", message)
+        }, nil)
         // Fonts a script carries in its own [Fonts] section.
         ass_set_extract_fonts(library, 1)
         // The fonts the file carries as attachments, as mpv gives libass a Matroska's: the signs and
@@ -233,19 +250,52 @@ final class AssRenderer: @unchecked Sendable {
         if applied != layout {
             applied = layout
             ass_set_frame_size(renderer, layout.frameWidth, layout.frameHeight)
-            // The picture's own size, so libass keeps the script's aspect ratio.
-            ass_set_storage_size(renderer, layout.pictureWidth, layout.pictureHeight)
+            // The video's own size; libass works the pixel aspect out from it and the picture's place.
+            let stored = layout.videoWidth > 0 && layout.videoHeight > 0
+            ass_set_storage_size(renderer, stored ? layout.videoWidth : layout.pictureWidth,
+                                 stored ? layout.videoHeight : layout.pictureHeight)
             ass_set_margins(renderer, layout.top, layout.bottom, layout.left, layout.right)
             ass_set_use_margins(renderer, layout.useMargins ? 1 : 0)
             ass_set_font_scale(renderer, layout.fontScale)
             ass_set_line_position(renderer, layout.linePosition)
         }
         var changed: Int32 = 0
+        let started = DispatchTime.now().uptimeNanoseconds
         let images = ass_render_frame(renderer, track, milliseconds, &changed)
         if changed == 0 { return .unchanged }
-        guard let composed = Self.compose(images) else { return .empty }
+        let rendered = DispatchTime.now().uptimeNanoseconds
+        let composed = Self.compose(images)
+        noteTiming(render: rendered - started, compose: DispatchTime.now().uptimeNanoseconds - rendered,
+                   pixels: composed.map { Int($0.rect.width * $0.rect.height) } ?? 0)
+        guard let composed else { return .empty }
         return .frame(composed.image, composed.rect)
     }
+
+    // MARK: Timings
+
+    /// Queue only: the slowest frame since the last report, and how many went over a frame's time.
+    private var slowest: (render: UInt64, compose: UInt64, pixels: Int) = (0, 0, 0)
+    private var slowFrames = 0
+    private var reportedAt: UInt64 = 0
+
+    /**
+     * Logs the frames libass and the blend took longer than a 24 Hz frame over (`[subtitles] slow`), at
+     * most every 10 s, so heavy typesetting shows in the log as which part costs, before any of it
+     * moves to the GPU, as the Android app counts its renders and blends.
+     */
+    private func noteTiming(render: UInt64, compose: UInt64, pixels: Int) {
+        guard render + compose > Self.slowNanos else { return }
+        slowFrames += 1
+        if render + compose > slowest.render + slowest.compose { slowest = (render, compose, pixels) }
+        let now = DispatchTime.now().uptimeNanoseconds
+        guard now - reportedAt > 10_000_000_000 else { return }
+        reportedAt = now
+        NSLog("[subtitles] slow: \(slowFrames) frames over \(Self.slowNanos / 1_000_000) ms; slowest libass \(slowest.render / 1_000_000) ms, blend \(slowest.compose / 1_000_000) ms, \(slowest.pixels / 1000)k pixels")
+        slowFrames = 0
+        slowest = (0, 0, 0)
+    }
+
+    private static let slowNanos: UInt64 = 42_000_000
 
     /**
      * Lays libass's pieces (shadows, outlines, then fills, each an alpha mask

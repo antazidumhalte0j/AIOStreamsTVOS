@@ -19,6 +19,8 @@ import UIKit
 final class SubtitleOverlay: UIView {
     /// The rectangle the picture fills, in this view's coordinates.
     var videoRect: @MainActor () -> CGRect = { .zero }
+    /// The video's own size in its pixels, as it's stored; zero when not known.
+    var videoSize: @MainActor () -> CGSize = { .zero }
 
     /// Seconds; positive shows them later, as mpv's `sub-delay`.
     var delay: Double = 0 {
@@ -193,6 +195,7 @@ final class SubtitleOverlay: UIView {
         }
         let scale = min(2, max(1, traitCollection.displayScale))
         func pixels(_ value: CGFloat) -> Int32 { Int32((value * scale).rounded()) }
+        let video = videoSize()
         let layout = AssRenderer.Layout(
             frameWidth: pixels(bounds.width),
             frameHeight: pixels(bounds.height),
@@ -205,7 +208,9 @@ final class SubtitleOverlay: UIView {
             fontScale: (look?.scale ?? 1) * 0.8 * Double(Self.textScale),
             // The page's Height, and its lift above the controls while they show, as for text. libass takes
             // 0 to 100 up from the bottom; below the usual place stays at it, as libass moves only up.
-            linePosition: min(100, max(0, 100 - (look?.position ?? 100)))
+            linePosition: min(100, max(0, 100 - (look?.position ?? 100))),
+            videoWidth: Int32(max(0, min(16384, video.width.rounded()))),
+            videoHeight: Int32(max(0, min(16384, video.height.rounded())))
         )
         let milliseconds = Int64(((time - delay) * 1000).rounded())
         ass.render(at: milliseconds, layout: layout) { [weak self] output in
