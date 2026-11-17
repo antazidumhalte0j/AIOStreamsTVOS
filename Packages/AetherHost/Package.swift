@@ -7,26 +7,26 @@ import PackageDescription
  * its FFmpeg build with it, and the app is tested against one.
  *
  * The commit is on the app's fork (mickey2266/AetherEngine, branch
- * `aiostreams-7.69.0`): upstream 7.69.0 plus the fork's own commits, replayed
- * from `aiostreams-7.67.1` unchanged (their hashes there in brackets).
- * - 0ccbd419 (34b3feee): the engine's software player (interlaced H.264 and the like)
+ * `aiostreams-7.70.0`): upstream 7.70.0 plus the fork's own commits, replayed
+ * from `aiostreams-7.69.0` unchanged (their hashes there in brackets).
+ * - 5b77bc8a (0ccbd419): the engine's software player (interlaced H.264 and the like)
  *   labelled 7.1 MPEG_7_1_C, which put the side and rear surrounds in each
  *   other's speakers; it now labels it WAVE_7_1 (Dolby's TrueHD 7.1 channel
  *   check on a Samsung HW-Q990F). The AVPlayer route's FLAC bridge was right
  *   as upstream has it.
- * - bdc30694 (6ed1c261): for remuxes, a 64 MB read-ahead window and 128 MB ranges (were
+ * - 066241dc (bdc30694): for remuxes, a 64 MB read-ahead window and 128 MB ranges (were
  *   16 MB and 32 MB); a connection the reader waits on for 8 s below the
  *   video's mean rate is replaced (3 in a row, then the check rests 2
  *   minutes); `confirmsAtmosOnHeldSourceConnection`, so the Atmos
  *   confirmation runs on the held connection the app uses by default.
- * - 638cbab7 (23d16fd2): the silent Atmos stream the engine plays beside a rendered
+ * - 61f95f45 (638cbab7): the silent Atmos stream the engine plays beside a rendered
  *   TrueHD Atmos or DTS:X bed stops while the picture-in-picture window
  *   shows, as the bed played nothing in the window beside it.
- * - 1f989285 (1e192e6b): a forward seek past the read-ahead is read through the live
+ * - a34f7bc6 (1f989285): a forward seek past the read-ahead is read through the live
  *   connection up to what the link delivers in a new request's first-byte time
  *   (8 to 32 MB, was a fixed 8 MB); `prefetchLandings(atSeconds:)`, which holds
  *   the bytes a skip lands on ahead of the skip, from the page's skip segments.
- * - 67810a54 (22806ef1): a VOD `.m3u8` / `.m3u` whose loopback open fails, for any
+ * - 915a7a3b (67810a54): a VOD `.m3u8` / `.m3u` whose loopback open fails, for any
  *   reason but the origin's refusal, takes the AE#154 reroute onto AVPlayer. Apple's trailer CDN
  *   (play-edge.itunes.apple.com) answers its playlist differently each time, so the reader caught it
  *   "answering byte ranges with other bytes" (or FFmpeg read invalid data) before it saw `#EXTM3U`.
@@ -49,7 +49,7 @@ let package = Package(
         .library(name: "AetherHost", targets: ["AetherHost"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mickey2266/AetherEngine", revision: "67810a548fd94622404236f8c8a035b38a8b1809",
+        .package(url: "https://github.com/mickey2266/AetherEngine", revision: "915a7a3b20d46ba0e4e5f101bb30390bdb97dd50",
                  traits: ["TrueHDObjectAudio", "DTSXObjectAudio", "DolbyVisionFelCurves"]),
     ],
     targets: [
