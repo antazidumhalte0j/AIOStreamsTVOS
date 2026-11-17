@@ -49,4 +49,11 @@ enum ArtworkCache {
         ImageFit.forgetKept()
         NSLog("[artwork] cache cleared")
     }
+
+    /// As the app's data is reset: everything kept goes, and the settings go back to the page's defaults.
+    static func reset() {
+        UserDefaults.standard.removeObject(forKey: settingsKey)
+        disk.diskCapacity = defaultLimit
+        clear()
+    }
 }

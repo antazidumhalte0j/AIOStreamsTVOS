@@ -470,7 +470,14 @@ final class MainViewController: UIViewController, RemoteReceiver {
         confirm.addAction(UIAlertAction(title: "Reset", style: .destructive) { [weak self] _ in
             guard let self else { return }
             self.storage.clear()
-            self.web?.removeAllWebData { [weak self] in self?.loadPage() }
+            // The artwork the app kept and the cache settings it remembered go too; off the main thread,
+            // as it deletes files, before the page loads again and sends its defaults.
+            DispatchQueue.global(qos: .userInitiated).async {
+                ArtworkCache.reset()
+                DispatchQueue.main.async { [weak self] in
+                    self?.web?.removeAllWebData { [weak self] in self?.loadPage() }
+                }
+            }
         })
         confirm.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
             self?.web?.focusPage()
