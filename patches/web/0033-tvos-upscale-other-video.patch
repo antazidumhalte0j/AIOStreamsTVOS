@@ -1,16 +1,16 @@
-diff --git a/packages/web/src/app/settings/playback.tsx b/packages/web/src/app/settings/playback.tsx
-index 61b30b318..c63d0c6b7 100644
---- a/packages/web/src/app/settings/playback.tsx
-+++ b/packages/web/src/app/settings/playback.tsx
-@@ -430,6 +430,7 @@ export function PlaybackSection() {
-             onValueChange={setDolbyVision}
-           />
-           {canUpscale() && <UpscalingSwitch />}
-+          {appleTv() && <OtherUpscalingSwitch />}
-           {androidTv && (
-             <Switch
-               side="right"
-@@ -559,6 +560,23 @@ function UpscalingSwitch() {
+diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
+index 34ce75a09..81dc1cc5a 100644
+--- a/packages/web/src/app/settings/player.tsx
++++ b/packages/web/src/app/settings/player.tsx
+@@ -487,6 +487,7 @@ function VideoCard() {
+           onValueChange={setUpscaling}
+         />
+       )}
++      {appleTv() && <OtherUpscalingSwitch />}
+       {info?.superResolution && (
+         <Switch
+           side="right"
+@@ -554,6 +555,23 @@ function VideoCard() {
    );
  }
  
@@ -31,9 +31,9 @@ index 61b30b318..c63d0c6b7 100644
 +  );
 +}
 +
- function PlayerCard() {
-   const [player, setPlayer] = useSetting(settings.player.choice);
-   const [link, setLink] = useSetting(settings.player.link);
+ const videoOutputs = (output: VideoOutput): { label: string; help: string } =>
+   ({
+     mpv: {
 diff --git a/packages/web/src/lib/playback/upscaling.ts b/packages/web/src/lib/playback/upscaling.ts
 index 8ae6a20c0..16f93ee7f 100644
 --- a/packages/web/src/lib/playback/upscaling.ts
@@ -64,15 +64,15 @@ index 8ae6a20c0..16f93ee7f 100644
  export function pickUpscaling(on: boolean): void {
    picked = on;
 diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
-index 5cc803263..58403be06 100644
+index 73f25b7f9..60b98652b 100644
 --- a/packages/web/src/lib/settings/index.ts
 +++ b/packages/web/src/lib/settings/index.ts
-@@ -690,6 +690,8 @@ export const settings = {
+@@ -689,6 +689,8 @@ export const settings = {
      ),
      gpuSubtitles: device<boolean>('aiostreams-web-video-gpu-subtitles', true),
      upscaling: device<boolean>('aiostreams-web-video-upscaling', false),
 +    /** The Apple TV app's upscaling of everything that isn't anime (AIOStreamsTVOS). */
 +    upscalingOther: device<boolean>('aiostreams-web-video-upscaling-other', false),
-     hdrOutput: device<boolean>('aiostreams-web-video-hdr-output', false),
-   },
-   audio: {
+     superResolution: device<boolean>(
+       'aiostreams-web-video-super-resolution',
+       false
