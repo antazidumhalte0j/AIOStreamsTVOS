@@ -300,6 +300,11 @@ final class SubtitleOverlay: UIView {
         let color = Self.assColor(look?.color, default: 0xFFFF_FFFF)
         let outline = Self.assColor(look?.outlineColor, default: 0xFF00_0000)
         let boxed = look?.box == true
+        // libass sizes a font by its whole line (ascender to descender), as VSFilter does, where the text
+        // drawing sizes its em: the same size reads about a sixth smaller there, so it's made up here.
+        let face = SubtitleFonts.font(look?.font, size: 100, bold: false, italic: false)
+            ?? UIFont(name: "HelveticaNeue", size: 100)
+        let line = face.map { Double(($0.ascender - $0.descender) / $0.pointSize) } ?? 1
         return AssRenderer.ForcedStyle(
             fontName: SubtitleFonts.family(look?.font),
             bold: look?.bold == true,
@@ -307,7 +312,7 @@ final class SubtitleOverlay: UIView {
             outlineColor: outline,
             backColor: boxed ? Self.assColor(look?.backColor, default: 0x0000_0000) : outline,
             boxed: boxed,
-            fontSize: Double(Self.fontUnits),
+            fontSize: Double(Self.fontUnits) * min(1.5, max(1, line)),
             outline: look?.outlineSize ?? 1.65,
             shadow: look?.shadowSize ?? 0,
             margin: Double(Self.marginUnits)
