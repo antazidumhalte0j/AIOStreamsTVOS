@@ -1352,6 +1352,49 @@ enum BridgeScript {
     navRedraws.trailerSettleMs = 0;
     navRedraws.trailerHideFrames = 1;
     navRedraws.trailerResets = 0;
+    /*
+     * Without a trailer, on the home page (the hero) and a title page, once: the scroll that leaves
+     * the top resets the navigation as it comes to rest, so its layer is made anew where the page now
+     * stands. The rest of the page's scrolls don't. `leaveTopSettleMs` is how long no scroll counts
+     * as rest, as a keyed scroll is WebKit's own smooth one over several frames.
+     */
+    navRedraws.leaveTopSettleMs = 150;
+    navRedraws.leaveTopResets = 0;
+    // The home page or a title page, by the route's first part, as upstream's `artPageOf` reads it.
+    const heroOrTitle = () => {
+      const page = (location.hash.slice(1).split('?')[0] || '/').split('/')[1] || '';
+      return page === '' || page === 'item';
+    };
+    let atTop = scrollY <= 0;
+    let leftTop = false;
+    let resting = 0;
+    addEventListener(
+      'scroll',
+      () => {
+        if (scrollY <= 0) {
+          atTop = true;
+          leftTop = false;
+          clearTimeout(resting);
+          return;
+        }
+        if (atTop) {
+          atTop = false;
+          leftTop = heroOrTitle();
+        }
+        if (!leftTop) return;
+        clearTimeout(resting);
+        resting = setTimeout(() => {
+          resting = 0;
+          if (!leftTop || scrollY <= 0 || !heroOrTitle()) return;
+          leftTop = false;
+          // A trailer's own resets below already cover this scroll.
+          if (html.hasAttribute('data-video-hole')) return;
+          navRedraws.leaveTopResets += 1;
+          resetNav(navRedraws.trailerHideFrames);
+        }, navRedraws.leaveTopSettleMs);
+      },
+      { capture: true, passive: true }
+    );
     let settling = 0;
     addEventListener(
       'scroll',
