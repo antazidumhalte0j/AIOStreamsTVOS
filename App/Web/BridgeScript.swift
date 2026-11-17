@@ -852,6 +852,25 @@ enum BridgeScript {
   const listeners = new Set();
   const post = (message) => handler.postMessage(JSON.stringify(message));
   /*
+   * A web link the page opens in a new window (Donate, About's links and credits, Account's
+   * configuration page, any other): a TV has no browser, and WebKit opened no window for it, so it
+   * went nowhere. The app shows it as a QR code for a phone instead (`tvos-open-link`, LinkScreen).
+   * Anything else goes to WebKit's own as before.
+   */
+  try {
+    const openWindow = window.open;
+    window.open = function (url, ...rest) {
+      try {
+        const address = new URL(String(url ?? ''), location.href);
+        if (address.protocol === 'http:' || address.protocol === 'https:') {
+          post({ type: 'tvos-open-link', url: address.href });
+          return null;
+        }
+      } catch {}
+      return openWindow.call(this, url, ...rest);
+    };
+  } catch {}
+  /*
    * A `player-frame` is in the page's pixels times its viewport scale (the page's `unzoomed`). The page
    * asks a TV for a 1280-wide viewport, and whether WebKit scales that up to the screen is WebKit's to
    * say, so the page's width in the same measure goes with it: the app maps the frame by the web

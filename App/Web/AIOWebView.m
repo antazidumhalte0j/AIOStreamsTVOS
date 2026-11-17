@@ -163,8 +163,9 @@ static NSString *AIOMimeType(NSString *extension) {
     BOOL mainFrame = frame && ((BOOL (*)(id, SEL))objc_msgSend)(frame, NSSelectorFromString(@"isMainFrame"));
     BOOL ours = [scheme isEqualToString:self.scheme] ||
                 [@[@"about", @"data", @"blob"] containsObject:scheme];
-    // Frames such as trailers load; the page itself never leaves, as a TV has no browser.
-    BOOL embedded = !mainFrame && ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]);
+    // Frames such as trailers load; the page itself never leaves, as a TV has no browser. A link
+    // for a new window has no frame at all: it goes to the app, which shows it as a QR code.
+    BOOL embedded = frame && !mainFrame && ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]);
     if (ours || embedded) {
         decisionHandler(1);  // WKNavigationActionPolicyAllow
         return;

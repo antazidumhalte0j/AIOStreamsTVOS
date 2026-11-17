@@ -559,12 +559,20 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private func open(_ url: URL) {
         let scheme = url.scheme?.lowercased() ?? ""
         if scheme == "aiostreams" { return receiveLink(url.absoluteString) }
-        // A TV has no browser for a web link.
-        if scheme == "http" || scheme == "https" { return }
+        // A TV has no browser for a web link: it shows as a QR code to open on a phone.
+        if scheme == "http" || scheme == "https" { return showLink(url) }
         UIApplication.shared.open(url) { [weak self] opened in
             guard !opened else { return }
             self?.flashStatus("Couldn't open the player. Check that the app for \(scheme):// links is installed.")
         }
+    }
+
+    /// A web link the page opened, as a QR code and its address (`LinkScreen`).
+    private func showLink(_ url: URL) {
+        guard presentedViewController == nil else { return }
+        let screen = LinkScreen(url: url)
+        screen.closed = { [weak self] in self?.web?.focusPage() }
+        present(screen, animated: true)
     }
 
     /// From the system, or a link in the page.
@@ -611,6 +619,12 @@ final class MainViewController: UIViewController, RemoteReceiver {
         case "tvos-pip":
             // The player's picture-in-picture button, which the bridge script adds.
             pip?.start()
+        case "tvos-open-link":
+            // A web link the page opened in a new window (BridgeScript's `window.open`), as a QR code.
+            if let text = message.text("url"), let url = URL(string: text),
+               ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                showLink(url)
+            }
         case "player-frame":
             // The page's mini player docked in a preview, or a trailer playing by itself in a card, the hero
             // or a title page: the video in that box, or the whole screen again for none (VideoStage).
