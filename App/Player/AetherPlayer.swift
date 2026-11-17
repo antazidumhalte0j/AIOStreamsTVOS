@@ -1340,11 +1340,7 @@ final class AetherPlayer {
                 let track = index.flatMap { id in tracks.first { $0.id == id } }
                 let isASS = track.map { ["ass", "ssa"].contains($0.codec.lowercased()) } ?? false
                 let header = track.flatMap { $0.isExternal ? sidecarHeader : $0.assHeader }
-                // The text libass draws as the Android app's does: SubRip and WebVTT, whose lines merge rather
-                // than take each other's place (its drawnByLibass). mov_text, teletext and captions stay the
-                // overlay's own text drawing, as they stay Media3's view there.
-                let mergingText = track.map { ["subrip", "srt", "webvtt", "vtt"].contains($0.codec.lowercased()) } ?? false
-                self?.subtitles.setASSTrack(id: index, raw: isASS || header != nil, header: header, libassText: mergingText)
+                self?.subtitles.setASSTrack(id: index, raw: isASS || header != nil, header: header)
             }
             .store(in: &watching)
         Publishers.CombineLatest(engine.$audioTracks, engine.$subtitleTracks)

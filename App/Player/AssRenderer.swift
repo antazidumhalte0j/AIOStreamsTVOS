@@ -6,8 +6,7 @@ import UIKit
 
 /**
  * libass drawing an ASS/SSA track, as mpv and the Android app's ExoPlayer path draw them: the file's
- * styles, positioning, animation, karaoke, drawings and fonts. Text tracks (SubRip, WebVTT) come here too,
- * made into ASS by the overlay (`SubtitleOverlay.assText`), as the Android app's AssText does.
+ * styles, positioning, animation, karaoke, drawings and fonts. Text tracks stay the overlay's own drawing.
  *
  * The engine hands over the track's header (`[Script Info]` and
  * `[V4+ Styles]`) and its events as Matroska event lines
@@ -41,8 +40,7 @@ final class AssRenderer: @unchecked Sendable {
         var videoWidth: Int32
         var videoHeight: Int32
 
-        /// The page's look, when it forces its style on the file's (mpv's `sub-ass-override=force`), and
-        /// always on text made into ASS; nil keeps the file's.
+        /// The page's look, when it forces its style on the file's (mpv's `sub-ass-override=force`); nil keeps the file's.
         var forced: ForcedStyle?
 
         var pictureWidth: Int32 { frameWidth - left - right }
