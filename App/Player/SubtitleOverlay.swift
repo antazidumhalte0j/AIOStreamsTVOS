@@ -52,6 +52,8 @@ final class SubtitleOverlay: UIView {
      * come; pictures (PGS, DVB, DVD) stay the overlay's.
      */
     private var textTrack = false
+    /// The selected track is SubRip or WebVTT, the text the Android app has libass draw (its drawnByLibass).
+    private var textForLibass = false
     /// The cues libass has had, by id, so a re-published list costs a lookup for each it has.
     private var givenIDs = Set<Int>()
 
@@ -68,7 +70,7 @@ final class SubtitleOverlay: UIView {
 
     func setCues(_ cues: [SubtitleCue]) {
         self.cues = cues
-        if !rawASS, !textTrack, cues.contains(where: Self.isText), !cues.contains(where: Self.isImage) {
+        if textForLibass, !rawASS, !textTrack, cues.contains(where: Self.isText), !cues.contains(where: Self.isImage) {
             textTrack = true
             updateASS()
         }
@@ -108,11 +110,12 @@ final class SubtitleOverlay: UIView {
      * The selected track, as far as drawing goes: `raw` when the engine hands
      * its events over as ASS event lines, and the header that styles them.
      */
-    func setASSTrack(id: Int?, raw: Bool, header: String?) {
-        guard id != assTrackID || raw != rawASS || header != assHeader else { return }
+    func setASSTrack(id: Int?, raw: Bool, header: String?, libassText: Bool = false) {
+        guard id != assTrackID || raw != rawASS || header != assHeader || libassText != textForLibass else { return }
         assTrackID = id
         rawASS = raw
         assHeader = header
+        textForLibass = libassText
         textTrack = false
         // Another track's events and styles: start over.
         if assLoaded {
