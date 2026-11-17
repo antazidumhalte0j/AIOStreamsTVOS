@@ -9,9 +9,9 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
-# The AIOStreams commit the patches are made against (main on 2026-11-17, after v2.38.1); a branch,
+# The AIOStreams commit the patches are made against (main on 2026-11-17, Android 0.16.0); a branch,
 # a tag or another commit in AIOSTREAMS_REF tries another.
-ref="${AIOSTREAMS_REF:-d470380cc2cb37c7841e4626b2840363193b7954}"
+ref="${AIOSTREAMS_REF:-f070797ca93bd977c4a47f58c4150c4bebd0027b}"
 repo="${AIOSTREAMS_REPO:-https://github.com/Viren070/AIOStreams.git}"
 src="${AIOSTREAMS_DIR:-}"
 
