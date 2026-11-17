@@ -515,10 +515,8 @@ enum BridgeScript {
       return watchAnimation(animate.call(this, keyframes, options));
     };
   } catch {}
-  // The page's saved copies of artwork come back as blob URLs too.
-  try {
-    localStorage.setItem('aiostreams-web-cache-artwork', 'false');
-  } catch {}
+  // The page's saved copies of artwork come back as blob URLs too, so the app keeps artwork itself and
+  // the page's Artwork switch decides that cache (`__aioArtworkCache` below, patches/web/0071).
 
   /*
    * Every picture at the width the page asked for it. Each artwork address names the width it's
@@ -950,6 +948,97 @@ enum BridgeScript {
       clear.call(this);
       if (local(this)) send({ type: 'tvos-storage', origin, clear: true });
     };
+  } catch {}
+
+  /*
+   * The app's artwork cache, which the page's Settings > Cache decides (ArtworkCache.swift): the page's
+   * own saved artwork comes back as blob URLs, which this WebKit doesn't draw, so the page saves none
+   * (patches/web/0071) and the app keeps what it fetches. Its "Save what you browse" and Artwork
+   * switches turn the app's on and off, and "Space to use", less what the page saves itself, is the
+   * room it has. The page asks through `__aioArtworkCache` for the bytes kept, for its Artwork row,
+   * and to clear it, with Artwork's Clear and "Clear everything".
+   */
+  try {
+    const CACHE_ON = 'aiostreams-web-cache';
+    const CACHE_ARTWORK = 'aiostreams-web-cache-artwork';
+    const CACHE_SIZE = 'aiostreams-web-cache-size';
+    // Builds before this one kept the Artwork switch off, as the page's copies don't draw here: put
+    // back to the page's default once, now that it means the app's cache.
+    const LINKED = 'aiostv-artwork-cache-linked';
+    if (localStorage.getItem(LINKED) === null) {
+      localStorage.removeItem(CACHE_ARTWORK);
+      localStorage.setItem(LINKED, '1');
+    }
+    // As the page's device settings keep them: JSON, and absent at the default.
+    const setting = (key, fallback) => {
+      try {
+        const raw = localStorage.getItem(key);
+        const value = raw === null ? fallback : JSON.parse(raw);
+        return typeof value === typeof fallback ? value : fallback;
+      } catch {
+        return fallback;
+      }
+    };
+    let pageBytes = 0;
+    let told = '';
+    const tell = () => {
+      const on = setting(CACHE_ON, true) && setting(CACHE_ARTWORK, true);
+      const limit = Math.max(0, Math.round(setting(CACHE_SIZE, 500) * 1e6 - pageBytes));
+      const message = { type: 'tvos-artwork-cache', on, limit };
+      const text = JSON.stringify(message);
+      if (text === told) return;
+      told = text;
+      post(message);
+    };
+    const proto = Storage.prototype;
+    const { setItem, removeItem, clear } = proto;
+    const watched = (key) => key === CACHE_ON || key === CACHE_ARTWORK || key === CACHE_SIZE;
+    proto.setItem = function (key, value) {
+      setItem.call(this, key, value);
+      if (watched(String(key))) tell();
+    };
+    proto.removeItem = function (key) {
+      removeItem.call(this, key);
+      if (watched(String(key))) tell();
+    };
+    proto.clear = function () {
+      clear.call(this);
+      tell();
+    };
+    // Each request's answer (`tvos-artwork-cache-reply`), by its id; none in 3 s counts as nothing kept.
+    let asked = 0;
+    const waiting = new Map();
+    listeners.add((message) => {
+      if (!message || message.type !== 'tvos-artwork-cache-reply') return;
+      const done = waiting.get(message.id);
+      if (done) done(Number(message.bytes) || 0);
+    });
+    const ask = (type) =>
+      new Promise((resolve) => {
+        const id = ++asked;
+        const timer = setTimeout(() => finish(0), 3000);
+        const finish = (bytes) => {
+          clearTimeout(timer);
+          waiting.delete(id);
+          resolve(bytes);
+        };
+        waiting.set(id, finish);
+        post({ type, id });
+      });
+    Object.defineProperty(window, '__aioArtworkCache', {
+      value: Object.freeze({
+        /** The bytes the app keeps. */
+        bytes: () => ask('tvos-artwork-cache-usage'),
+        /** Clears it all. */
+        clear: () => ask('tvos-artwork-cache-clear').then(() => undefined),
+        /** What the page saves itself, which the room the app has leaves out. */
+        pageBytes(bytes) {
+          pageBytes = Math.max(0, Number(bytes) || 0);
+          tell();
+        },
+      }),
+    });
+    tell();
   } catch {}
 
   // The app calls this with each message for the page.

@@ -50,9 +50,9 @@ enum ImageFit {
     static let session: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 20
-        // Every picture on the page comes through here, so originals are kept on disk too.
-        configuration.urlCache = URLCache(memoryCapacity: 8 << 20, diskCapacity: 256 << 20,
-                                          directory: AppFolders.caches.appendingPathComponent("image-fit", isDirectory: true))
+        // Every picture on the page comes through here, so originals are kept on disk too, as the page's
+        // cache settings say (ArtworkCache).
+        configuration.urlCache = ArtworkCache.disk
         configuration.requestCachePolicy = .returnCacheDataElseLoad
         configuration.httpMaximumConnectionsPerHost = 6
         return URLSession(configuration: configuration)
@@ -217,6 +217,15 @@ enum ImageFit {
         while keptBytes > keptMaxBytes, !order.isEmpty {
             if let gone = kept.removeValue(forKey: order.removeFirst()) { keptBytes -= gone.data.count }
         }
+    }
+
+    /// Drops the fitted copies kept in memory, as the page's artwork cache is cleared (ArtworkCache).
+    static func forgetKept() {
+        lock.lock()
+        defer { lock.unlock() }
+        kept.removeAll()
+        order.removeAll()
+        keptBytes = 0
     }
 
     private static func note(drawn: Bool) {

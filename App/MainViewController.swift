@@ -671,6 +671,20 @@ final class MainViewController: UIViewController, RemoteReceiver {
             leaveApp()
         case "tvos-storage":
             storage.apply(message)
+        case "tvos-artwork-cache":
+            // The page's cache settings, as the bridge reads them (ArtworkCache).
+            let limit = message.number("limit").map { Int(min(max($0, 0), 1e13)) } ?? ArtworkCache.defaultLimit
+            ArtworkCache.configure(on: message.flag("on") != false, limit: limit)
+        case "tvos-artwork-cache-usage":
+            sendToPage(["type": "tvos-artwork-cache-reply", "id": message.number("id") ?? 0, "bytes": ArtworkCache.bytes])
+        case "tvos-artwork-cache-clear":
+            let id = message.number("id") ?? 0
+            DispatchQueue.global(qos: .userInitiated).async {
+                ArtworkCache.clear()
+                DispatchQueue.main.async { [weak self] in
+                    self?.sendToPage(["type": "tvos-artwork-cache-reply", "id": id, "bytes": ArtworkCache.bytes])
+                }
+            }
         case "watch-next":
             // Continue Watching and Next Up, for the Top Shelf.
             TopShelf.publish(message)
