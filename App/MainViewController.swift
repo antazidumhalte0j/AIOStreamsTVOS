@@ -449,6 +449,12 @@ final class MainViewController: UIViewController, RemoteReceiver {
                 + "Update it in the app you sideload with, or download it from \(UpdateCheck.releases).",
             preferredStyle: .alert
         )
+        if let page = UpdateCheck.releasePage(version) {
+            alert.addAction(UIAlertAction(title: "View This Release", style: .default) { [weak self] _ in
+                // The handler runs as the alert goes; showLink needs nothing presented.
+                DispatchQueue.main.async { self?.showLink(page) }
+            })
+        }
         alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
             self?.web?.focusPage()
         })
@@ -569,6 +575,13 @@ final class MainViewController: UIViewController, RemoteReceiver {
 
     /// A web link the page opened, as a QR code and its address (`LinkScreen`).
     private func showLink(_ url: URL) {
+        if let going = presentedViewController, going.isBeingDismissed {
+            // An alert still on its way out (the update notice's View This Release): after it.
+            going.transitionCoordinator?.animate(alongsideTransition: nil) { [weak self] _ in
+                DispatchQueue.main.async { self?.showLink(url) }
+            }
+            return
+        }
         guard presentedViewController == nil else { return }
         let screen = LinkScreen(url: url)
         screen.closed = { [weak self] in self?.web?.focusPage() }
