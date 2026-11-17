@@ -1259,7 +1259,7 @@ enum BridgeScript {
    * down the side, `position: fixed`, from a stale layer: as far down the screen as the page was
    * scrolled, though the page still laid it out at the top (scripts/probes/sidebar-shift.js). A
    * scroll didn't put it back (27a5315, reverted: it kept the shift until the app restarted).
-   * Hidden for two frames and shown again, WebKit makes its layer anew, in place
+   * Hidden for a frame and shown again, WebKit makes its layer anew, in place
    * (scripts/probes/sidebar-reset.js). Only on a real change: the page sets `data-art-wash` again
    * with each new wash, and the navigation mustn't blink at every card. (Up to 11d20f0, `lookNow`
    * took an empty attribute for none, so no change was ever seen: the timings tried in builds
@@ -1270,13 +1270,13 @@ enum BridgeScript {
     /*
      * No wait: tried on the TV with scripts/probes/sidebar-tune.js, hidden at once and for one
      * frame put it back even just after a keyed scroll (WebKit's own smooth scroll, NATIVE_SCROLLS,
-     * the only time it went stale). Hidden two frames, to be safe. Both waits stay, at none, for
-     * the probe to try others.
+     * the only time it went stale). Hidden one frame, as the trailer's reset is. Both waits stay, at
+     * none, for the probe to try others.
      */
     const REDRAW_AFTER_MS = 0;
     /** After a scroll, how long the page must have held still first. */
     const SCROLL_STILL_MS = 0;
-    const HIDE_FRAMES = 2;
+    const HIDE_FRAMES = 1;
     const html = document.documentElement;
     // Set, the attributes are mostly empty (`data-art-wash=""`), which a plain join of their values
     // can't tell from none: whether each is there, and its value.
@@ -1354,6 +1354,15 @@ enum BridgeScript {
       look = now;
       redrawNav();
     }).observe(html, { attributeFilter: LOOK });
+    /*
+     * Glass surface with Glass panels off changes nothing on the root: only the navigation's own
+     * `.glass-surface` takes the new `data-surface` (frosted, liquid, solid), its blur coming or
+     * going, which leaves the same stale layer.
+     */
+    new MutationObserver((records) => {
+      if (records.some((r) => r.target.classList?.contains('glass-surface') && r.target.getAttribute('data-surface') !== r.oldValue))
+        redrawNav();
+    }).observe(html, { subtree: true, attributeFilter: ['data-surface'], attributeOldValue: true });
     /*
      * The same stale layer, with a title page scrolled while its trailer plays behind it: the page's
      * background is cut with a mask for the video then (upstream's `useVideoHole`, which marks
