@@ -17,6 +17,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
     private let backdrop = BackdropStage()
     /// "Background from artwork"'s wash, beneath the backdrop (`tvos-wash`, WashStage).
     private let wash = WashStage()
+    /// Liquid glass behind the page's floating rail and corner menu (`tvos-glass`, GlassStage).
+    private let glass = GlassStage()
     private var web: AIOWebView?
     private let status = UILabel()
     private var engine: AetherPlayer?
@@ -87,6 +89,12 @@ final class MainViewController: UIViewController, RemoteReceiver {
         web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(web)
         view.addSubview(status)
+        // Over the backdrop, the wash and the video, so the glass bends them; beneath the page.
+        glass.view.frame = view.bounds
+        glass.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(glass.view, belowSubview: web)
+        glass.web = web
+        glass.scrollView = web.scrollView
         self.web = web
         stage.web = web
         backdrop.web = web
@@ -216,6 +224,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
         stage.place(nil)
         backdrop.reset()
         wash.reset()
+        glass.reset()
         let now = Date()
         pageEnds = pageEnds.filter { now.timeIntervalSince($0) < 10 * Self.quickEnd } + [now]
         var quick = 0
@@ -385,7 +394,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             lines.append("")
         }
         // What the app draws beneath the page now, beside the page's marks in the memory lines below.
-        lines.append("Backdrop: \(backdrop.summary) · wash: \(wash.view.isHidden ? "none" : "shown")")
+        lines.append("Backdrop: \(backdrop.summary) · wash: \(wash.view.isHidden ? "none" : "shown") · glass: \(glass.summary)")
         lines.append("Video: \(stage.summary), \(videoView.isHidden ? "video view hidden" : "video view shown")")
         lines.append("")
         lines += AppAnswers.videoLines(player: engine, window: view.window)
@@ -629,6 +638,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             backdrop.reset()
             view.backgroundColor = .black
             wash.reset()
+            glass.reset()
             web?.focusPage()
             pipButtonShown = false
             updatePipButton()
@@ -732,6 +742,12 @@ final class MainViewController: UIViewController, RemoteReceiver {
         case "tvos-wash":
             // "Background from artwork"'s wash, drawn here beneath the page, or none (patches/web/0050).
             wash.handle(message)
+        case "tvos-glass":
+            // Liquid glass behind the floating rail or the corner menu, or put away (patches/web/0073).
+            glass.handle(message)
+        case "tvos-glass-panels":
+            // Liquid glass behind the settings cards, tab groups and pill tabs over the artwork (patches/web/0074).
+            glass.handlePanels(message)
         case "tvos-page-color":
             // The page's colour, drawn here beneath the wash, the backdrop and the page, whose own
             // background is then clear (patches/web/0058), so the backdrop shows through it with no hole.
