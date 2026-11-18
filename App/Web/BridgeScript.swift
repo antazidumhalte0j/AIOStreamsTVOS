@@ -18,7 +18,6 @@ enum BridgeScript {
             .replacingOccurrences(of: "__DEVICE__", with: literal(device))
             .replacingOccurrences(of: "__DEVICE_ID__", with: literal(deviceId))
             .replacingOccurrences(of: "__HOURS24__", with: hours24 ? "true" : "false")
-            .replacingOccurrences(of: "__LIQUID_GLASS__", with: GlassStage.available ? "true" : "false")
             .replacingOccurrences(of: "__STORAGE__", with: storage)
     }
 
@@ -1083,10 +1082,6 @@ enum BridgeScript {
     // The system's 12- or 24-hour clock, for the page's Time format on Automatic (the player's clock,
     // the TV guide), as the Android app sends it.
     hours24: __HOURS24__,
-    // tvOS 26 and later draw Liquid glass beneath the page for the floating rail and, with Glass
-    // panels on, the settings cards, tab groups and pill tabs (`tvos-glass`, `tvos-glass-panels`,
-    // GlassStage.swift, patches/web/0073 and 0074). Earlier, the page draws them flat.
-    liquidGlass: __LIQUID_GLASS__,
     device: __DEVICE__,
     deviceId: __DEVICE_ID__,
     send,

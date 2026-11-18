@@ -481,28 +481,13 @@ Back behaviour and the bundled-player path. It also means:
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
-- **Liquid glass** (Settings → Theme → Glass surface) is drawn by tvOS, on tvOS 26 and later, for
-  the floating rail (Settings → Interface → Rail shape → Floating). On tvOS 18 to 25 every glass
-  surface is liquid glass as the page draws it without the bend, as described at the end of this
-  item. The page's own liquid glass bends
-  what's behind it with an SVG filter in `backdrop-filter`, which only Chromium draws, so upstream
-  offers it there alone. Here the rail's panel draws no fill or blur of its own and tells the app
-  where it is, each frame it opens or shuts, and the app puts a `UIGlassEffect` view there, beneath
-  the page and over the backdrop, the artwork wash and a trailer, which the app draws too
-  (`GlassStage`, `tvos-glass`, `patches/web/0073-tvos-liquid-glass-drawn-by-the-app.patch`). Page
-  content the open rail covers (the first column) is in the page, above the glass, so it isn't seen
-  through it. With **Glass panels** on as well (over the artwork background), the settings cards,
-  the settings tab groups and the pill tabs (Discover, Live TV, History, Favourites) get tvOS's glass
-  too, as they sit over nothing of the page but the wash
-  (`tvos-glass-panels`, `patches/web/0074-tvos-liquid-glass-panels-drawn-by-the-app.patch`). They
-  follow WebKit's scroll in the app frame by frame, as the backdrop does, each clipped to what its
-  scrolling list leaves in sight; the settings tabs' sticky column stays put, and the page measures
-  again once a scroll rests, as anything changes, and every frame while something animates. The
-  rest, which open over or move with page content glass beneath the page can't show through (menus,
-  dialogs and the other panels, the top tabs, the corner menu, the back button), are liquid glass
-  as the page draws it without the bend: its clearer fill and bright rim over the frosted blur.
-  Upstream shows Liquid glass as Frosted glass where it can't bend it; on an Apple TV those take
-  the liquid look instead. The docked rail has no glass surface.
+- **Liquid glass** (Settings → Theme → Glass surface) is offered on the Apple TV, drawn without its
+  bend (`patches/web/0073-tvos-liquid-glass-without-the-bend.patch`). Upstream's liquid glass bends
+  what's behind its edges with an SVG filter in `backdrop-filter`, which only Chromium draws, so it
+  offers the option there alone and draws Frosted glass in its place elsewhere. Here every glass
+  surface (the floating rail, top tabs, corner menu, back button, and with Glass panels on the
+  menus, dialogs and settings cards) takes liquid glass's clearer fill and bright rim over the
+  frosted blur, the same on every tvOS version. The docked rail has no glass surface.
 - **Anime upscaling** (Settings → Playback → Video) uses AetherEngine's line-art scaler, Anime4K
   mode A (small), rather than the official app's anime shaders. The page turns it on only for what
   it takes for anime (an AniList, Kitsu, MyAnimeList or AniDB id on the title, its season or its

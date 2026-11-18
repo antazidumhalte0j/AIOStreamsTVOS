@@ -1,0 +1,71 @@
+diff --git a/packages/web/src/app/settings/theme.tsx b/packages/web/src/app/settings/theme.tsx
+index f71d23f7..bdc3d603 100644
+--- a/packages/web/src/app/settings/theme.tsx
++++ b/packages/web/src/app/settings/theme.tsx
+@@ -22,7 +22,7 @@ import {
+   type ArtPage,
+   type GlassSurface,
+ } from '@/lib/settings';
+-import { canRefract } from '@/components/shell/glass-surface';
++import { canPickLiquid } from '@/components/shell/glass-surface';
+ import { useServerInfo } from '@/lib/jellyfin/server-info';
+ import { currentHost } from '@/lib/hosts';
+ import { focusOn, keyboardFocus } from '@/lib/input';
+@@ -194,11 +194,13 @@ export function ThemeSection() {
+           options={[
+             { value: 'solid', label: t`Solid` },
+             { value: 'frosted', label: t`Frosted glass` },
+-            ...(canRefract
++            ...(canPickLiquid()
+               ? [{ value: 'liquid', label: t`Liquid glass` }]
+               : []),
+           ]}
+-          value={surface === 'liquid' && !canRefract ? 'frosted' : surface}
++          value={
++            surface === 'liquid' && !canPickLiquid() ? 'frosted' : surface
++          }
+           onValueChange={(value) => setSurface(value as GlassSurface)}
+         />
+         {artBackground.length > 0 && surface !== 'solid' && (
+diff --git a/packages/web/src/components/shell/glass-surface.tsx b/packages/web/src/components/shell/glass-surface.tsx
+index 577cebac..3215f4a1 100644
+--- a/packages/web/src/components/shell/glass-surface.tsx
++++ b/packages/web/src/components/shell/glass-surface.tsx
+@@ -1,5 +1,6 @@
+ import React from 'react';
+ import { cn } from '@aiostreams/ui/core/styling';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { settings, useSetting } from '@/lib/settings';
+ 
+ /** Only Chromium draws an SVG filter over what's behind an element. */
+@@ -8,6 +9,15 @@ export const canRefract =
+   CSS.supports('backdrop-filter', 'url(#a)') &&
+   /Chrome\//.test(navigator.userAgent);
+ 
++/**
++ * The Apple TV app's WebKit draws no SVG filter behind an element, so its liquid glass is the
++ * clearer fill and bright rim over the frosted blur, without the bending edge (AIOStreamsTVOS).
++ */
++const flatLiquid = () => !canRefract && appleTv();
++
++/** Liquid glass is offered where it bends, and flat in the Apple TV app (AIOStreamsTVOS). */
++export const canPickLiquid = () => canRefract || appleTv();
++
+ interface Lens {
+   start: string;
+   end: string;
+@@ -178,7 +188,13 @@ export function GlassSurface({
+   return (
+     <div
+       ref={ref}
+-      data-surface={map ? 'liquid' : look === 'solid' ? 'solid' : 'frosted'}
++      data-surface={
++        map || (look === 'liquid' && flatLiquid())
++          ? 'liquid'
++          : look === 'solid'
++            ? 'solid'
++            : 'frosted'
++      }
+       className={cn('glass-surface', className)}
+       style={
+         map ? { ...style, backdropFilter: `blur(2px) url(#${id})` } : style
