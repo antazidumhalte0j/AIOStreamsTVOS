@@ -481,8 +481,10 @@ Back behaviour and the bundled-player path. It also means:
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
-- **Liquid glass** (Settings → Theme → Glass surface, tvOS 26 and later) is drawn by tvOS for the
-  floating rail (Settings → Interface → Rail shape → Floating). The page's own liquid glass bends
+- **Liquid glass** (Settings → Theme → Glass surface) is drawn by tvOS, on tvOS 26 and later, for
+  the floating rail (Settings → Interface → Rail shape → Floating). On tvOS 18 to 25 every glass
+  surface is liquid glass as the page draws it without the bend, as described at the end of this
+  item. The page's own liquid glass bends
   what's behind it with an SVG filter in `backdrop-filter`, which only Chromium draws, so upstream
   offers it there alone. Here the rail's panel draws no fill or blur of its own and tells the app
   where it is, each frame it opens or shuts, and the app puts a `UIGlassEffect` view there, beneath
