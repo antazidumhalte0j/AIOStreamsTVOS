@@ -91,8 +91,9 @@ final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelega
         bar.returnKeyType = returnKey
         bar.autocorrectionType = .no
         bar.autocapitalizationType = .none
-        // A password shows as dots in the keyboard's field, as in the page's own.
-        bar.searchTextField.isSecureTextEntry = secure
+        // A password shows as dots in the keyboard's field, as in the page's own. On the bar, which takes
+        // the text input traits itself: tvOS has no `searchTextField`.
+        bar.isSecureTextEntry = secure
 
         // Over the page, which shows through beside or below the keyboard. Faded in, as tvOS fades its
         // keyboard in, so the box behind it comes with it rather than sliding up from below.
