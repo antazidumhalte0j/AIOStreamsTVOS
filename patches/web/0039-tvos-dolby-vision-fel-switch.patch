@@ -1,8 +1,8 @@
 diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
-index 81dc1cc5a..e4c1da488 100644
+index 05f8c42aa..d6545c34d 100644
 --- a/packages/web/src/app/settings/player.tsx
 +++ b/packages/web/src/app/settings/player.tsx
-@@ -472,6 +472,7 @@ function VideoCard() {
+@@ -462,6 +462,7 @@ function VideoCard() {
            onValueChange={setDolbyVision}
          />
        )}
@@ -10,7 +10,7 @@ index 81dc1cc5a..e4c1da488 100644
        {(shell ? canUpscale() : webGpu) && (
          <Switch
            side="right"
-@@ -572,6 +573,23 @@ function OtherUpscalingSwitch() {
+@@ -562,6 +563,23 @@ function OtherUpscalingSwitch() {
    );
  }
  
@@ -35,10 +35,10 @@ index 81dc1cc5a..e4c1da488 100644
    ({
      mpv: {
 diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
-index 75eb7b7eb..32a4269fd 100644
+index ad6b39c88..636f9370d 100644
 --- a/packages/web/src/lib/hosts/shell/player.ts
 +++ b/packages/web/src/lib/hosts/shell/player.ts
-@@ -553,6 +553,8 @@ export function playerSettings() {
+@@ -560,6 +560,8 @@ export function playerSettings() {
        objectAudio: audio.objectAudio.read(),
        objectAudioLayout: audio.objectAudioLayout.read(),
        upscalingAnime: upscalingAnime(),
@@ -48,10 +48,10 @@ index 75eb7b7eb..32a4269fd 100644
      ...(android
        ? {
 diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
-index 60b98652b..051320302 100644
+index 447822aa6..335b71e16 100644
 --- a/packages/web/src/lib/settings/index.ts
 +++ b/packages/web/src/lib/settings/index.ts
-@@ -695,6 +695,8 @@ export const settings = {
+@@ -698,6 +698,8 @@ export const settings = {
        'aiostreams-web-video-super-resolution',
        false
      ),

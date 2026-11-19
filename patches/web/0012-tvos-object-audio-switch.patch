@@ -74,7 +74,7 @@ index f1f68c34d..30806839f 100644
    const [audioDevice, setAudioDevice] = useSetting(settings.audio.device);
    const devices = useAudioDevices();
 diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
-index 1447c0f56..fd136c8a1 100644
+index b60589dbb..bd9f05819 100644
 --- a/packages/web/src/lib/hosts/shell/player.ts
 +++ b/packages/web/src/lib/hosts/shell/player.ts
 @@ -32,7 +32,12 @@ import {
@@ -91,7 +91,7 @@ index 1447c0f56..fd136c8a1 100644
  import { exoStats } from './exo-stats';
  import { passthroughFormats } from './sound';
  
-@@ -536,6 +541,10 @@ export function playerSettings() {
+@@ -541,6 +546,10 @@ export function playerSettings() {
      ac3Encode: audio.ac3Encode.read(),
      cacheMb: Number(settings.player.cacheSize.read()) || 0,
      upscaling: upscalingOn(),

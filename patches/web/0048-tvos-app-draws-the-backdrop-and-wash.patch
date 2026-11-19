@@ -181,12 +181,12 @@ index 7266365e5..788af574f 100644
        </div>
        <Shade />
 diff --git a/packages/web/src/components/shell/art-wash.tsx b/packages/web/src/components/shell/art-wash.tsx
-index a2e18b3a4..7022aa9f9 100644
+index 7beb8a8cc..2b6bf7f11 100644
 --- a/packages/web/src/components/shell/art-wash.tsx
 +++ b/packages/web/src/components/shell/art-wash.tsx
 @@ -2,23 +2,114 @@ import React from 'react';
  import { cn } from '@aiostreams/ui/core/styling';
- import { currentWash, subscribeWash } from '@/lib/artwork/background';
+ import { currentWash, subscribeWash, takeCut } from '@/lib/artwork/background';
  import { WASH_H, WASH_W } from '@/lib/artwork/wash';
 +import { appBridge, appleTv } from '@/lib/hosts/shell/bridge';
  
@@ -311,10 +311,10 @@ index a2e18b3a4..7022aa9f9 100644
      <div
        data-ui="art-wash"
 diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
-index a6a6e9176..c314a69ab 100644
+index c7588518c..c596c4a99 100644
 --- a/packages/web/src/components/shell/layout.tsx
 +++ b/packages/web/src/components/shell/layout.tsx
-@@ -78,6 +78,7 @@ import {
+@@ -73,6 +73,7 @@ import {
    setWashPaused,
    setWashVisible,
  } from '@/lib/artwork/background';
@@ -322,7 +322,7 @@ index a6a6e9176..c314a69ab 100644
  import { HistoryButtons } from './history-buttons';
  import { ConnectionNote } from './unreachable';
  import { Logo, onBar } from './nav/common';
-@@ -102,6 +103,8 @@ const PAGE_FADE = {
+@@ -88,6 +89,8 @@ import { TOP_BAR_HEIGHT, TopTabs } from './nav/top-tabs';
   * transparent page shows nothing beneath it; the player hides it.
   */
  export function PageBackground({ router }: { router: AnyRouter }) {
@@ -331,7 +331,7 @@ index a6a6e9176..c314a69ab 100644
    const [pages] = useSetting(settings.theme.artBackground);
    const [glass] = useSetting(settings.theme.artGlass);
    const [surface] = useSetting(settings.theme.glassSurface);
-@@ -124,7 +127,9 @@ export function PageBackground({ router }: { router: AnyRouter }) {
+@@ -110,7 +113,9 @@ export function PageBackground({ router }: { router: AnyRouter }) {
        data-ui="page-background"
        className="page-background pointer-events-none fixed inset-0 -z-10 bg-[--background]"
      >

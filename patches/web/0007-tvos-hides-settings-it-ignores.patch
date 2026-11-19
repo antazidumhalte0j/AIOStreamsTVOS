@@ -31,7 +31,7 @@ index 21efbfa60..f1f68c34d 100644
            label={t`Pass surround audio through`}
            help={passthroughHelp(passthrough)}
 diff --git a/packages/web/src/app/settings/page.tsx b/packages/web/src/app/settings/page.tsx
-index f036ef301..a8839ebba 100644
+index 33ebe469f..2a848e236 100644
 --- a/packages/web/src/app/settings/page.tsx
 +++ b/packages/web/src/app/settings/page.tsx
 @@ -37,6 +37,7 @@ import { useDisclosure } from '@aiostreams/ui/hooks/disclosure';
@@ -40,8 +40,8 @@ index f036ef301..a8839ebba 100644
  import { shellHost } from '@/lib/hosts/shell';
 +import { appleTv } from '@/lib/hosts/shell/bridge';
  import { navigate, to } from '@/lib/paths';
+ import { pageOpening } from '@/lib/page-open';
  import { canPlayWithWebGpu } from '@/lib/playback/player-choice';
- import { BackButton } from '@/components/back-button';
 @@ -206,7 +207,8 @@ function sections(): Section[] {
            },
          ]
