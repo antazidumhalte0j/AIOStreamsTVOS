@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/app/settings/about.tsx b/packages/web/src/app/settings/about.tsx
-index 6d5fecb10..53c6ba38c 100644
+index 7abf03e05..1a8a4a23a 100644
 --- a/packages/web/src/app/settings/about.tsx
 +++ b/packages/web/src/app/settings/about.tsx
 @@ -10,6 +10,7 @@ import { usageStatsText } from '@/components/shell/usage-stats';
@@ -20,7 +20,7 @@ index 6d5fecb10..53c6ba38c 100644
                : shell.platform === 'android'
                  ? t`Android app`
                  : t`Desktop app`,
-@@ -198,53 +198,53 @@ function credits(
+@@ -194,53 +194,53 @@ function credits(
  
  /*
   * What plays and decodes video in the Apple TV app, which plays with AetherEngine rather than mpv.
@@ -86,7 +86,7 @@ index 6d5fecb10..53c6ba38c 100644
    },
  ];
 diff --git a/packages/web/src/app/settings/audio.tsx b/packages/web/src/app/settings/audio.tsx
-index 39a7d67f8..54d2c12e4 100644
+index 30806839f..f36f9445e 100644
 --- a/packages/web/src/app/settings/audio.tsx
 +++ b/packages/web/src/app/settings/audio.tsx
 @@ -7,6 +7,7 @@ import { currentHost } from '@/lib/hosts';
@@ -97,15 +97,15 @@ index 39a7d67f8..54d2c12e4 100644
  import { audioTypes, type AudioType } from '@/lib/playback/audio-tracks';
  import {
    audioLanguages,
-@@ -147,6 +148,7 @@ function OutputCard() {
-   const info = useShellInfo();
+@@ -145,6 +146,7 @@ function OutputCard() {
+   const layer = useSettingsLayer();
    // An Apple TV copies Dolby Digital (Plus) and decodes the rest, whatever is asked.
    const tvos = appleTv();
 +  const objectText = objectAudioText();
    const passing = !tvos && passthrough !== 'off';
    return (
-     <SettingsCard name="output" title={t`Output`} description={onDevice()}>
-@@ -212,19 +214,19 @@ function OutputCard() {
+     <SettingsCard name="output" title={t`Output`} holds="device">
+@@ -210,19 +212,19 @@ function OutputCard() {
        {tvos && audioChannels === 'auto' && (
          <Switch
            side="right"
@@ -130,7 +130,7 @@ index 39a7d67f8..54d2c12e4 100644
            }))}
            value={objectLayout}
            onValueChange={(v) => setObjectLayout(v as ObjectAudioLayout)}
-@@ -235,21 +237,20 @@ function OutputCard() {
+@@ -233,21 +235,20 @@ function OutputCard() {
  }
  
  /*
@@ -163,7 +163,7 @@ index 39a7d67f8..54d2c12e4 100644
  function AudioDeviceSelect() {
    const [audioDevice, setAudioDevice] = useSetting(settings.audio.device);
 diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
-index 97089d1b8..f97a03973 100644
+index 75df09b03..729321237 100644
 --- a/packages/web/src/app/settings/player.tsx
 +++ b/packages/web/src/app/settings/player.tsx
 @@ -28,6 +28,7 @@ import {
@@ -174,7 +174,7 @@ index 97089d1b8..f97a03973 100644
  import {
    CUSTOM_LINK,
    LAUNCHED_PLAYERS,
-@@ -482,9 +483,9 @@ function VideoCard() {
+@@ -472,9 +473,9 @@ function VideoCard() {
            label={t`Anime upscaling`}
            help={
              // The Apple TV app upscales anime with the engine's Anime4K line-art scaler, not the official app's anime shaders (AIOStreamsTVOS).
@@ -186,7 +186,7 @@ index 97089d1b8..f97a03973 100644
                : t`Sharpens the lines and cleans up the compression in anime as it plays, most of all in older and lower-resolution shows. It applies to titles marked as anime. With a keyboard, U in the player switches it for what's playing. Uses more power, and turns itself off for a video this device can't keep up with. HDR videos, and videos about as large as the screen, stay as they are.`
            }
            value={upscaling}
-@@ -561,15 +562,15 @@ function VideoCard() {
+@@ -551,15 +552,15 @@ function VideoCard() {
  
  /**
   * The Apple TV app's upscaling of everything else (`settings.video.upscalingOther`, AIOStreamsTVOS).
@@ -205,7 +205,7 @@ index 97089d1b8..f97a03973 100644
        value={other}
        onValueChange={setOther}
      />
-@@ -578,15 +579,15 @@ function OtherUpscalingSwitch() {
+@@ -568,15 +569,15 @@ function OtherUpscalingSwitch() {
  
  /**
   * The Apple TV app's Dolby Vision Profile 7 FEL switch (`settings.video.dolbyVisionFel`, AIOStreamsTVOS).
@@ -224,7 +224,7 @@ index 97089d1b8..f97a03973 100644
        value={fel}
        onValueChange={setFel}
      />
-@@ -595,17 +596,17 @@ function DolbyVisionFelSwitch() {
+@@ -585,17 +586,17 @@ function DolbyVisionFelSwitch() {
  
  /**
   * The Apple TV app's HDR10 tone mapping (`settings.video.hdrToneMap`, AIOStreamsTVOS): the engine maps an
@@ -247,7 +247,7 @@ index 97089d1b8..f97a03973 100644
        value={toneMap}
        onValueChange={(v) => setToneMap(v as HdrToneMap)}
 diff --git a/packages/web/src/app/settings/subtitles.tsx b/packages/web/src/app/settings/subtitles.tsx
-index fda06afba..57c7ee4a6 100644
+index bfce60092..6a200253d 100644
 --- a/packages/web/src/app/settings/subtitles.tsx
 +++ b/packages/web/src/app/settings/subtitles.tsx
 @@ -27,6 +27,7 @@ import {
@@ -256,9 +256,9 @@ index fda06afba..57c7ee4a6 100644
  import { appleTv } from '@/lib/hosts/shell/bridge';
 +import { tvText } from '@/lib/hosts/shell/tvos-text';
  import { SettingsCard } from './_components/settings-card';
- import {
-   languageOptions,
-@@ -75,11 +76,9 @@ const fontOptions = (): { value: SubtitleFont; label: string }[] => [
+ import { languageOptions, LanguageList } from './_components/common';
+ 
+@@ -70,11 +71,9 @@ const fontOptions = (): { value: SubtitleFont; label: string }[] => [
  
  /**
   * What the switch does in the Apple TV app (AIOStreamsTVOS), which honours it, and sizes Blu-ray and
@@ -272,7 +272,7 @@ index fda06afba..57c7ee4a6 100644
  
  const subtitleTypeOptions = (): { value: SubtitleType; label: string }[] => [
    { value: 'normal', label: t`Full` },
-@@ -266,7 +265,7 @@ export function SubtitlesSection() {
+@@ -272,7 +271,7 @@ export function SubtitlesSection() {
            label={t`Apply to styled subtitles too`}
            help={
              appleTv()
