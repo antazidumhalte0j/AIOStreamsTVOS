@@ -171,13 +171,21 @@ enum ImageFit {
             image = blurred
         }
         let out = NSMutableData()
-        // A PNG may be see-through; a backdrop otherwise is not.
-        let format = png ? "public.png" : "public.jpeg"
+        // A PNG may be see-through, and so may a WebP, AVIF or GIF (TVDB and IMDb logos come as
+        // these): JPEG has no alpha, so a see-through picture drawn down to JPEG got a solid
+        // background. Only a picture with no transparency becomes a JPEG.
+        let seeThrough: Bool
+        switch image.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: seeThrough = false
+        default: seeThrough = true
+        }
+        let keepAlpha = png || seeThrough
+        let format = keepAlpha ? "public.png" : "public.jpeg"
         guard let destination = CGImageDestinationCreateWithData(out as CFMutableData, format as CFString, 1, nil)
         else { return nil }
         CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.92] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
-        return (out as Data, png ? "image/png" : "image/jpeg", true)
+        return (out as Data, keepAlpha ? "image/png" : "image/jpeg", true)
     }
 
     /// Its edges spread outward rather than fading to clear, so a blurred card has no dark rim.
