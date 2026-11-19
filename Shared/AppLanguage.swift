@@ -1,9 +1,9 @@
 import Foundation
 
 /**
- * The app's own screens and notices follow the page's language (`tvos-language`), among those the
- * web app has catalogs for, as the page's own text does: its own table, else one in the same
- * language (`pt` for `pt-BR`), else British English, which every table has.
+ * The app's own screens and notices, and the Top Shelf, follow the page's language (`tvos-language`),
+ * among those the web app has catalogs for, as the page's own text does: its own table, else one in
+ * the same language (`pt` for `pt-BR`), else British English, which every table has.
  */
 enum AppLanguage {
     static func pick<Text>(_ table: [String: Text], for language: String) -> Text {

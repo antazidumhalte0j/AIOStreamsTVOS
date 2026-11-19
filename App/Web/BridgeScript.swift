@@ -1747,6 +1747,25 @@ enum BridgeScript {
    */
   let pipLabel = null;
   const PIP_LABEL_GAP = 4;
+  /*
+   * The button's name in the page's language, as the web app's own catalogs word Picture-in-picture
+   * where they have it: its own, else one in the same language, else British English.
+   */
+  const PIP_NAMES = {
+    'en-GB': 'Picture in picture', ar: 'صورة داخل صورة', ca: "Imatge dins d'imatge", de: 'Bild-in-Bild',
+    el: 'Εικόνα μέσα σε εικόνα', es: 'Imagen en imagen', fi: 'Kuva kuvassa', fr: "Image dans l'image",
+    id: 'Picture-in-picture', it: 'Picture-in-picture', ms: 'Gambar dalam gambar', nb: 'Bilde-i-bilde',
+    nl: 'Beeld-in-beeld', pl: 'Obraz w obrazie', pt: 'Imagem na imagem', 'pt-BR': 'Picture-in-picture',
+    ro: 'Imagine în imagine', ru: 'Картинка в картинке', sl: 'Slika v sliki', sv: 'Bild-i-bild',
+    tr: 'Resim içinde resim', 'zh-Hans': '画中画',
+  };
+  const pipName = () => {
+    const lang = document.documentElement.lang || 'en-GB';
+    const base = lang.split('-')[0].toLowerCase();
+    if (PIP_NAMES[lang]) return PIP_NAMES[lang];
+    const same = Object.keys(PIP_NAMES).find((key) => key.split('-')[0].toLowerCase() === base);
+    return PIP_NAMES[same || 'en-GB'];
+  };
   const showPipLabel = () => {
     if (!pipButton?.isConnected) return;
     if (!pipLabel) {
@@ -1759,8 +1778,9 @@ enum BridgeScript {
       pipLabel.style.position = 'fixed';
       pipLabel.style.pointerEvents = 'none';
       pipLabel.style.whiteSpace = 'nowrap';
-      pipLabel.textContent = 'Picture in picture';
     }
+    // In the language shown now, which can change while the player is open.
+    pipLabel.textContent = pipName();
     document.body.appendChild(pipLabel);
     const button = pipButton.getBoundingClientRect();
     const label = pipLabel.getBoundingClientRect();
@@ -1789,8 +1809,6 @@ enum BridgeScript {
       pipButton.dataset.ui = 'player-button';
       pipButton.dataset.name = 'tvos-pip';
       pipButton.dataset.focus = 'own';
-      pipButton.setAttribute('aria-label', 'Picture in picture');
-      pipButton.title = 'Picture in picture';
       pipButton.innerHTML = PIP_ICON;
       pipButton.addEventListener('click', () => {
         hidePipLabel();
@@ -1800,6 +1818,8 @@ enum BridgeScript {
       pipButton.addEventListener('blur', hidePipLabel);
     }
     pipButton.className = like.className;
+    pipButton.setAttribute('aria-label', pipName());
+    pipButton.title = pipName();
     row.appendChild(pipButton);
   };
   const queuePip = () => {

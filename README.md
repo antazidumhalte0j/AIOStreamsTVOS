@@ -491,9 +491,11 @@ Back behaviour and the bundled-player path. It also means:
   catalog changes never conflict with it. A language without a line there falls back to British
   English, as the web app does. The translations are machine-made, matched to the terms each
   language's catalog already uses, and unreviewed by native speakers. The app's own screen for a web
-  link (its QR code, `LinkScreen`) and the update notice (`UpdateNoticeText`) are in the same
-  languages, following the page's language, which the bridge script reports as the web app sets it
-  (`tvos-language`, `AppLanguage`).
+  link (its QR code, `LinkScreen`), the update notice (`UpdateNoticeText`), the Top Shelf's row
+  titles (`TopShelfText`, saved for the extension with its list) and the player's
+  picture-in-picture button are in the same languages, following the page's language, which the
+  bridge script reports as the web app sets it (`tvos-language`, `AppLanguage`). The Top Shelf and
+  the button use the web app's own catalogs' words where they have them.
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
@@ -599,7 +601,7 @@ Back behaviour and the bundled-player path. It also means:
 | ----------------------------------- | ------------------------------------------------- |
 | Clickpad edges / swipe              | Arrow keys (held edges repeat; a swipe up or down moves one row, or two when it's long; across, it moves as many posters as its length; an edge the swipe starts or ends on adds no arrow of its own; Left from a row's or a grid line's first poster opens the navigation)|
 | Click                               | Enter (held, the page's hold actions)             |
-| Click on a text field               | tvOS's search keyboard over the page, typing straight into the field (dictation on the mic button); Menu or moving off the keys closes it. The Search page opens it on its own as it opens, unless it opens with a search already in it, as Back to a search's results does. The linear keyboard keeps tvOS's full-screen layout over a black backdrop, with the page showing in the space below it. The grid keyboard (Settings → General → Keyboard) sits in a black box at the screen's top right, its keys' width as measured from what tvOS draws, with the page to its left. Passwords get the same keyboard, shown as dots, and PINs its number keys; the return key, where the keyboard has one, sends the field's form. The app menu's test video link is typed on it too |
+| Click on a text field               | tvOS's search keyboard over the page, typing straight into the field (dictation on the mic button); Menu or moving off the keys closes it. The Search page opens it on its own as it opens, unless it opens with a search already in it, as Back to a search's results does. The linear keyboard keeps tvOS's full-screen layout over a black backdrop, with the page showing in the space below it. The grid keyboard (Settings → General → Keyboard) sits in a black box at the screen's top right, its keys' width as measured from what tvOS draws, with the page to its left. Passwords and PINs get tvOS's full-screen keyboard for a text field of the app's instead, with no alert around it (`FieldKeyboard`): it shows a password as dots, which the search keyboard can't, and a PIN on the number keys; its Done sends the field's form. The app menu's test video link is typed on the search keyboard too |
 | Click in a searchable list          | The pickers with up and down carets, such as Discover's catalog picker: picks the highlighted entry, including the one highlighted as the list opens or after a search; opens the keyboard only when nothing is left to pick |
 | Up from a searchable list's top entry | Opens the keyboard to search (a held Up, or a quick run of presses, stops at the top instead) |
 | Back / Menu                         | The page's Back; twice on Home leaves the app     |

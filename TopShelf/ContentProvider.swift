@@ -17,12 +17,14 @@ final class ContentProvider: TVTopShelfContentProvider {
             return completionHandler(nil)
         }
         let items = TopShelfStore.load()
+        // The rows' titles in the page's language, as its home page words them.
+        let text = TopShelfText.text(for: TopShelfStore.language)
         // With the page's "Merge Continue Watching and Next Up" on, one row in the home page's order.
         let sections = (TopShelfStore.merged
-            ? [section("Continue Watching", items)]
+            ? [section(text.continueWatching, items)]
             : [
-                section("Continue Watching", items.filter(\.resumes)),
-                section("Next Up", items.filter { !$0.resumes }),
+                section(text.continueWatching, items.filter(\.resumes)),
+                section(text.nextUp, items.filter { !$0.resumes }),
             ]).compactMap { $0 }
         TopShelfStore.noteAsked(shown: sections.reduce(0) { $0 + $1.items.count })
         completionHandler(sections.isEmpty ? nil : TVTopShelfSectionedContent(sections: sections))

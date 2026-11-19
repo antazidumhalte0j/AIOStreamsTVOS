@@ -24,6 +24,11 @@ enum TopShelf {
         }
     }
 
+    /// The page's language, for the Top Shelf's row titles; tvOS asks the extension again when it changes.
+    static func language(_ language: String) {
+        if TopShelfStore.saveLanguage(language) { TVTopShelfContentProvider.topShelfContentDidChange() }
+    }
+
     private static func item(_ entry: Message) -> TopShelfItem? {
         guard let id = entry.text("id"), let title = entry.text("title"), let link = entry.text("link") else { return nil }
         return TopShelfItem(

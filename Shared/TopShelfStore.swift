@@ -81,6 +81,7 @@ enum TopShelfStore {
 
     private static let listName = "items.json"
     private static let mergedName = "merged.txt"
+    private static let languageName = "language.txt"
     private static let askedName = "asked.txt"
     private static func settingsKey(_ name: String) -> String { "aiostreams.topShelf.\(name)" }
 
@@ -138,6 +139,18 @@ enum TopShelfStore {
     static func load() -> [TopShelfItem] {
         guard let data = newest(listName) else { return [] }
         return (try? JSONDecoder().decode([TopShelfItem].self, from: data)) ?? []
+    }
+
+    /// The page's language, which the Top Shelf's row titles follow (`TopShelfText`); British English until it says.
+    static var language: String {
+        newest(languageName).flatMap { String(data: $0, encoding: .utf8) }.flatMap { $0.isEmpty ? nil : $0 } ?? "en-GB"
+    }
+
+    /// The page's language, saved for the extension; true if it changed and was saved.
+    @discardableResult
+    static func saveLanguage(_ language: String) -> Bool {
+        guard !language.isEmpty, language != self.language else { return false }
+        return write(Data(language.utf8), as: languageName)
     }
 
     /// The page merges Next Up into Continue Watching, so the Top Shelf shows the list as one row.

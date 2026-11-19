@@ -518,18 +518,34 @@ final class MainViewController: UIViewController, RemoteReceiver {
         let type: UIKeyboardType = numeric ? .numberPad
             : message.flag("email") == true ? .emailAddress
             : message.flag("url") == true ? .URL : .default
+        let onChange: (String) -> Void = { [weak self] text in
+            guard let self else { return }
+            self.callTV("input(\(self.jsString(text)))")
+        }
+        // A password or a PIN: tvOS's keyboard for a text field of the app's, which hides a password
+        // as dots and has the number keys for a PIN; Done sends the form, as it's the last thing asked.
+        if secure || numeric {
+            let field = FieldKeyboard(
+                text: message.text("value") ?? "",
+                prompt: message.text("label") ?? "",
+                keyboardType: type,
+                secure: secure,
+                onChange: onChange,
+                onClose: { [weak self] submit in
+                    guard let self else { return }
+                    self.callTV("done(\(submit))")
+                    self.web?.focusPage()
+                }
+            )
+            present(field, animated: true)
+            return
+        }
         let keyboard = SearchKeyboard(
             text: message.text("value") ?? "",
             prompt: message.text("label") ?? "",
             look: keyboardLook(message),
             keyboardType: type,
-            secure: secure,
-            // A password or a PIN is the last thing its form asks for.
-            returnKey: secure || numeric ? .done : .search,
-            onChange: { [weak self] text in
-                guard let self else { return }
-                self.callTV("input(\(self.jsString(text)))")
-            },
+            onChange: onChange,
             onClose: { [weak self] submit in
                 guard let self else { return }
                 self.keyboard = nil
@@ -679,7 +695,11 @@ final class MainViewController: UIViewController, RemoteReceiver {
             showKeyboard(message)
         case "tvos-language":
             // The page's language, which the app's own screens follow (LinkScreen).
-            if let language = message.text("language"), !language.isEmpty { pageLanguage = language }
+            if let language = message.text("language"), !language.isEmpty {
+                pageLanguage = language
+                // And the Top Shelf's row titles, which the extension reads from the App Group.
+                TopShelf.language(language)
+            }
         case "mpv-config", "mpv-config-save":
             sendToPage(["type": "mpv-config", "text": MPVConfig.text])
         case "diagnostics":
