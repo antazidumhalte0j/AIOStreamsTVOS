@@ -482,7 +482,15 @@ Back behaviour and the bundled-player path. It also means:
     decodes the rest to PCM whatever is asked.
 - Settings → About names the app's version **tvOS app**, and its Credits list AetherEngine as the
   player, with FFmpeg, dav1d, libdovi, LibTrueHD, libzvbi, libass and VideoToolbox, rather than mpv
-  (`patches/web/0010-tvos-about-names-its-engine.patch`). They're in English only.
+  (`patches/web/0010-tvos-about-names-its-engine.patch`).
+- The settings the app adds or words its own way (the About lines above, Object audio and its
+  Speakers, the Smaller subtitle size, Apply to styled subtitles too's help, Anime upscaling's help,
+  Upscale other video, Dolby Vision profile 7 FEL, HDR10 tone mapping) are in the languages the web
+  app has catalogs for, from the app's own catalog (`src/lib/hosts/shell/tvos-text.ts`,
+  `patches/web/0075-tvos-own-settings-text-translated.patch`) rather than Weblate's, so upstream's
+  catalog changes never conflict with it. A language without a line there falls back to British
+  English, as the web app does. The translations are machine-made, matched to the terms each
+  language's catalog already uses, and unreviewed by native speakers.
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
