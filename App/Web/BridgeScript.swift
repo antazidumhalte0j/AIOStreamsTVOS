@@ -1092,6 +1092,23 @@ enum BridgeScript {
   });
 
   /*
+   * The page's language, which the web app sets on the root as it activates one, for the app's own
+   * screens (the web link's QR code, LinkScreen.swift), so they follow the page rather than tvOS.
+   */
+  let sentLanguage = '';
+  const sendLanguage = () => {
+    const language = document.documentElement.lang || '';
+    if (!language || language === sentLanguage) return;
+    sentLanguage = language;
+    send({ type: 'tvos-language', language });
+  };
+  new MutationObserver(sendLanguage).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['lang'],
+  });
+  sendLanguage();
+
+  /*
    * The Siri Remote, as the keys the page's own remote handling reads. Back
    * goes through the bridge instead, as on Android.
    */

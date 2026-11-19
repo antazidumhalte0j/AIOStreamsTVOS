@@ -542,6 +542,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
 
     /// The keyboard open over the page, kept until it closes.
     private var keyboard: SearchKeyboard?
+    /// The page's language as it last said (`tvos-language`), for the app's own screens.
+    private var pageLanguage = "en-GB"
 
     // MARK: Links
 
@@ -567,7 +569,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
             return
         }
         guard presentedViewController == nil else { return }
-        let screen = LinkScreen(url: url)
+        let screen = LinkScreen(url: url, language: pageLanguage)
         screen.closed = { [weak self] in self?.web?.focusPage() }
         present(screen, animated: true)
     }
@@ -674,6 +676,9 @@ final class MainViewController: UIViewController, RemoteReceiver {
             TopShelf.publish(message)
         case "tvos-keyboard":
             showKeyboard(message)
+        case "tvos-language":
+            // The page's language, which the app's own screens follow (LinkScreen).
+            if let language = message.text("language"), !language.isEmpty { pageLanguage = language }
         case "mpv-config", "mpv-config-save":
             sendToPage(["type": "mpv-config", "text": MPVConfig.text])
         case "diagnostics":

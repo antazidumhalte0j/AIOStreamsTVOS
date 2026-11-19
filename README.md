@@ -490,7 +490,9 @@ Back behaviour and the bundled-player path. It also means:
   `patches/web/0075-tvos-own-settings-text-translated.patch`) rather than Weblate's, so upstream's
   catalog changes never conflict with it. A language without a line there falls back to British
   English, as the web app does. The translations are machine-made, matched to the terms each
-  language's catalog already uses, and unreviewed by native speakers.
+  language's catalog already uses, and unreviewed by native speakers. The app's own screen for a web
+  link (its QR code, `LinkScreen`) is in the same languages, following the page's language, which
+  the bridge script reports as the web app sets it (`tvos-language`).
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
