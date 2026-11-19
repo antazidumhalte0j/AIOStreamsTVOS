@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/components/shell/watch-next.tsx b/packages/web/src/components/shell/watch-next.tsx
-index 56089715d..989378f99 100644
+index 56089715d..c1b1ff4d6 100644
 --- a/packages/web/src/components/shell/watch-next.tsx
 +++ b/packages/web/src/components/shell/watch-next.tsx
 @@ -10,6 +10,7 @@ import {
@@ -10,21 +10,43 @@ index 56089715d..989378f99 100644
  
  const MAX_ITEMS = 10;
  const REPORTED_MS = 2000;
-@@ -43,9 +44,11 @@ export function WatchNextSync() {
+@@ -43,9 +44,14 @@ export function WatchNextSync() {
          };
        });
    }, [client, resume.data, nextUp.data]);
-+  // Sent again as it changes: the Apple TV app's Top Shelf merges the rows as the home page does (AIOStreamsTVOS).
++  // Sent again as it changes: the Apple TV app's Top Shelf merges the rows as the home page does
++  // (AIOStreamsTVOS). The value this renders with goes with the list: read from the settings again as
++  // the effect runs, it could be the default for a moment, as the page's settings are put back while
++  // the page draws itself again (a language change), and a wrong value then stayed.
 +  const [merged] = useSetting(settings.interface.mergeNextUp);
    React.useEffect(() => {
-     if (items) currentHost().watchNext?.(items);
+-    if (items) currentHost().watchNext?.(items);
 -  }, [items]);
++    if (items) currentHost().watchNext?.(items, merged);
 +  }, [items, merged]);
    const { refetch: refetchResume } = resume;
    const { refetch: refetchNextUp } = nextUp;
    React.useEffect(() => {
+diff --git a/packages/web/src/lib/hosts/index.ts b/packages/web/src/lib/hosts/index.ts
+index f7a92d495..335e96d67 100644
+--- a/packages/web/src/lib/hosts/index.ts
++++ b/packages/web/src/lib/hosts/index.ts
+@@ -120,8 +120,11 @@ export interface Host {
+   }): Promise<string | null>;
+   /** Saves a file the page made, for a web view that drops download links. */
+   saveFile?(name: string, type: string, text: string): void;
+-  /** Replaces what the system's row of what to watch next shows from this app. */
+-  watchNext?(items: WatchNextItem[]): void;
++  /**
++   * Replaces what the system's row of what to watch next shows from this app; `merged` is the
++   * home page's merge of Next Up into Continue Watching, as it renders (AIOStreamsTVOS).
++   */
++  watchNext?(items: WatchNextItem[], merged?: boolean): void;
+ }
+ 
+ const browserHost: Host = { name: 'browser', keepAwake: keepScreenOn };
 diff --git a/packages/web/src/lib/hosts/shell/android.ts b/packages/web/src/lib/hosts/shell/android.ts
-index a7b6f015f..4b7cc178c 100644
+index a7b6f015f..d63372369 100644
 --- a/packages/web/src/lib/hosts/shell/android.ts
 +++ b/packages/web/src/lib/hosts/shell/android.ts
 @@ -3,7 +3,7 @@ import { toast } from 'sonner';
@@ -36,16 +58,18 @@ index a7b6f015f..4b7cc178c 100644
  import { shellDownloads } from './downloads';
  import { appEngine, setEngine } from './player';
  import { resolveYouTube } from './youtube';
-@@ -108,7 +108,12 @@ const listen: NonNullable<Host['listen']> = ({ hearing, signal }) =>
+@@ -107,8 +107,13 @@ const listen: NonNullable<Host['listen']> = ({ hearing, signal }) =>
+     bridge?.send({ type: 'voice-search' });
    });
  
- const watchNext: NonNullable<Host['watchNext']> = (items) =>
+-const watchNext: NonNullable<Host['watchNext']> = (items) =>
 -  appBridge()?.send({ type: 'watch-next', items });
++const watchNext: NonNullable<Host['watchNext']> = (items, merged) =>
 +  appBridge()?.send({
 +    type: 'watch-next',
 +    items,
 +    // The Apple TV app's Top Shelf shows them as one Continue Watching row, as the home page does (AIOStreamsTVOS).
-+    ...(appleTv() && { merged: settings.interface.mergeNextUp.read() }),
++    ...(appleTv() && merged !== undefined && { merged }),
 +  });
  
  /** Saves it and applies it to what plays next. */
