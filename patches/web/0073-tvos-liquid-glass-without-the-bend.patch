@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/app/settings/theme.tsx b/packages/web/src/app/settings/theme.tsx
-index f71d23f7..bdc3d603 100644
+index f71d23f71..bdc3d6033 100644
 --- a/packages/web/src/app/settings/theme.tsx
 +++ b/packages/web/src/app/settings/theme.tsx
 @@ -22,7 +22,7 @@ import {
@@ -28,7 +28,7 @@ index f71d23f7..bdc3d603 100644
          />
          {artBackground.length > 0 && surface !== 'solid' && (
 diff --git a/packages/web/src/components/shell/glass-surface.tsx b/packages/web/src/components/shell/glass-surface.tsx
-index 577cebac..3215f4a1 100644
+index 577cebac7..a872e4214 100644
 --- a/packages/web/src/components/shell/glass-surface.tsx
 +++ b/packages/web/src/components/shell/glass-surface.tsx
 @@ -1,5 +1,6 @@
@@ -38,7 +38,7 @@ index 577cebac..3215f4a1 100644
  import { settings, useSetting } from '@/lib/settings';
  
  /** Only Chromium draws an SVG filter over what's behind an element. */
-@@ -8,6 +9,15 @@ export const canRefract =
+@@ -8,6 +9,19 @@ export const canRefract =
    CSS.supports('backdrop-filter', 'url(#a)') &&
    /Chrome\//.test(navigator.userAgent);
  
@@ -48,13 +48,17 @@ index 577cebac..3215f4a1 100644
 + */
 +const flatLiquid = () => !canRefract && appleTv();
 +
++// Its blur is lighter than frosted glass's, nearer the clear liquid glass that bends (styles.css).
++if (typeof document !== 'undefined' && flatLiquid())
++  document.documentElement.dataset.flatLiquid = '';
++
 +/** Liquid glass is offered where it bends, and flat in the Apple TV app (AIOStreamsTVOS). */
 +export const canPickLiquid = () => canRefract || appleTv();
 +
  interface Lens {
    start: string;
    end: string;
-@@ -178,7 +188,13 @@ export function GlassSurface({
+@@ -178,7 +192,13 @@ export function GlassSurface({
    return (
      <div
        ref={ref}
@@ -69,3 +73,42 @@ index 577cebac..3215f4a1 100644
        className={cn('glass-surface', className)}
        style={
          map ? { ...style, backdropFilter: `blur(2px) url(#${id})` } : style
+diff --git a/packages/web/src/styles.css b/packages/web/src/styles.css
+index 0b15b968d..1bdf6ff08 100644
+--- a/packages/web/src/styles.css
++++ b/packages/web/src/styles.css
+@@ -480,6 +480,34 @@ html[data-art-wash][data-art-glass='liquid']:not(.playing)
+     inset -12px -12px 24px -16px rgb(0 0 0 / 0.32),
+     0 12px 32px -12px rgb(0 0 0 / 0.6);
+ }
++/*
++ * The Apple TV app's liquid glass has no lens, which takes most of the blur off where it bends, so
++ * its blur is lighter than frosted glass's and it has no grain, nearer that clear glass (AIOStreamsTVOS).
++ */
++html[data-flat-liquid] .glass-surface[data-surface='liquid'],
++html[data-flat-liquid][data-art-wash][data-art-glass='liquid']:not(.playing)
++  :is(
++    .UI-Popover__root,
++    .UI-DropdownMenu__root,
++    .UI-DropdownMenu__subContent,
++    .UI-ContextMenu__root,
++    .UI-Select__content,
++    .UI-Tooltip__root,
++    .UI-Modal__content,
++    .UI-Drawer__content,
++    [data-ui='settings-card-body'],
++    [data-ui='settings-tab-group'],
++    [data-ui='pill-tabs']
++  ) {
++  /* Clear glass has no grain: only the sheen of frosted glass's background is kept. */
++  background-image: linear-gradient(
++    to bottom,
++    rgb(255 255 255 / 0.09),
++    rgb(255 255 255 / 0.02)
++  );
++  -webkit-backdrop-filter: blur(10px) saturate(1.8);
++  backdrop-filter: blur(10px) saturate(1.8);
++}
+ /* Fields sit recessed in the glass rather than being glass themselves. */
+ html[data-art-wash][data-art-glass]:not(.playing) .UI-Input__root {
+   --paper: rgb(0 0 0 / 0.25);

@@ -486,8 +486,11 @@ Back behaviour and the bundled-player path. It also means:
   what's behind its edges with an SVG filter in `backdrop-filter`, which only Chromium draws, so it
   offers the option there alone and draws Frosted glass in its place elsewhere. Here every glass
   surface (the floating rail, top tabs, corner menu, back button, and with Glass panels on the
-  menus, dialogs and settings cards) takes liquid glass's clearer fill and bright rim over the
-  frosted blur, the same on every tvOS version. The docked rail has no glass surface.
+  menus, dialogs and settings cards) takes liquid glass's clearer fill and bright rim over a 10 px
+  blur, lighter than frosted glass's 24 px, and without its grain (`data-flat-liquid` on the root),
+  as the lens that bends liquid glass elsewhere takes most of its blur off; the same on every tvOS
+  version. The
+  docked rail has no glass surface.
 - **Anime upscaling** (Settings → Playback → Video) uses AetherEngine's line-art scaler, Anime4K
   mode A (small), rather than the official app's anime shaders. The page turns it on only for what
   it takes for anime (an AniList, Kitsu, MyAnimeList or AniDB id on the title, its season or its
