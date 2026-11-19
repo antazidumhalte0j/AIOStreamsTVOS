@@ -1,0 +1,17 @@
+diff --git a/packages/web/src/components/shell/page-stack.tsx b/packages/web/src/components/shell/page-stack.tsx
+index 29feaac78..1eb34e9bd 100644
+--- a/packages/web/src/components/shell/page-stack.tsx
++++ b/packages/web/src/components/shell/page-stack.tsx
+@@ -82,8 +82,11 @@ function settle(
+   }
+   const open = next.at(-1)!;
+   const home = next.filter((e) => e.pathname === '/' && e !== open).at(-1);
++  // On an Apple TV only Home stays behind the open page: each page kept holds its layers and DOM in
++  // WebKit's process, which tvOS ends for memory long before the app runs short (AIOStreamsTVOS).
++  const kept = appleTv() ? 0 : KEPT;
+   next = next.filter(
+-    (e) => e === open || e === home || e.index >= open.index - KEPT
++    (e) => e === open || e === home || e.index >= open.index - kept
+   );
+   for (const k of leftAt.keys())
+     if (!next.some((e) => e.key === k)) leftAt.delete(k);
