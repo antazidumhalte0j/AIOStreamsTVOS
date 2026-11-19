@@ -80,6 +80,7 @@ enum TopShelfStore {
     private static let suites: [UserDefaults] = groups.compactMap { UserDefaults(suiteName: $0) }
 
     private static let listName = "items.json"
+    private static let mergedName = "merged.txt"
     private static let askedName = "asked.txt"
     private static func settingsKey(_ name: String) -> String { "aiostreams.topShelf.\(name)" }
 
@@ -139,9 +140,14 @@ enum TopShelfStore {
         return (try? JSONDecoder().decode([TopShelfItem].self, from: data)) ?? []
     }
 
+    /// The page merges Next Up into Continue Watching, so the Top Shelf shows the list as one row.
+    static var merged: Bool { newest(mergedName).flatMap { String(data: $0, encoding: .utf8) } == "1" }
+
+    /// The list, and whether it shows as one row; written before the list, which the extension reads by.
     @discardableResult
-    static func save(_ items: [TopShelfItem]) -> Bool {
+    static func save(_ items: [TopShelfItem], merged: Bool) -> Bool {
         guard let data = try? JSONEncoder().encode(items) else { return false }
+        _ = write(Data((merged ? "1" : "0").utf8), as: mergedName)
         return write(data, as: listName)
     }
 

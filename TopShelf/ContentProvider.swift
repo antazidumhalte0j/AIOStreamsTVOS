@@ -2,7 +2,8 @@ import TVServices
 
 /**
  * The Top Shelf over AIOStreams' icon on the home screen: Continue Watching
- * and Next Up, from the list the app saved when the page last sent it.
+ * and Next Up, from the list the app saved when the page last sent it, or
+ * one Continue Watching row where the page merges them, as its home page does.
  * Selecting a title opens its page in the app; Play plays it from where it
  * stopped. With nothing to show, tvOS shows the app's Top Shelf image.
  */
@@ -14,10 +15,13 @@ final class ContentProvider: TVTopShelfContentProvider {
             return completionHandler(notShared())
         }
         let items = TopShelfStore.load()
-        let sections = [
-            section("Continue Watching", items.filter(\.resumes)),
-            section("Next Up", items.filter { !$0.resumes }),
-        ].compactMap { $0 }
+        // With the page's "Merge Continue Watching and Next Up" on, one row in the home page's order.
+        let sections = (TopShelfStore.merged
+            ? [section("Continue Watching", items)]
+            : [
+                section("Continue Watching", items.filter(\.resumes)),
+                section("Next Up", items.filter { !$0.resumes }),
+            ]).compactMap { $0 }
         TopShelfStore.noteAsked(shown: sections.reduce(0) { $0 + $1.items.count })
         completionHandler(sections.isEmpty ? nil : TVTopShelfSectionedContent(sections: sections))
     }

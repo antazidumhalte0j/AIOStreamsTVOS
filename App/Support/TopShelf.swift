@@ -12,8 +12,10 @@ enum TopShelf {
 
     static func publish(_ message: Message) {
         let items = (message["items"] as? [Message] ?? []).compactMap(item)
-        if items == TopShelfStore.load(), lastSaved { return }
-        let saved = TopShelfStore.save(items)
+        // The page's "Merge Continue Watching and Next Up" (patches/web/0074): one row, as the home page shows.
+        let merged = message.flag("merged") == true
+        if items == TopShelfStore.load(), merged == TopShelfStore.merged, lastSaved { return }
+        let saved = TopShelfStore.save(items, merged: merged)
         lastSaved = saved
         if saved {
             TVTopShelfContentProvider.topShelfContentDidChange()

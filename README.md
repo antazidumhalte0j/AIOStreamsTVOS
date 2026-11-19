@@ -383,6 +383,10 @@ message whenever it changes, and an empty one on sign-out. The app saves it in a
 container it shares with its Top Shelf extension (`TopShelf/`), and tells tvOS to ask the extension
 again.
 
+- With the page's setting that merges Next Up into Continue Watching on, the Top Shelf shows the
+  list as one **Continue Watching** row, in the home page's order, as the home page does. The page
+  says so with the list (`merged` on `watch-next`, `patches/web/0074-tvos-top-shelf-merges-next-up.patch`)
+  and sends it again when the setting changes.
 - Selecting a title opens its page in the app (`aiostreams://item/…`); Play plays it, from where it
   stopped (`aiostreams://play/…`).
 - The list is as of the app's last run: the page asks the server again a couple of seconds after
