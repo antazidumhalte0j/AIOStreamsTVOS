@@ -128,16 +128,22 @@ jobs:
           codesign --force --sign - --timestamp=none --entitlements App/AIOStreamsTV.entitlements "$app"
           codesign -d --entitlements - "$app"
           codesign -d --entitlements - "$shelf"
-          rm -rf Payload AIOStreams.ipa
+          # Named for the app's version, as the release's tag is: aiostreams-v1.3.2.ipa.
+          ipa="aiostreams-v$(plist "$app" CFBundleShortVersionString).ipa"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]] && [ "$ipa" != "aiostreams-$GITHUB_REF_NAME.ipa" ]; then
+            echo "The tag $GITHUB_REF_NAME doesn't match the app's version ($ipa)"; exit 1
+          fi
+          rm -rf Payload aiostreams-*.ipa
           mkdir Payload
           cp -R "$app" Payload/
-          zip -qry AIOStreams.ipa Payload
-          ls -lh AIOStreams.ipa
+          zip -qry "$ipa" Payload
+          ls -lh "$ipa"
+          echo "IPA=$ipa" >> "$GITHUB_ENV"
 
       # The .ipa as it is, not zipped (archive: false, v7): a single file, which names the artifact.
       - uses: actions/upload-artifact@v7
         with:
-          path: AIOStreams.ipa
+          path: ${{ env.IPA }}
           archive: false
           if-no-files-found: error
 
@@ -147,7 +153,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" AIOStreams.ipa \
+          gh release create "$GITHUB_REF_NAME" "$IPA" \
             --title "$GITHUB_REF_NAME" \
             --notes "Unsigned build. Sign it with your own Apple ID to install, or add the AltStore-format source (https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/altstore/source.json) to an Apple TV sideloader that reads it." \
             --verify-tag
@@ -162,7 +168,7 @@ jobs:
         run: |
           git fetch --depth 1 origin main
           git checkout -B main origin/main
-          python3 scripts/update-source.py "$GITHUB_REF_NAME" AIOStreams.ipa
+          python3 scripts/update-source.py "$GITHUB_REF_NAME" "$IPA"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add altstore/source.json

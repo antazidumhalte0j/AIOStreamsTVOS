@@ -25,7 +25,7 @@ lasts 7 days, with a paid developer account a year.
   Apple TV sideloader that reads AltStore-format sources (FlareStore, for one). It lists every
   release and offers each new one as an update. AltStore and SideStore can add it too, but neither
   installs to an Apple TV.
-- **By hand**: download `AIOStreams.ipa` from the latest
+- **By hand**: download the `.ipa` (named for its version, such as `aiostreams-v1.3.2.ipa`) from the latest
   [release](https://github.com/mickey2266/AIOStreamsTVOS/releases/latest), and open it in your
   sideloading tool. Builds of `main` and of branches are attached to their workflow run as an
   artifact instead (Actions, the run, Artifacts; downloading one needs a GitHub account).
@@ -625,7 +625,9 @@ to the page; the page saves where you stopped.
 
 ## Building
 
-The GitHub Actions workflow builds an unsigned `AIOStreams.ipa` for Apple TV hardware. Every run
+The GitHub Actions workflow builds an unsigned `.ipa` for Apple TV hardware, named for the app's
+version (`aiostreams-v1.3.2.ipa`, from `project.yml`'s `MARKETING_VERSION`; a `v*` tag that doesn't
+match it fails the build). Every run
 attaches it as an artifact, whether from a push to `main`, a pull request or a run started by hand (Actions → Build →
 Run workflow, on any branch), and a `v*` tag also publishes a release of its own. Sign it with your own Apple ID using a sideloading tool that
 handles Apple TV; with a free Apple ID the signature lasts 7 days, with a paid account a year.
