@@ -443,19 +443,20 @@ final class MainViewController: UIViewController, RemoteReceiver {
         updateFound = nil
         guard presentedViewController == nil, player?.playing != true else { return }
         UpdateCheck.markShown(version)
+        // In the page's language, as the page has loaded by now (`pageReady`).
+        let text = UpdateNoticeText.text(for: pageLanguage)
         let alert = UIAlertController(
-            title: "Update available",
-            message: "AIOStreams for Apple TV \(version) is out; this is \(Identity.version). "
-                + "Update it in the app you sideload with, or download it from \(UpdateCheck.releases).",
+            title: text.title,
+            message: text.message(version, Identity.version, UpdateCheck.releases),
             preferredStyle: .alert
         )
         if let page = UpdateCheck.releasePage(version) {
-            alert.addAction(UIAlertAction(title: "View This Release", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: text.viewRelease, style: .default) { [weak self] _ in
                 // The handler runs as the alert goes; showLink needs nothing presented.
                 DispatchQueue.main.async { self?.showLink(page) }
             })
         }
-        alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: text.ok, style: .cancel) { [weak self] _ in
             self?.web?.focusPage()
         })
         present(alert, animated: true)

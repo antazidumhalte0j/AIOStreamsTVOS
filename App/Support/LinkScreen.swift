@@ -101,15 +101,8 @@ final class LinkScreen: UIViewController {
         let done: String
     }
 
-    /// The page's language, else one in the same language, else British English, as the page falls back.
-    static func text(for language: String) -> Text {
-        if let exact = texts[language] { return exact }
-        let base = language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
-        if let same = texts.first(where: { $0.key.split(separator: "-").first.map { String($0).lowercased() } == base }) {
-            return same.value
-        }
-        return texts["en-GB"]!
-    }
+    /// The page's language, else one in the same language, else British English (`AppLanguage`).
+    static func text(for language: String) -> Text { AppLanguage.pick(texts, for: language) }
 
     /// In the languages the web app has catalogs for, addressing the reader as each catalog does.
     private static let texts: [String: Text] = [
