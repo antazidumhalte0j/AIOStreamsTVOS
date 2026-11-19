@@ -43,10 +43,12 @@ struct KeyboardLook {
 }
 
 /**
- * tvOS's own search keyboard, shown over the page for one of the page's text
- * fields. Each change goes straight into the page's field, so a search's
- * results update while typing. Menu, or moving off the keyboard, closes it
- * and hands the remote back to the page.
+ * tvOS's own search keyboard, shown over the page for the page's text fields
+ * but passwords and PINs (`FieldKeyboard`, which hides what's typed), and for
+ * the app menu's own. Each change goes straight into the page's field, so
+ * a search's results update while typing. Menu, or moving off the keyboard,
+ * closes it and hands the remote back to the page; the return key, where the
+ * keyboard has one, closes it and sends the field's form.
  */
 final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelegate {
     /// What to present.
@@ -63,6 +65,7 @@ final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelega
         prompt: String,
         look: KeyboardLook = KeyboardLook(),
         keyboardType: UIKeyboardType,
+        returnKey: UIReturnKeyType = .search,
         onChange: @escaping (String) -> Void,
         onClose: @escaping (_ submit: Bool) -> Void
     ) {
@@ -84,6 +87,7 @@ final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelega
         bar.text = text
         bar.placeholder = prompt
         bar.keyboardType = keyboardType
+        bar.returnKeyType = returnKey
         bar.autocorrectionType = .no
         bar.autocapitalizationType = .none
 

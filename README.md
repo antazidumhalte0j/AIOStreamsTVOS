@@ -25,7 +25,7 @@ lasts 7 days, with a paid developer account a year.
   Apple TV sideloader that reads AltStore-format sources (FlareStore, for one). It lists every
   release and offers each new one as an update. AltStore and SideStore can add it too, but neither
   installs to an Apple TV.
-- **By hand**: download `AIOStreams.ipa` from the latest
+- **By hand**: download the `.ipa` (named for its version, such as `aiostreams-v1.3.2.ipa`) from the latest
   [release](https://github.com/mickey2266/AIOStreamsTVOS/releases/latest), and open it in your
   sideloading tool. Builds of `main` and of branches are attached to their workflow run as an
   artifact instead (Actions, the run, Artifacts; downloading one needs a GitHub account).
@@ -383,11 +383,16 @@ message whenever it changes, and an empty one on sign-out. The app saves it in a
 container it shares with its Top Shelf extension (`TopShelf/`), and tells tvOS to ask the extension
 again.
 
+- With the page's setting that merges Next Up into Continue Watching on, the Top Shelf shows the
+  list as one **Continue Watching** row, in the home page's order, as the home page does. The page
+  says so with the list (`merged` on `watch-next`, `patches/web/0074-tvos-top-shelf-merges-next-up.patch`)
+  and sends it again when the setting changes.
 - Selecting a title opens its page in the app (`aiostreams://item/…`); Play plays it, from where it
   stopped (`aiostreams://play/…`).
 - The list is as of the app's last run: the page asks the server again a couple of seconds after
   the app leaves the screen, and the app stays awake that long.
-- With nothing to show, tvOS shows the Top Shelf image instead.
+- With nothing to show, or no list from the app where the extension can read it (the app not yet
+  opened, or no App Group in common), tvOS shows the Top Shelf image instead.
 - The App Group is `group.io.github.aiostreams.tvos`. The CI build ad-hoc signs the app and the
   extension with it, so a sideloading tool can carry it over when it re-signs. Some tools swap it
   for generic groups (`group.<hash>.1` to `.5`) in no set order, so the app writes the list to every
@@ -477,10 +482,33 @@ Back behaviour and the bundled-player path. It also means:
     decodes the rest to PCM whatever is asked.
 - Settings → About names the app's version **tvOS app**, and its Credits list AetherEngine as the
   player, with FFmpeg, dav1d, libdovi, LibTrueHD, libzvbi, libass and VideoToolbox, rather than mpv
-  (`patches/web/0010-tvos-about-names-its-engine.patch`). They're in English only.
+  (`patches/web/0010-tvos-about-names-its-engine.patch`).
+- The settings the app adds or words its own way (the About lines above, Object audio and its
+  Speakers, the Smaller subtitle size, Apply to styled subtitles too's help, Anime upscaling's help,
+  Upscale other video, Dolby Vision profile 7 FEL, HDR10 tone mapping) are in the languages the web
+  app has catalogs for, from the app's own catalog (`src/lib/hosts/shell/tvos-text.ts`,
+  `patches/web/0075-tvos-own-settings-text-translated.patch`) rather than Weblate's, so upstream's
+  catalog changes never conflict with it. A language without a line there falls back to British
+  English, as the web app does. The translations are machine-made, matched to the terms each
+  language's catalog already uses, and unreviewed by native speakers. The app's own screen for a web
+  link (its QR code, `LinkScreen`), the update notice (`UpdateNoticeText`), the Top Shelf's row
+  titles (`TopShelfText`, saved for the extension with its list) and the player's
+  picture-in-picture button are in the same languages, following the page's language, which the
+  bridge script reports as the web app sets it (`tvos-language`, `AppLanguage`). The Top Shelf and
+  the button use the web app's own catalogs' words where they have them.
 - Settings → **Donate** lists the GitHub Sponsors and Ko-fi links as text
   (`https://github.com/sponsors/Viren070`, `https://ko-fi.com/Viren070`) rather than buttons that
   open them, as a TV has no browser to open them in (`patches/web/0011-tvos-donate-shows-links.patch`).
+- **Liquid glass** (Settings → Theme → Glass surface) is offered on the Apple TV, drawn without its
+  bend (`patches/web/0073-tvos-liquid-glass-without-the-bend.patch`). Upstream's liquid glass bends
+  what's behind its edges with an SVG filter in `backdrop-filter`, which only Chromium draws, so it
+  offers the option there alone and draws Frosted glass in its place elsewhere. Here every glass
+  surface (the floating rail, top tabs, corner menu, back button, and with Glass panels on the
+  menus, dialogs and settings cards) takes liquid glass's clearer fill and bright rim over a 10 px
+  blur, lighter than frosted glass's 24 px, and without its grain (`data-flat-liquid` on the root),
+  as the lens that bends liquid glass elsewhere takes most of its blur off; the same on every tvOS
+  version. The
+  docked rail has no glass surface.
 - **Anime upscaling** (Settings → Playback → Video) uses AetherEngine's line-art scaler, Anime4K
   mode A (small), rather than the official app's anime shaders. The page turns it on only for what
   it takes for anime (an AniList, Kitsu, MyAnimeList or AniDB id on the title, its season or its
@@ -573,7 +601,7 @@ Back behaviour and the bundled-player path. It also means:
 | ----------------------------------- | ------------------------------------------------- |
 | Clickpad edges / swipe              | Arrow keys (held edges repeat; a swipe up or down moves one row, or two when it's long; across, it moves as many posters as its length; an edge the swipe starts or ends on adds no arrow of its own; Left from a row's or a grid line's first poster opens the navigation)|
 | Click                               | Enter (held, the page's hold actions)             |
-| Click on a text field               | tvOS's search keyboard over the page, typing straight into the field (dictation on the mic button); Menu or moving off the keys closes it. The Search page opens it on its own as it opens, unless it opens with a search already in it, as Back to a search's results does. The linear keyboard keeps tvOS's full-screen layout over a black backdrop, with the page showing in the space below it. The grid keyboard (Settings → General → Keyboard) sits in a black box at the screen's top right, its keys' width as measured from what tvOS draws, with the page to its left. Passwords and PINs get the keyboard in an alert |
+| Click on a text field               | tvOS's search keyboard over the page, typing straight into the field (dictation on the mic button); Menu or moving off the keys closes it. The Search page opens it on its own as it opens, unless it opens with a search already in it, as Back to a search's results does. The linear keyboard keeps tvOS's full-screen layout over a black backdrop, with the page showing in the space below it. The grid keyboard (Settings → General → Keyboard) sits in a black box at the screen's top right, its keys' width as measured from what tvOS draws, with the page to its left. Passwords and PINs get tvOS's full-screen keyboard for a text field of the app's instead, with no alert around it (`FieldKeyboard`): it shows a password as dots, which the search keyboard can't, and a PIN on the number keys; its Done sends the field's form. The app menu's test video link is typed on the search keyboard too |
 | Click in a searchable list          | The pickers with up and down carets, such as Discover's catalog picker: picks the highlighted entry, including the one highlighted as the list opens or after a search; opens the keyboard only when nothing is left to pick |
 | Up from a searchable list's top entry | Opens the keyboard to search (a held Up, or a quick run of presses, stops at the top instead) |
 | Back / Menu                         | The page's Back; twice on Home leaves the app     |
@@ -597,7 +625,9 @@ to the page; the page saves where you stopped.
 
 ## Building
 
-The GitHub Actions workflow builds an unsigned `AIOStreams.ipa` for Apple TV hardware. Every run
+The GitHub Actions workflow builds an unsigned `.ipa` for Apple TV hardware, named for the app's
+version (`aiostreams-v1.3.2.ipa`, from `project.yml`'s `MARKETING_VERSION`; a `v*` tag that doesn't
+match it fails the build). Every run
 attaches it as an artifact, whether from a push to `main`, a pull request or a run started by hand (Actions → Build →
 Run workflow, on any branch), and a `v*` tag also publishes a release of its own. Sign it with your own Apple ID using a sideloading tool that
 handles Apple TV; with a free Apple ID the signature lasts 7 days, with a paid account a year.
@@ -650,7 +680,7 @@ dynamic frameworks that Xcode embeds in the app; nothing else in the app may bri
 own, or it takes the engine's symbols.
 
 `AIOSTREAMS_DIR=/path/to/AIOStreams bash scripts/fetch-web.sh` builds from a checkout you already have
-instead, and `AIOSTREAMS_REF=<branch, tag or commit>` picks what to fetch (by default `f070797c`, AIOStreams' `main` on 2026-11-17 (Android 0.16.0), the commit the patches are made against; the build workflow takes the same unless run by hand with another). The script applies the patches in
+instead, and `AIOSTREAMS_REF=<branch, tag or commit>` picks what to fetch (by default `c9251258`, AIOStreams' `main` on 2026-11-18 (after Android 0.16.1), the commit the patches are made against; the build workflow takes the same unless run by hand with another). The script applies the patches in
 `patches/web/` for the build and takes them out again after it, so that repo is left as it was;
 `AIOSTREAMS_PATCHES=0` builds without them. They draw only the catalog cards near the screen, in long
 rows and in grids, so a long scroll doesn't keep every card it passed, and save only a catalog's first

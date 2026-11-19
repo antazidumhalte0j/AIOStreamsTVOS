@@ -1,0 +1,114 @@
+diff --git a/packages/web/src/app/settings/theme.tsx b/packages/web/src/app/settings/theme.tsx
+index f71d23f71..bdc3d6033 100644
+--- a/packages/web/src/app/settings/theme.tsx
++++ b/packages/web/src/app/settings/theme.tsx
+@@ -22,7 +22,7 @@ import {
+   type ArtPage,
+   type GlassSurface,
+ } from '@/lib/settings';
+-import { canRefract } from '@/components/shell/glass-surface';
++import { canPickLiquid } from '@/components/shell/glass-surface';
+ import { useServerInfo } from '@/lib/jellyfin/server-info';
+ import { currentHost } from '@/lib/hosts';
+ import { focusOn, keyboardFocus } from '@/lib/input';
+@@ -194,11 +194,13 @@ export function ThemeSection() {
+           options={[
+             { value: 'solid', label: t`Solid` },
+             { value: 'frosted', label: t`Frosted glass` },
+-            ...(canRefract
++            ...(canPickLiquid()
+               ? [{ value: 'liquid', label: t`Liquid glass` }]
+               : []),
+           ]}
+-          value={surface === 'liquid' && !canRefract ? 'frosted' : surface}
++          value={
++            surface === 'liquid' && !canPickLiquid() ? 'frosted' : surface
++          }
+           onValueChange={(value) => setSurface(value as GlassSurface)}
+         />
+         {artBackground.length > 0 && surface !== 'solid' && (
+diff --git a/packages/web/src/components/shell/glass-surface.tsx b/packages/web/src/components/shell/glass-surface.tsx
+index 577cebac7..a872e4214 100644
+--- a/packages/web/src/components/shell/glass-surface.tsx
++++ b/packages/web/src/components/shell/glass-surface.tsx
+@@ -1,5 +1,6 @@
+ import React from 'react';
+ import { cn } from '@aiostreams/ui/core/styling';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { settings, useSetting } from '@/lib/settings';
+ 
+ /** Only Chromium draws an SVG filter over what's behind an element. */
+@@ -8,6 +9,19 @@ export const canRefract =
+   CSS.supports('backdrop-filter', 'url(#a)') &&
+   /Chrome\//.test(navigator.userAgent);
+ 
++/**
++ * The Apple TV app's WebKit draws no SVG filter behind an element, so its liquid glass is the
++ * clearer fill and bright rim over the frosted blur, without the bending edge (AIOStreamsTVOS).
++ */
++const flatLiquid = () => !canRefract && appleTv();
++
++// Its blur is lighter than frosted glass's, nearer the clear liquid glass that bends (styles.css).
++if (typeof document !== 'undefined' && flatLiquid())
++  document.documentElement.dataset.flatLiquid = '';
++
++/** Liquid glass is offered where it bends, and flat in the Apple TV app (AIOStreamsTVOS). */
++export const canPickLiquid = () => canRefract || appleTv();
++
+ interface Lens {
+   start: string;
+   end: string;
+@@ -178,7 +192,13 @@ export function GlassSurface({
+   return (
+     <div
+       ref={ref}
+-      data-surface={map ? 'liquid' : look === 'solid' ? 'solid' : 'frosted'}
++      data-surface={
++        map || (look === 'liquid' && flatLiquid())
++          ? 'liquid'
++          : look === 'solid'
++            ? 'solid'
++            : 'frosted'
++      }
+       className={cn('glass-surface', className)}
+       style={
+         map ? { ...style, backdropFilter: `blur(2px) url(#${id})` } : style
+diff --git a/packages/web/src/styles.css b/packages/web/src/styles.css
+index 0b15b968d..1bdf6ff08 100644
+--- a/packages/web/src/styles.css
++++ b/packages/web/src/styles.css
+@@ -480,6 +480,34 @@ html[data-art-wash][data-art-glass='liquid']:not(.playing)
+     inset -12px -12px 24px -16px rgb(0 0 0 / 0.32),
+     0 12px 32px -12px rgb(0 0 0 / 0.6);
+ }
++/*
++ * The Apple TV app's liquid glass has no lens, which takes most of the blur off where it bends, so
++ * its blur is lighter than frosted glass's and it has no grain, nearer that clear glass (AIOStreamsTVOS).
++ */
++html[data-flat-liquid] .glass-surface[data-surface='liquid'],
++html[data-flat-liquid][data-art-wash][data-art-glass='liquid']:not(.playing)
++  :is(
++    .UI-Popover__root,
++    .UI-DropdownMenu__root,
++    .UI-DropdownMenu__subContent,
++    .UI-ContextMenu__root,
++    .UI-Select__content,
++    .UI-Tooltip__root,
++    .UI-Modal__content,
++    .UI-Drawer__content,
++    [data-ui='settings-card-body'],
++    [data-ui='settings-tab-group'],
++    [data-ui='pill-tabs']
++  ) {
++  /* Clear glass has no grain: only the sheen of frosted glass's background is kept. */
++  background-image: linear-gradient(
++    to bottom,
++    rgb(255 255 255 / 0.09),
++    rgb(255 255 255 / 0.02)
++  );
++  -webkit-backdrop-filter: blur(10px) saturate(1.8);
++  backdrop-filter: blur(10px) saturate(1.8);
++}
+ /* Fields sit recessed in the glass rather than being glass themselves. */
+ html[data-art-wash][data-art-glass]:not(.playing) .UI-Input__root {
+   --paper: rgb(0 0 0 / 0.25);

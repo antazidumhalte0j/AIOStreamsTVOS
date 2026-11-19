@@ -1,8 +1,8 @@
 diff --git a/packages/web/src/app/settings/audio.tsx b/packages/web/src/app/settings/audio.tsx
-index 835b9bc7b..39a7d67f8 100644
+index f1f68c34d..30806839f 100644
 --- a/packages/web/src/app/settings/audio.tsx
 +++ b/packages/web/src/app/settings/audio.tsx
-@@ -21,8 +21,10 @@ import {
+@@ -22,8 +22,10 @@ import {
    AUDIO_DELAY_LIMIT_MS,
    AUDIO_DELAY_STEP_MS,
    DIALOGUE_BOOSTS,
@@ -13,7 +13,7 @@ index 835b9bc7b..39a7d67f8 100644
    type Passthrough,
    type PassthroughFormat,
  } from '@/lib/settings';
-@@ -138,6 +140,10 @@ function OutputCard() {
+@@ -135,6 +137,10 @@ function OutputCard() {
    const [passthrough, setPassthrough] = useSetting(settings.audio.passthrough);
    const [formats, setFormats] = useSetting(settings.audio.passthroughFormats);
    const [ac3Encode, setAc3Encode] = useSetting(settings.audio.ac3Encode);
@@ -22,9 +22,9 @@ index 835b9bc7b..39a7d67f8 100644
 +    settings.audio.objectAudioLayout
 +  );
    const info = useShellInfo();
+   const layer = useSettingsLayer();
    // An Apple TV copies Dolby Digital (Plus) and decodes the rest, whatever is asked.
-   const tvos = appleTv();
-@@ -203,10 +209,48 @@ function OutputCard() {
+@@ -201,10 +207,48 @@ function OutputCard() {
            onValueChange={setAc3Encode}
          />
        )}
@@ -74,10 +74,10 @@ index 835b9bc7b..39a7d67f8 100644
    const [audioDevice, setAudioDevice] = useSetting(settings.audio.device);
    const devices = useAudioDevices();
 diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
-index 13e268227..40b522e79 100644
+index 1447c0f56..fd136c8a1 100644
 --- a/packages/web/src/lib/hosts/shell/player.ts
 +++ b/packages/web/src/lib/hosts/shell/player.ts
-@@ -31,7 +31,12 @@ import type {
+@@ -32,7 +32,12 @@ import {
  } from '@/lib/playback/engine';
  import { audioCodes } from '@/lib/playback/track-picks';
  import { currentHost } from '..';
@@ -91,7 +91,7 @@ index 13e268227..40b522e79 100644
  import { exoStats } from './exo-stats';
  import { passthroughFormats } from './sound';
  
-@@ -534,6 +539,10 @@ export function playerSettings() {
+@@ -536,6 +541,10 @@ export function playerSettings() {
      ac3Encode: audio.ac3Encode.read(),
      cacheMb: Number(settings.player.cacheSize.read()) || 0,
      upscaling: upscalingOn(),
@@ -103,10 +103,10 @@ index 13e268227..40b522e79 100644
        ? {
            frameRate: video.frameRate.read(),
 diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
-index 67bb68e55..3f5b8706c 100644
+index 3f11e1774..d3d36cf6d 100644
 --- a/packages/web/src/lib/settings/index.ts
 +++ b/packages/web/src/lib/settings/index.ts
-@@ -196,6 +196,10 @@ const isPercent = (value: number) => value >= 0 && value <= 100;
+@@ -201,6 +201,10 @@ const isPercent = (value: number) => value >= 0 && value <= 100;
  export const AUDIO_CHANNELS = ['auto', 'stereo', '5.1', '7.1'] as const;
  export type AudioChannels = (typeof AUDIO_CHANNELS)[number];
  
@@ -117,7 +117,7 @@ index 67bb68e55..3f5b8706c 100644
  /** What plays versions inside the Android app. */
  /** `auto` is the browser's own player in a browser. */
  export const PLAYER_ENGINES = [
-@@ -738,6 +742,14 @@ export const settings = {
+@@ -746,6 +750,14 @@ export const settings = {
        undefined,
        ['aiostreams-app-ac3-encode']
      ),

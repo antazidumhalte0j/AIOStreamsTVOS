@@ -1,0 +1,920 @@
+diff --git a/packages/web/src/app/settings/about.tsx b/packages/web/src/app/settings/about.tsx
+index 7abf03e05..1a8a4a23a 100644
+--- a/packages/web/src/app/settings/about.tsx
++++ b/packages/web/src/app/settings/about.tsx
+@@ -10,6 +10,7 @@ import { usageStatsText } from '@/components/shell/usage-stats';
+ import { currentHost } from '@/lib/hosts';
+ import { useShellInfo, type ShellInfo } from '@/lib/hosts/shell';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
++import { tvText } from '@/lib/hosts/shell/tvos-text';
+ import { serverAddress } from '@/lib/jellyfin/servers';
+ import { useServerInfo } from '@/lib/jellyfin/server-info';
+ import { LicensesSetting } from './_components/licenses';
+@@ -61,8 +62,7 @@ export function AboutSection() {
+       ? ([
+           [
+             appleTv()
+-              ? // eslint-disable-next-line lingui/no-unlocalized-strings -- the Apple TV app's own build, untranslated
+-                'tvOS app'
++              ? tvText('about.tvosApp')
+               : shell.platform === 'android'
+                 ? t`Android app`
+                 : t`Desktop app`,
+@@ -194,53 +194,53 @@ function credits(
+ 
+ /*
+  * What plays and decodes video in the Apple TV app, which plays with AetherEngine rather than mpv.
+- * In English only: the app's own build, with no catalog entries for these.
++ * Its own lines are in the app's own catalog (`tvText`); AetherEngine's is the one mpv has.
+  */
+-/* eslint-disable lingui/no-unlocalized-strings -- the Apple TV app's own build, untranslated */
++/* eslint-disable lingui/no-unlocalized-strings -- names and addresses */
+ const appleTvCredits = (): { name: string; help: string; url: string }[] => [
+   {
+     name: 'AetherEngine',
+-    help: 'Plays the video.',
++    help: t`Plays the video.`,
+     url: 'https://github.com/superuser404notfound/AetherEngine',
+   },
+   {
+     name: 'FFmpeg',
+-    help: 'Reads every file and decodes what the Apple TV has no decoder for.',
++    help: tvText('credit.ffmpeg'),
+     url: 'https://ffmpeg.org',
+   },
+   {
+     name: 'dav1d',
+-    help: 'Decodes AV1, inside FFmpeg.',
++    help: tvText('credit.dav1d'),
+     url: 'https://code.videolan.org/videolan/dav1d',
+   },
+   {
+     name: 'libdovi',
+-    help: 'Reads and converts the Dolby Vision metadata.',
++    help: tvText('credit.libdovi'),
+     url: 'https://github.com/quietvoid/dovi_tool',
+   },
+   {
+     name: 'LibTrueHD',
+-    help: 'Decodes TrueHD Atmos objects for object audio.',
++    help: tvText('credit.libtruehd'),
+     url: 'https://github.com/superuser404notfound/LibTrueHD',
+   },
+   {
+     name: 'libzvbi',
+-    help: 'Decodes teletext subtitles, inside FFmpeg.',
++    help: tvText('credit.libzvbi'),
+     url: 'https://github.com/zapping-vbi/zvbi',
+   },
+   {
+     name: 'libass',
+-    help: 'Draws ASS and SSA subtitles with their styles.',
++    help: tvText('credit.libass'),
+     url: 'https://github.com/libass/libass',
+   },
+   {
+     name: 'VideoToolbox',
+-    help: "Apple's hardware decoder, for HEVC, H.264 and the Apple TV's other formats.",
++    help: tvText('credit.videotoolbox'),
+     url: 'https://developer.apple.com/documentation/videotoolbox',
+   },
+   {
+     name: 'Anime4K',
+-    help: "Upscales anime in the engine's line-art scaler.",
++    help: tvText('credit.anime4k'),
+     url: 'https://github.com/bloc97/Anime4K',
+   },
+ ];
+diff --git a/packages/web/src/app/settings/audio.tsx b/packages/web/src/app/settings/audio.tsx
+index 30806839f..f36f9445e 100644
+--- a/packages/web/src/app/settings/audio.tsx
++++ b/packages/web/src/app/settings/audio.tsx
+@@ -7,6 +7,7 @@ import { currentHost } from '@/lib/hosts';
+ import { useShellInfo, shellHost } from '@/lib/hosts/shell';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { useAudioDevices } from '@/lib/hosts/shell/desktop';
++import { tvText } from '@/lib/hosts/shell/tvos-text';
+ import { audioTypes, type AudioType } from '@/lib/playback/audio-tracks';
+ import {
+   audioLanguages,
+@@ -145,6 +146,7 @@ function OutputCard() {
+   const layer = useSettingsLayer();
+   // An Apple TV copies Dolby Digital (Plus) and decodes the rest, whatever is asked.
+   const tvos = appleTv();
++  const objectText = objectAudioText();
+   const passing = !tvos && passthrough !== 'off';
+   return (
+     <SettingsCard name="output" title={t`Output`} holds="device">
+@@ -210,19 +212,19 @@ function OutputCard() {
+       {tvos && audioChannels === 'auto' && (
+         <Switch
+           side="right"
+-          label={OBJECT_AUDIO.label}
+-          help={OBJECT_AUDIO.help}
++          label={objectText.label}
++          help={objectText.help}
+           value={objectAudio}
+           onValueChange={setObjectAudio}
+         />
+       )}
+       {tvos && audioChannels === 'auto' && objectAudio && (
+         <Select
+-          label={OBJECT_AUDIO.layoutLabel}
+-          help={OBJECT_AUDIO.layoutHelp}
++          label={objectText.layoutLabel}
++          help={objectText.layoutHelp}
+           options={OBJECT_AUDIO_LAYOUTS.map((l) => ({
+             value: l,
+-            label: OBJECT_AUDIO.layouts[l],
++            label: objectText.layouts[l],
+           }))}
+           value={objectLayout}
+           onValueChange={(v) => setObjectLayout(v as ObjectAudioLayout)}
+@@ -233,21 +235,20 @@ function OutputCard() {
+ }
+ 
+ /*
+- * The Apple TV app's object audio switch (`settings.audio.objectAudio`). In English only: the app's
+- * own build, with no catalog entries for these.
++ * The Apple TV app's object audio switch (`settings.audio.objectAudio`), in the app's own catalog
++ * (`tvText`), read as the card draws so it follows the language.
+  */
+-/* eslint-disable lingui/no-unlocalized-strings -- the Apple TV app's own build, untranslated */
+-const OBJECT_AUDIO = {
+-  label: 'Object audio for TrueHD Atmos and DTS:X',
+-  help: 'Keeps their heights and objects, rendered for your speakers, instead of playing their 7.1. Needs tvOS 26 and an Atmos receiver or soundbar on HDMI. Dialogue boost and night mode turn it off.',
+-  layoutLabel: 'Speakers',
+-  layoutHelp: 'The layout object audio is rendered for. Your receiver or soundbar fits it to the speakers it has, so choose 9.1.6 only for a system with wide and middle height speakers.',
++const objectAudioText = () => ({
++  label: tvText('objectAudio.label'),
++  help: tvText('objectAudio.help'),
++  layoutLabel: tvText('objectAudio.layoutLabel'),
++  layoutHelp: tvText('objectAudio.layoutHelp'),
+   layouts: {
+-    '7.1.4': '7.1.4, or fewer speakers',
++    '7.1.4': tvText('objectAudio.layout714'),
++    // eslint-disable-next-line lingui/no-unlocalized-strings -- a speaker layout's name
+     '9.1.6': '9.1.6',
+   } satisfies Record<ObjectAudioLayout, string>,
+-};
+-/* eslint-enable lingui/no-unlocalized-strings */
++});
+ 
+ function AudioDeviceSelect() {
+   const [audioDevice, setAudioDevice] = useSetting(settings.audio.device);
+diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
+index 75df09b03..729321237 100644
+--- a/packages/web/src/app/settings/player.tsx
++++ b/packages/web/src/app/settings/player.tsx
+@@ -28,6 +28,7 @@ import {
+   saveMpvConfig,
+ } from '@/lib/hosts/shell/android';
+ import { appBridge, appleTv, type VideoOutput } from '@/lib/hosts/shell/bridge';
++import { tvText } from '@/lib/hosts/shell/tvos-text';
+ import {
+   CUSTOM_LINK,
+   LAUNCHED_PLAYERS,
+@@ -472,9 +473,9 @@ function VideoCard() {
+           label={t`Anime upscaling`}
+           help={
+             // The Apple TV app upscales anime with the engine's Anime4K line-art scaler, not the official app's anime shaders (AIOStreamsTVOS).
+-            // In English only, as a plain string: the build compiles t`` to an id, which shows as itself without a translation.
++            // In the app's own catalog (`tvText`): t`` compiles to an id, which shows as itself without a catalog entry.
+             appleTv()
+-              ? "Upscales anime up to 1080p to the screen as it plays, with Anime4K's line-art networks, for sharper lines in older and lower-resolution shows. It applies to titles marked as anime, and needs tvOS 26 or later. HDR and Dolby Vision videos, videos about as large as the screen, and live channels stay as they are. Turns itself off for a video the Apple TV can't keep up with. Switching it during a video reopens the video where it is."
++              ? tvText('upscaling.animeHelp')
+               : t`Sharpens the lines and cleans up the compression in anime as it plays, most of all in older and lower-resolution shows. It applies to titles marked as anime. With a keyboard, U in the player switches it for what's playing. Uses more power, and turns itself off for a video this device can't keep up with. HDR videos, and videos about as large as the screen, stay as they are.`
+           }
+           value={upscaling}
+@@ -551,15 +552,15 @@ function VideoCard() {
+ 
+ /**
+  * The Apple TV app's upscaling of everything else (`settings.video.upscalingOther`, AIOStreamsTVOS).
+- * In English only, as the help above.
++ * In the app's own catalog (`tvText`).
+  */
+ function OtherUpscalingSwitch() {
+   const [other, setOther] = useSetting(settings.video.upscalingOther);
+   return (
+     <Switch
+       side="right"
+-      label="Upscale other video"
+-      help="Upscales films and shows that aren't anime with the Apple TV's super resolution, below 1080p, from tvOS 26: older and lower-resolution videos look sharper, though faces and fine detail can look smoothed. HDR and Dolby Vision videos, videos about as large as the screen, live channels and trailers stay as they are. Switching it during a video reopens the video where it is."
++      label={tvText('upscaling.otherLabel')}
++      help={tvText('upscaling.otherHelp')}
+       value={other}
+       onValueChange={setOther}
+     />
+@@ -568,15 +569,15 @@ function OtherUpscalingSwitch() {
+ 
+ /**
+  * The Apple TV app's Dolby Vision Profile 7 FEL switch (`settings.video.dolbyVisionFel`, AIOStreamsTVOS).
+- * Shown only under the Dolby Vision switch, which it depends on. In English only, as the help above.
++ * Shown only under the Dolby Vision switch, which it depends on. In the app's own catalog (`tvText`).
+  */
+ function DolbyVisionFelSwitch() {
+   const [fel, setFel] = useSetting(settings.video.dolbyVisionFel);
+   return (
+     <Switch
+       side="right"
+-      label="Dolby Vision profile 7 FEL"
+-      help="Plays profile 7 videos with a full enhancement layer (some UHD Blu-ray remuxes) with that layer folded into the picture's brightness curves, so a Dolby Vision TV shows more of the disc's detail. Starts and seeks take a little longer."
++      label={tvText('dolbyVision.felLabel')}
++      help={tvText('dolbyVision.felHelp')}
+       value={fel}
+       onValueChange={setFel}
+     />
+@@ -585,17 +586,17 @@ function DolbyVisionFelSwitch() {
+ 
+ /**
+  * The Apple TV app's HDR10 tone mapping (`settings.video.hdrToneMap`, AIOStreamsTVOS): the engine maps an
+- * HDR10 video brighter than the chosen peak down to it. In English only, as the help above.
++ * HDR10 video brighter than the chosen peak down to it. In the app's own catalog (`tvText`).
+  */
+ function HdrToneMapSelect() {
+   const [toneMap, setToneMap] = useSetting(settings.video.hdrToneMap);
+   return (
+     <Select
+-      label="HDR10 tone mapping"
+-      help="Maps HDR10 videos mastered brighter than your TV down to its peak brightness, so highlights keep their detail instead of clipping. Choose the peak your TV reaches. Dolby Vision, HDR10+ and HLG videos, and videos already within the peak, stay as they are. A tone-mapped video has no picture-in-picture and plays Dolby Digital Plus Atmos without its heights."
++      label={tvText('toneMap.label')}
++      help={tvText('toneMap.help')}
+       options={HDR_TONE_MAPS.map((v) => ({
+         value: v,
+-        label: v === 'off' ? 'Off' : `${v} nits`,
++        label: v === 'off' ? t`Off` : tvText('toneMap.nits', { n: v }),
+       }))}
+       value={toneMap}
+       onValueChange={(v) => setToneMap(v as HdrToneMap)}
+diff --git a/packages/web/src/app/settings/subtitles.tsx b/packages/web/src/app/settings/subtitles.tsx
+index bfce60092..6a200253d 100644
+--- a/packages/web/src/app/settings/subtitles.tsx
++++ b/packages/web/src/app/settings/subtitles.tsx
+@@ -27,6 +27,7 @@ import {
+ import { ColorInput } from '@aiostreams/ui/color-input';
+ import { currentHost } from '@/lib/hosts';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
++import { tvText } from '@/lib/hosts/shell/tvos-text';
+ import { SettingsCard } from './_components/settings-card';
+ import { languageOptions, LanguageList } from './_components/common';
+ 
+@@ -70,11 +71,9 @@ const fontOptions = (): { value: SubtitleFont; label: string }[] => [
+ 
+ /**
+  * What the switch does in the Apple TV app (AIOStreamsTVOS), which honours it, and sizes Blu-ray and
+- * DVD subtitles with Size. In English only: the app's own build, with no catalog entry for it.
++ * DVD subtitles with Size. In the app's own catalog (`tvText`).
+  */
+-const TVOS_STYLED_HELP =
+-  // eslint-disable-next-line lingui/no-unlocalized-strings -- the Apple TV app's own build, untranslated
+-  'Styled subtitles, common in anime, keep their own fonts, colours and placement unless this is on, which shows them as plain text in your style. Blu-ray and DVD subtitles keep their look, at the size chosen above.';
++const tvosStyledHelp = () => tvText('subtitles.styledHelp');
+ 
+ const subtitleTypeOptions = (): { value: SubtitleType; label: string }[] => [
+   { value: 'normal', label: t`Full` },
+@@ -272,7 +271,7 @@ export function SubtitlesSection() {
+           label={t`Apply to styled subtitles too`}
+           help={
+             appleTv()
+-              ? TVOS_STYLED_HELP
++              ? tvosStyledHelp()
+               : t`Styled subtitles, common in anime, keep their own fonts and colours unless this is on. Blu-ray and DVD subtitles always keep their look and size. Only in the desktop app.`
+           }
+           value={overrideStyled}
+diff --git a/packages/web/src/lib/hosts/shell/tvos-text.ts b/packages/web/src/lib/hosts/shell/tvos-text.ts
+new file mode 100644
+index 000000000..5789f9b73
+--- /dev/null
++++ b/packages/web/src/lib/hosts/shell/tvos-text.ts
+@@ -0,0 +1,610 @@
++import { i18n } from '@lingui/core';
++
++/*
++ * The Apple TV app's own settings text (AIOStreamsTVOS), in the languages the web app has catalogs
++ * for. Kept here rather than in the catalogs, which Weblate writes, so upstream's catalog changes
++ * never conflict with it. `tvText` takes the language Lingui has active, then one in the same
++ * language, then British English, as the catalogs fall back.
++ */
++/* eslint-disable lingui/no-unlocalized-strings -- the Apple TV app's catalog */
++const TEXT = {
++  "en-GB": {
++    "about.tvosApp": "tvOS app",
++    "credit.ffmpeg": "Reads every file and decodes what the Apple TV has no decoder for.",
++    "credit.dav1d": "Decodes AV1, inside FFmpeg.",
++    "credit.libdovi": "Reads and converts the Dolby Vision metadata.",
++    "credit.libtruehd": "Decodes TrueHD Atmos objects for object audio.",
++    "credit.libzvbi": "Decodes teletext subtitles, inside FFmpeg.",
++    "credit.libass": "Draws ASS and SSA subtitles with their styles.",
++    "credit.videotoolbox": "Apple's hardware decoder, for HEVC, H.264 and the Apple TV's other formats.",
++    "credit.anime4k": "Upscales anime in the engine's line-art scaler.",
++    "objectAudio.label": "Object audio for TrueHD Atmos and DTS:X",
++    "objectAudio.help": "Keeps their heights and objects, rendered for your speakers, instead of playing their 7.1. Needs tvOS 26 and an Atmos receiver or soundbar on HDMI. Dialogue boost and night mode turn it off.",
++    "objectAudio.layoutLabel": "Speakers",
++    "objectAudio.layoutHelp": "The layout object audio is rendered for. Your receiver or soundbar fits it to the speakers it has, so choose 9.1.6 only for a system with wide and middle height speakers.",
++    "objectAudio.layout714": "7.1.4, or fewer speakers",
++    "subtitles.sizeSmaller": "Smaller",
++    "subtitles.styledHelp": "Styled subtitles, common in anime, keep their own fonts, colours and placement unless this is on, which shows them as plain text in your style. Blu-ray and DVD subtitles keep their look, at the size chosen above.",
++    "upscaling.animeHelp": "Upscales anime up to 1080p to the screen as it plays, with Anime4K's line-art networks, for sharper lines in older and lower-resolution shows. It applies to titles marked as anime, and needs tvOS 26 or later. HDR and Dolby Vision videos, videos about as large as the screen, and live channels stay as they are. Turns itself off for a video the Apple TV can't keep up with. Switching it during a video reopens the video where it is.",
++    "upscaling.otherLabel": "Upscale other video",
++    "upscaling.otherHelp": "Upscales films and shows that aren't anime with the Apple TV's super resolution, below 1080p, from tvOS 26: older and lower-resolution videos look sharper, though faces and fine detail can look smoothed. HDR and Dolby Vision videos, videos about as large as the screen, live channels and trailers stay as they are. Switching it during a video reopens the video where it is.",
++    "dolbyVision.felLabel": "Dolby Vision profile 7 FEL",
++    "dolbyVision.felHelp": "Plays profile 7 videos with a full enhancement layer (some UHD Blu-ray remuxes) with that layer folded into the picture's brightness curves, so a Dolby Vision TV shows more of the disc's detail. Starts and seeks take a little longer.",
++    "toneMap.label": "HDR10 tone mapping",
++    "toneMap.help": "Maps HDR10 videos mastered brighter than your TV down to its peak brightness, so highlights keep their detail instead of clipping. Choose the peak your TV reaches. Dolby Vision, HDR10+ and HLG videos, and videos already within the peak, stay as they are. A tone-mapped video has no picture-in-picture and plays Dolby Digital Plus Atmos without its heights.",
++    "toneMap.nits": "{n} nits",
++  },
++  "ar": {
++    "about.tvosApp": "تطبيق tvOS",
++    "credit.ffmpeg": "يقرأ كل الملفات ويفك ترميز ما لا يملك Apple TV مفكّ ترميز له.",
++    "credit.dav1d": "يفك ترميز AV1 داخل FFmpeg.",
++    "credit.libdovi": "يقرأ بيانات Dolby Vision الوصفية ويحوّلها.",
++    "credit.libtruehd": "يفك ترميز كائنات TrueHD Atmos للصوت القائم على الكائنات.",
++    "credit.libzvbi": "يفك ترميز ترجمة التليتكست داخل FFmpeg.",
++    "credit.libass": "يرسم ترجمة ASS وSSA بأنماطها.",
++    "credit.videotoolbox": "مفكّ الترميز العتادي من Apple، لصيغ HEVC وH.264 وصيغ Apple TV الأخرى.",
++    "credit.anime4k": "يحسّن دقة الأنمي في أداة تكبير الخطوط الخاصة بالمحرّك.",
++    "objectAudio.label": "الصوت القائم على الكائنات لـ TrueHD Atmos وDTS:X",
++    "objectAudio.help": "يحتفظ بالارتفاعات والكائنات ويعرضها على مكبرات الصوت لديك بدل تشغيل نسخة 7.1. يتطلب tvOS 26 وجهاز استقبال أو مكبر صوت شريطي (soundbar) يدعم Atmos عبر HDMI. يؤدي تعزيز الحوار والوضع الليلي إلى إيقافه.",
++    "objectAudio.layoutLabel": "مكبرات الصوت",
++    "objectAudio.layoutHelp": "التوزيع الذي يُعرض عليه الصوت القائم على الكائنات. يكيّفه جهاز الاستقبال أو مكبر الصوت الشريطي مع مكبرات الصوت المتوفرة لديه، لذا اختر 9.1.6 فقط إذا كان نظامك يضم مكبرات صوت علوية عريضة وأوسطية.",
++    "objectAudio.layout714": "7.1.4 أو مكبرات صوت أقل",
++    "subtitles.sizeSmaller": "أصغر",
++    "subtitles.styledHelp": "تحتفظ الترجمة المنسّقة، الشائعة في الأنمي، بخطوطها وألوانها ومواضعها ما لم يكن هذا الخيار مفعّلًا، وعندها تُعرض كنص عادي بنمطك. أما ترجمة Blu-ray وDVD فتحتفظ بمظهرها بالحجم المحدد أعلاه.",
++    "upscaling.animeHelp": "يحسّن دقة الأنمي حتى 1080p لتناسب الشاشة أثناء التشغيل، بشبكات خطوط Anime4K، للحصول على خطوط أوضح في المسلسلات الأقدم والأقل دقة. يُطبَّق على العناوين المصنّفة كأنمي، ويتطلب tvOS 26 أو أحدث. تبقى فيديوهات HDR وDolby Vision، والفيديوهات التي بحجم الشاشة تقريبًا، والقنوات المباشرة كما هي. يتوقف تلقائيًا للفيديو الذي لا يستطيع Apple TV مجاراته. يؤدي تغييره أثناء الفيديو إلى إعادة فتحه من الموضع نفسه.",
++    "upscaling.otherLabel": "تحسين دقة الفيديو الآخر",
++    "upscaling.otherHelp": "يحسّن دقة الأفلام والمسلسلات غير الأنمي بخاصية الدقة الفائقة في Apple TV، لما دون 1080p، بدءًا من tvOS 26: تبدو الفيديوهات الأقدم والأقل دقة أوضح، لكن الوجوه والتفاصيل الدقيقة قد تبدو ناعمة. تبقى فيديوهات HDR وDolby Vision، والفيديوهات التي بحجم الشاشة تقريبًا، والقنوات المباشرة، والإعلانات التشويقية كما هي. يؤدي تغييره أثناء الفيديو إلى إعادة فتحه من الموضع نفسه.",
++    "dolbyVision.felLabel": "Dolby Vision بروفايل 7 FEL",
++    "dolbyVision.felHelp": "يشغّل فيديوهات بروفايل 7 ذات طبقة التحسين الكاملة (بعض ملفات UHD Blu-ray remux) مع دمج تلك الطبقة في منحنيات سطوع الصورة، فيعرض تلفزيون Dolby Vision مزيدًا من تفاصيل القرص. يستغرق البدء والتنقل وقتًا أطول قليلًا.",
++    "toneMap.label": "رسم نغمات HDR10",
++    "toneMap.help": "يخفض سطوع فيديوهات HDR10 المُعدّة بسطوع أعلى من تلفزيونك إلى ذروة سطوعه، فتحتفظ المناطق الساطعة بتفاصيلها بدل أن تُقتطع. اختر الذروة التي يبلغها تلفزيونك. تبقى فيديوهات Dolby Vision وHDR10+ وHLG، والفيديوهات التي ضمن الذروة أصلًا، كما هي. لا تتوفر صورة داخل صورة مع الفيديو المعالَج، ويُشغَّل Dolby Digital Plus Atmos بدون الارتفاعات.",
++    "toneMap.nits": "{n} nits",
++  },
++  "ca": {
++    "about.tvosApp": "Aplicació de tvOS",
++    "credit.ffmpeg": "Llegeix tots els fitxers i descodifica allò que l'Apple TV no sap descodificar.",
++    "credit.dav1d": "Descodifica AV1, dins de FFmpeg.",
++    "credit.libdovi": "Llegeix i converteix les metadades de Dolby Vision.",
++    "credit.libtruehd": "Descodifica els objectes de TrueHD Atmos per a l'àudio d'objectes.",
++    "credit.libzvbi": "Descodifica els subtítols del teletext, dins de FFmpeg.",
++    "credit.libass": "Dibuixa els subtítols ASS i SSA amb els seus estils.",
++    "credit.videotoolbox": "El descodificador de maquinari d'Apple, per a HEVC, H.264 i els altres formats de l'Apple TV.",
++    "credit.anime4k": "Escala l'anime amb l'escalador de línies del motor.",
++    "objectAudio.label": "Àudio d'objectes per a TrueHD Atmos i DTS:X",
++    "objectAudio.help": "Conserva els canals d'alçada i els objectes i els renderitza per als teus altaveus, en lloc de reproduir-ne la mescla 7.1. Necessita tvOS 26 i un receptor o una barra de so Atmos per HDMI. La millora del diàleg i el mode nocturn el desactiven.",
++    "objectAudio.layoutLabel": "Altaveus",
++    "objectAudio.layoutHelp": "La disposició per a la qual es renderitza l'àudio d'objectes. El teu receptor o la teva barra de so l'adapta als altaveus que té, així que tria 9.1.6 només per a un sistema amb altaveus amples i d'alçada central.",
++    "objectAudio.layout714": "7.1.4, o menys altaveus",
++    "subtitles.sizeSmaller": "Més petit",
++    "subtitles.styledHelp": "Els subtítols amb estil, habituals a l'anime, conserven les seves tipografies, colors i posició, tret que això estigui activat. Llavors es mostren com a text normal amb el teu estil. Els subtítols de Blu-ray i DVD conserven el seu aspecte, a la mida triada a dalt.",
++    "upscaling.animeHelp": "Escala l'anime fins a 1080p a la pantalla mentre es reprodueix, amb les xarxes de línies d'Anime4K, per obtenir línies més nítides en sèries més antigues i de menor resolució. S'aplica als títols marcats com a anime i necessita tvOS 26 o posterior. Els vídeos en HDR i Dolby Vision, els vídeos de la mida de la pantalla aproximadament i els canals en directe es queden tal com són. Es desactiva automàticament per a un vídeo que l'Apple TV no pot seguir. Si ho canvies durant un vídeo, el vídeo es torna a obrir pel mateix punt.",
++    "upscaling.otherLabel": "Escala la resta de vídeos",
++    "upscaling.otherHelp": "Escala les pel·lícules i les sèries que no són anime amb la superresolució de l'Apple TV, per sota de 1080p, a partir de tvOS 26: els vídeos més antics i de menor resolució es veuen més nítids, tot i que les cares i els detalls fins poden semblar suavitzats. Els vídeos en HDR i Dolby Vision, els vídeos de la mida de la pantalla aproximadament, els canals en directe i els tràilers es queden tal com són. Si ho canvies durant un vídeo, el vídeo es torna a obrir pel mateix punt.",
++    "dolbyVision.felLabel": "Perfil 7 FEL de Dolby Vision",
++    "dolbyVision.felHelp": "Reprodueix els vídeos de perfil 7 amb una capa de millora completa (alguns remuxos d'UHD Blu-ray) amb aquesta capa integrada a les corbes de brillantor de la imatge, de manera que un televisor Dolby Vision mostra més detalls del disc. L'inici i els salts triguen una mica més.",
++    "toneMap.label": "Mapatge de tons HDR10",
++    "toneMap.help": "Adapta els vídeos HDR10 masteritzats amb més brillantor que el teu televisor a la brillantor màxima del televisor, perquè les llums altes conservin els detalls en lloc de retallar-se. Tria el màxim que assoleix el teu televisor. Els vídeos Dolby Vision, HDR10+ i HLG, i els que ja són dins del màxim, es queden tal com són. Un vídeo amb mapatge de tons no té imatge dins d'imatge i reprodueix Dolby Digital Plus Atmos sense els canals d'alçada.",
++    "toneMap.nits": "{n} nits",
++  },
++  "de": {
++    "about.tvosApp": "tvOS-App",
++    "credit.ffmpeg": "Liest jede Datei und dekodiert, wofür der Apple TV keinen Decoder hat.",
++    "credit.dav1d": "Dekodiert AV1, innerhalb von FFmpeg.",
++    "credit.libdovi": "Liest und konvertiert die Dolby-Vision-Metadaten.",
++    "credit.libtruehd": "Dekodiert TrueHD-Atmos-Objekte für Objektaudio.",
++    "credit.libzvbi": "Dekodiert Videotext-Untertitel, innerhalb von FFmpeg.",
++    "credit.libass": "Zeichnet ASS- und SSA-Untertitel mit ihren Stilen.",
++    "credit.videotoolbox": "Der Hardware-Decoder von Apple, für HEVC, H.264 und die anderen Formate des Apple TV.",
++    "credit.anime4k": "Skaliert Anime im Linienzeichnungs-Scaler der Engine hoch.",
++    "objectAudio.label": "Objektaudio für TrueHD Atmos und DTS:X",
++    "objectAudio.help": "Behält Höhenkanäle und Objekte bei und rendert sie für deine Lautsprecher, statt das 7.1 abzuspielen. Erfordert tvOS 26 sowie einen Atmos-Receiver oder eine Soundbar über HDMI. Dialogverstärkung und Nachtmodus schalten es aus.",
++    "objectAudio.layoutLabel": "Lautsprecher",
++    "objectAudio.layoutHelp": "Das Layout, für das Objektaudio gerendert wird. Dein Receiver oder deine Soundbar passt es an die vorhandenen Lautsprecher an. Wähle 9.1.6 daher nur für ein System mit seitlichen und mittleren Höhenlautsprechern.",
++    "objectAudio.layout714": "7.1.4 oder weniger Lautsprecher",
++    "subtitles.sizeSmaller": "Kleiner",
++    "subtitles.styledHelp": "Formatierte Untertitel, wie sie bei Anime üblich sind, behalten ihre eigenen Schriftarten, Farben und Positionen, außer diese Option ist aktiviert. Dann werden sie als einfacher Text in deinem Stil angezeigt. Blu-ray- und DVD-Untertitel behalten ihr Aussehen, in der oben gewählten Größe.",
++    "upscaling.animeHelp": "Skaliert Anime bis 1080p während der Wiedergabe mit den Linienzeichnungs-Netzwerken von Anime4K auf die Bildschirmgröße hoch, für schärfere Linien bei älteren und niedriger aufgelösten Serien. Gilt für Titel, die als Anime markiert sind, und erfordert tvOS 26 oder neuer. HDR- und Dolby-Vision-Videos, Videos in etwa Bildschirmgröße und Live-Sender bleiben unverändert. Schaltet sich für ein Video selbst aus, wenn der Apple TV nicht mithalten kann. Wird die Einstellung während eines Videos geändert, öffnet sich das Video an derselben Stelle neu.",
++    "upscaling.otherLabel": "Anderes Video hochskalieren",
++    "upscaling.otherHelp": "Skaliert Filme und Serien, die kein Anime sind, mit der Super Resolution des Apple TV hoch, unterhalb von 1080p und ab tvOS 26: Ältere und niedriger aufgelöste Videos wirken schärfer, Gesichter und feine Details können aber geglättet aussehen. HDR- und Dolby-Vision-Videos, Videos in etwa Bildschirmgröße, Live-Sender und Trailer bleiben unverändert. Wird die Einstellung während eines Videos geändert, öffnet sich das Video an derselben Stelle neu.",
++    "dolbyVision.felLabel": "Dolby Vision Profil 7 FEL",
++    "dolbyVision.felHelp": "Spielt Profil-7-Videos mit voller Enhancement Layer (einige UHD-Blu-ray-Remuxes) ab, wobei diese Ebene in die Helligkeitskurven des Bildes eingerechnet wird, sodass ein Dolby-Vision-Fernseher mehr Details der Disc zeigt. Start und Spulen dauern etwas länger.",
++    "toneMap.label": "HDR10-Tone-Mapping",
++    "toneMap.help": "Passt HDR10-Videos, die heller gemastert wurden als dein Fernseher darstellen kann, an dessen Spitzenhelligkeit an, damit Lichter ihre Details behalten, statt abgeschnitten zu werden. Wähle die Spitzenhelligkeit, die dein Fernseher erreicht. Dolby-Vision-, HDR10+- und HLG-Videos sowie Videos, die bereits innerhalb der Spitzenhelligkeit liegen, bleiben unverändert. Ein Video mit Tone-Mapping hat kein Bild-in-Bild und spielt Dolby Digital Plus Atmos ohne Höhenkanäle ab.",
++    "toneMap.nits": "{n} nits",
++  },
++  "el": {
++    "about.tvosApp": "Εφαρμογή tvOS",
++    "credit.ffmpeg": "Διαβάζει κάθε αρχείο και αποκωδικοποιεί ό,τι δεν διαθέτει αποκωδικοποιητή το Apple TV.",
++    "credit.dav1d": "Αποκωδικοποιεί AV1, μέσα στο FFmpeg.",
++    "credit.libdovi": "Διαβάζει και μετατρέπει τα μεταδεδομένα Dolby Vision.",
++    "credit.libtruehd": "Αποκωδικοποιεί αντικείμενα TrueHD Atmos για ήχο βάσει αντικειμένων.",
++    "credit.libzvbi": "Αποκωδικοποιεί υπότιτλους τελετέξτ, μέσα στο FFmpeg.",
++    "credit.libass": "Σχεδιάζει υπότιτλους ASS και SSA με τα στιλ τους.",
++    "credit.videotoolbox": "Ο αποκωδικοποιητής υλικού της Apple, για HEVC, H.264 και τις άλλες μορφές του Apple TV.",
++    "credit.anime4k": "Αναβαθμίζει την εικόνα των anime στον scaler γραμμών της μηχανής.",
++    "objectAudio.label": "Ήχος βάσει αντικειμένων για TrueHD Atmos και DTS:X",
++    "objectAudio.help": "Διατηρεί τα ύψη και τα αντικείμενα, αποδίδοντάς τα για τα ηχεία σου, αντί να παίζει το 7.1 τους. Απαιτεί tvOS 26 και ενισχυτή ή soundbar Atmos μέσω HDMI. Η ενίσχυση διαλόγων και η νυχτερινή λειτουργία το απενεργοποιούν.",
++    "objectAudio.layoutLabel": "Ηχεία",
++    "objectAudio.layoutHelp": "Η διάταξη για την οποία αποδίδεται ο ήχος βάσει αντικειμένων. Ο ενισχυτής ή το soundbar την προσαρμόζει στα ηχεία που διαθέτει, οπότε επίλεξε 9.1.6 μόνο για σύστημα με ηχεία wide και μεσαία ηχεία ύψους.",
++    "objectAudio.layout714": "7.1.4 ή λιγότερα ηχεία",
++    "subtitles.sizeSmaller": "Μικρότερο",
++    "subtitles.styledHelp": "Οι υπότιτλοι με μορφοποίηση, συνηθισμένοι στα anime, διατηρούν τις δικές τους γραμματοσειρές, χρώματα και θέση, εκτός αν είναι ενεργό αυτό, που τους εμφανίζει ως απλό κείμενο με το δικό σου στιλ. Οι υπότιτλοι Blu-ray και DVD διατηρούν την εμφάνισή τους, στο μέγεθος που επιλέγεις παραπάνω.",
++    "upscaling.animeHelp": "Αναβαθμίζει την εικόνα των anime έως 1080p στο μέγεθος της οθόνης κατά την αναπαραγωγή, με τα δίκτυα γραμμών του Anime4K, για πιο καθαρές γραμμές σε παλαιότερες σειρές και σειρές χαμηλότερης ανάλυσης. Ισχύει για τίτλους που είναι σημειωμένοι ως anime και απαιτεί tvOS 26 ή νεότερο. Τα βίντεο HDR και Dolby Vision, τα βίντεο περίπου στο μέγεθος της οθόνης και τα ζωντανά κανάλια μένουν όπως είναι. Απενεργοποιείται μόνο του για βίντεο που το Apple TV δεν μπορεί να ακολουθήσει. Η αλλαγή κατά τη διάρκεια βίντεο το ανοίγει ξανά από το ίδιο σημείο.",
++    "upscaling.otherLabel": "Αναβάθμιση άλλων βίντεο",
++    "upscaling.otherHelp": "Αναβαθμίζει ταινίες και σειρές που δεν είναι anime με την υπερ-ανάλυση του Apple TV, κάτω από 1080p, από το tvOS 26: τα παλαιότερα βίντεο και τα βίντεο χαμηλότερης ανάλυσης φαίνονται πιο καθαρά, αν και τα πρόσωπα και οι λεπτομέρειες μπορεί να φαίνονται εξομαλυμένα. Τα βίντεο HDR και Dolby Vision, τα βίντεο περίπου στο μέγεθος της οθόνης, τα ζωντανά κανάλια και τα τρέιλερ μένουν όπως είναι. Η αλλαγή κατά τη διάρκεια βίντεο το ανοίγει ξανά από το ίδιο σημείο.",
++    "dolbyVision.felLabel": "Dolby Vision προφίλ 7 FEL",
++    "dolbyVision.felHelp": "Αναπαράγει βίντεο προφίλ 7 με πλήρες επίπεδο βελτίωσης (ορισμένα remux UHD Blu-ray), ενσωματώνοντας το επίπεδο αυτό στις καμπύλες φωτεινότητας της εικόνας, ώστε μια τηλεόραση Dolby Vision να δείχνει περισσότερες λεπτομέρειες του δίσκου. Η έναρξη και η μετακίνηση παίρνουν λίγο περισσότερο χρόνο.",
++    "toneMap.label": "Αντιστοίχιση τόνων HDR10",
++    "toneMap.help": "Μειώνει τα βίντεο HDR10 που έχουν μαστερινγκ σε μεγαλύτερη φωτεινότητα από την τηλεόρασή σου στη μέγιστη φωτεινότητά της, ώστε τα φωτεινά σημεία να κρατούν τις λεπτομέρειές τους αντί να κόβονται. Επίλεξε τη μέγιστη φωτεινότητα της τηλεόρασής σου. Τα βίντεο Dolby Vision, HDR10+ και HLG, καθώς και τα βίντεο που είναι ήδη εντός αυτής, μένουν όπως είναι. Ένα βίντεο με αντιστοίχιση τόνων δεν έχει εικόνα μέσα σε εικόνα και παίζει το Dolby Digital Plus Atmos χωρίς τα ύψη.",
++    "toneMap.nits": "{n} νιτ",
++  },
++  "es": {
++    "about.tvosApp": "App de tvOS",
++    "credit.ffmpeg": "Lee todos los archivos y decodifica lo que el Apple TV no sabe decodificar.",
++    "credit.dav1d": "Decodifica AV1, dentro de FFmpeg.",
++    "credit.libdovi": "Lee y convierte los metadatos de Dolby Vision.",
++    "credit.libtruehd": "Decodifica los objetos de TrueHD Atmos para el audio de objetos.",
++    "credit.libzvbi": "Decodifica los subtítulos de teletexto, dentro de FFmpeg.",
++    "credit.libass": "Dibuja los subtítulos ASS y SSA con sus estilos.",
++    "credit.videotoolbox": "El decodificador por hardware de Apple, para HEVC, H.264 y los demás formatos del Apple TV.",
++    "credit.anime4k": "Escala el anime con el escalador de dibujo lineal del motor.",
++    "objectAudio.label": "Audio de objetos para TrueHD Atmos y DTS:X",
++    "objectAudio.help": "Conserva sus alturas y objetos, renderizados para tus altavoces, en lugar de reproducir su 7.1. Requiere tvOS 26 y un receptor o una barra de sonido Atmos por HDMI. El realce de diálogos y el modo noche lo desactivan.",
++    "objectAudio.layoutLabel": "Altavoces",
++    "objectAudio.layoutHelp": "La distribución para la que se renderiza el audio de objetos. Tu receptor o barra de sonido la adapta a los altavoces que tiene, así que elige 9.1.6 solo para un sistema con altavoces de altura laterales y centrales.",
++    "objectAudio.layout714": "7.1.4, o menos altavoces",
++    "subtitles.sizeSmaller": "Más pequeño",
++    "subtitles.styledHelp": "Los subtítulos con estilo, habituales en el anime, conservan sus propias fuentes, colores y posición, salvo que esto esté activado: entonces se muestran como texto sin formato con tu estilo. Los subtítulos de Blu-ray y DVD conservan su aspecto, con el tamaño elegido arriba.",
++    "upscaling.animeHelp": "Escala el anime de hasta 1080p a la pantalla mientras se reproduce, con las redes de dibujo lineal de Anime4K, para líneas más nítidas en series antiguas y de menor resolución. Se aplica a los títulos marcados como anime y requiere tvOS 26 o posterior. Los videos HDR y Dolby Vision, los videos de un tamaño parecido al de la pantalla y los canales en vivo se quedan como están. Se desactiva solo en un video que el Apple TV no puede procesar a tiempo. Cambiarlo durante un video lo vuelve a abrir en el mismo punto.",
++    "upscaling.otherLabel": "Escalar otros videos",
++    "upscaling.otherHelp": "Escala las películas y series que no son anime con la superresolución del Apple TV, por debajo de 1080p, desde tvOS 26: los videos antiguos y de menor resolución se ven más nítidos, aunque los rostros y los detalles finos pueden verse suavizados. Los videos HDR y Dolby Vision, los videos de un tamaño parecido al de la pantalla, los canales en vivo y los traílers se quedan como están. Cambiarlo durante un video lo vuelve a abrir en el mismo punto.",
++    "dolbyVision.felLabel": "Dolby Vision perfil 7 FEL",
++    "dolbyVision.felHelp": "Reproduce videos de perfil 7 con una capa de mejora completa (algunos remuxes de UHD Blu-ray) integrando esa capa en las curvas de brillo de la imagen, para que un televisor Dolby Vision muestre más detalle del disco. El inicio y los saltos tardan un poco más.",
++    "toneMap.label": "Mapeo de tonos HDR10",
++    "toneMap.help": "Ajusta los videos HDR10 masterizados con más brillo que tu televisor al brillo máximo de este, para que las luces altas conserven su detalle en lugar de recortarse. Elige el brillo máximo que alcanza tu televisor. Los videos Dolby Vision, HDR10+ y HLG, y los que ya están dentro del brillo máximo, se quedan como están. Un video con mapeo de tonos no tiene imagen en imagen y reproduce Dolby Digital Plus Atmos sin sus alturas.",
++    "toneMap.nits": "{n} nits",
++  },
++  "fi": {
++    "about.tvosApp": "tvOS-sovellus",
++    "credit.ffmpeg": "Lukee jokaisen tiedoston ja purkaa sen, mitä Apple TV ei itse osaa purkaa.",
++    "credit.dav1d": "Purkaa AV1:n FFmpegin sisällä.",
++    "credit.libdovi": "Lukee ja muuntaa Dolby Visionin metadatan.",
++    "credit.libtruehd": "Purkaa TrueHD Atmos -objektit objektiääntä varten.",
++    "credit.libzvbi": "Purkaa teksti-TV-tekstitykset FFmpegin sisällä.",
++    "credit.libass": "Piirtää ASS- ja SSA-tekstitykset tyyleineen.",
++    "credit.videotoolbox": "Applen laitteistopurkain HEVC:lle, H.264:lle ja Apple TV:n muille formaateille.",
++    "credit.anime4k": "Skaalaa animea moottorin viivaskaalaimessa.",
++    "objectAudio.label": "Objektiääni TrueHD Atmosille ja DTS:X:lle",
++    "objectAudio.help": "Säilyttää korkeuskanavat ja objektit ja renderöi ne kaiuttimillesi sen sijaan, että toistaisi 7.1-miksauksen. Vaatii tvOS 26:n sekä Atmos-vastaanottimen tai soundbarin HDMI-liitännässä. Dialogin korostus ja yötila poistavat tämän käytöstä.",
++    "objectAudio.layoutLabel": "Kaiuttimet",
++    "objectAudio.layoutHelp": "Kaiutinasettelu, jolle objektiääni renderöidään. Vastaanottimesi tai soundbarisi sovittaa sen omiin kaiuttimiinsa, joten valitse 9.1.6 vain järjestelmälle, jossa on leveät ja keskikorkeat kaiuttimet.",
++    "objectAudio.layout714": "7.1.4 tai vähemmän kaiuttimia",
++    "subtitles.sizeSmaller": "Pienempi",
++    "subtitles.styledHelp": "Tyyliteltyt tekstitykset, joita on usein animessa, säilyttävät omat fonttinsa, värinsä ja sijaintinsa, ellei tämä ole päällä. Silloin ne näytetään pelkkänä tekstinä sinun tyylilläsi. Blu-ray- ja DVD-tekstitykset säilyttävät ulkoasunsa yllä valitussa koossa.",
++    "upscaling.animeHelp": "Skaalaa enintään 1080p:n animen näytölle toiston aikana Anime4K:n viivaverkoilla, jotta viivat näyttävät terävämmiltä vanhemmissa ja matalamman resoluution sarjoissa. Se koskee animeksi merkittyjä nimikkeitä ja vaatii tvOS 26:n tai uudemman. HDR- ja Dolby Vision -videot, näytön kokoiset videot ja live-kanavat pysyvät ennallaan. Poistuu itsestään käytöstä videolla, jota Apple TV ei jaksa pyörittää. Jos vaihdat asetusta videon aikana, video avataan uudelleen samasta kohdasta.",
++    "upscaling.otherLabel": "Skaalaa muuta videota",
++    "upscaling.otherHelp": "Skaalaa elokuvat ja sarjat, jotka eivät ole animea, Apple TV:n superresoluutiolla 1080p:n alapuolella tvOS 26:sta alkaen: vanhemmat ja matalamman resoluution videot näyttävät terävämmiltä, mutta kasvot ja hienot yksityiskohdat voivat näyttää pehmennetyiltä. HDR- ja Dolby Vision -videot, näytön kokoiset videot, live-kanavat ja trailerit pysyvät ennallaan. Jos vaihdat asetusta videon aikana, video avataan uudelleen samasta kohdasta.",
++    "dolbyVision.felLabel": "Dolby Vision -profiili 7 FEL",
++    "dolbyVision.felHelp": "Toistaa profiilin 7 videot, joissa on täysi parannuskerros (jotkin UHD Blu-ray -remuxit), niin että kerros on yhdistetty kuvan kirkkauskäyriin. Dolby Vision -televisio näyttää silloin enemmän levyn yksityiskohtia. Käynnistys ja haku kestävät hieman pidempään.",
++    "toneMap.label": "HDR10-sävykartoitus",
++    "toneMap.help": "Sovittaa HDR10-videot, jotka on masteroitu televisiotasi kirkkaammiksi, television huippukirkkauteen, jotta kirkkaat kohdat säilyttävät yksityiskohtansa eivätkä leikkaudu. Valitse huippu, jonka televisiosi saavuttaa. Dolby Vision-, HDR10+- ja HLG-videot sekä videot, jotka ovat jo huipun rajoissa, pysyvät ennallaan. Sävykartoitetulla videolla ei ole kuva kuvassa -toimintoa, ja se toistaa Dolby Digital Plus Atmosin ilman korkeuskanavia.",
++    "toneMap.nits": "{n} nitiä",
++  },
++  "fr": {
++    "about.tvosApp": "App tvOS",
++    "credit.ffmpeg": "Lit chaque fichier et décode ce pour quoi l'Apple TV n'a pas de décodeur.",
++    "credit.dav1d": "Décode l'AV1, au sein de FFmpeg.",
++    "credit.libdovi": "Lit et convertit les métadonnées Dolby Vision.",
++    "credit.libtruehd": "Décode les objets TrueHD Atmos pour l'audio objet.",
++    "credit.libzvbi": "Décode les sous-titres télétexte, au sein de FFmpeg.",
++    "credit.libass": "Affiche les sous-titres ASS et SSA avec leurs styles.",
++    "credit.videotoolbox": "Le décodeur matériel d'Apple, pour HEVC, H.264 et les autres formats de l'Apple TV.",
++    "credit.anime4k": "Agrandit les animes avec le scaler de dessins au trait du moteur.",
++    "objectAudio.label": "Audio objet pour TrueHD Atmos et DTS:X",
++    "objectAudio.help": "Conserve les canaux de hauteur et les objets, rendus pour vos haut-parleurs, au lieu de lire le 7.1. Nécessite tvOS 26 et un ampli ou une barre de son Atmos sur HDMI. L'amplification des dialogues et le mode nuit le désactivent.",
++    "objectAudio.layoutLabel": "Haut-parleurs",
++    "objectAudio.layoutHelp": "La disposition pour laquelle l'audio objet est rendu. Votre ampli ou votre barre de son l'adapte aux haut-parleurs dont il dispose. Ne choisissez donc 9.1.6 que pour un système avec des haut-parleurs de hauteur latéraux et centraux.",
++    "objectAudio.layout714": "7.1.4, ou moins de haut-parleurs",
++    "subtitles.sizeSmaller": "Plus petit",
++    "subtitles.styledHelp": "Les sous-titres stylisés, courants dans les animes, gardent leurs propres polices, couleurs et positions, sauf si cette option est activée : ils s'affichent alors en texte brut avec votre style. Les sous-titres Blu-ray et DVD gardent leur apparence, à la taille choisie ci-dessus.",
++    "upscaling.animeHelp": "Agrandit les animes jusqu'à 1080p à l'écran pendant la lecture, avec les réseaux de dessins au trait d'Anime4K, pour des lignes plus nettes dans les séries plus anciennes et en basse résolution. S'applique aux titres marqués comme anime et nécessite tvOS 26 ou version ultérieure. Les vidéos HDR et Dolby Vision, les vidéos à peu près de la taille de l'écran et les chaînes en direct restent inchangées. Se désactive de lui-même pour une vidéo que l'Apple TV ne peut pas suivre. Modifier ce réglage pendant une vidéo la rouvre au même endroit.",
++    "upscaling.otherLabel": "Agrandir les autres vidéos",
++    "upscaling.otherHelp": "Agrandit les films et séries qui ne sont pas des animes avec la super-résolution de l'Apple TV, en dessous de 1080p, à partir de tvOS 26 : les vidéos plus anciennes et en basse résolution paraissent plus nettes, mais les visages et les détails fins peuvent sembler lissés. Les vidéos HDR et Dolby Vision, les vidéos à peu près de la taille de l'écran, les chaînes en direct et les bandes-annonces restent inchangées. Modifier ce réglage pendant une vidéo la rouvre au même endroit.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Lit les vidéos de profil 7 avec une couche d'amélioration complète (certains remuxes UHD Blu-ray) en intégrant cette couche aux courbes de luminosité de l'image, afin qu'un téléviseur Dolby Vision affiche davantage de détails du disque. Le démarrage et les déplacements prennent un peu plus de temps.",
++    "toneMap.label": "Tone mapping HDR10",
++    "toneMap.help": "Ramène les vidéos HDR10 masterisées plus lumineuses que votre téléviseur à sa luminosité maximale, afin que les hautes lumières gardent leurs détails au lieu d'être écrêtées. Choisissez la luminosité maximale que atteint votre téléviseur. Les vidéos Dolby Vision, HDR10+ et HLG, ainsi que celles déjà dans la limite de la luminosité maximale, restent inchangées. Une vidéo avec tone mapping n'a pas d'image dans l'image et lit le Dolby Digital Plus Atmos sans ses canaux de hauteur.",
++    "toneMap.nits": "{n} nits",
++  },
++  "id": {
++    "about.tvosApp": "Aplikasi tvOS",
++    "credit.ffmpeg": "Membaca semua file dan mendekode format yang tidak punya dekoder di Apple TV.",
++    "credit.dav1d": "Mendekode AV1, di dalam FFmpeg.",
++    "credit.libdovi": "Membaca dan mengonversi metadata Dolby Vision.",
++    "credit.libtruehd": "Mendekode objek TrueHD Atmos untuk audio berbasis objek.",
++    "credit.libzvbi": "Mendekode subtitel teletext, di dalam FFmpeg.",
++    "credit.libass": "Menampilkan subtitel ASS dan SSA beserta gayanya.",
++    "credit.videotoolbox": "Dekoder perangkat keras Apple, untuk HEVC, H.264, dan format lain di Apple TV.",
++    "credit.anime4k": "Meningkatkan resolusi anime dengan pengskala line-art milik mesin.",
++    "objectAudio.label": "Audio objek untuk TrueHD Atmos dan DTS:X",
++    "objectAudio.help": "Mempertahankan tinggi dan objeknya, lalu merendernya untuk speaker Anda, bukan memutar versi 7.1. Memerlukan tvOS 26 dan penerima audio atau soundbar Atmos lewat HDMI. Penguatan dialog dan mode malam menonaktifkannya.",
++    "objectAudio.layoutLabel": "Speaker",
++    "objectAudio.layoutHelp": "Tata letak yang dipakai untuk merender audio objek. Penerima audio atau soundbar Anda menyesuaikannya dengan speaker yang dimiliki, jadi pilih 9.1.6 hanya untuk sistem dengan speaker tinggi lebar dan tengah.",
++    "objectAudio.layout714": "7.1.4, atau speaker lebih sedikit",
++    "subtitles.sizeSmaller": "Lebih kecil",
++    "subtitles.styledHelp": "Subtitel bergaya, yang umum dalam anime, mempertahankan font, warna, dan posisinya sendiri kecuali opsi ini diaktifkan. Jika aktif, subtitel ditampilkan sebagai teks biasa dengan gaya Anda. Subtitel Blu-ray dan DVD mempertahankan tampilannya, pada ukuran yang dipilih di atas.",
++    "upscaling.animeHelp": "Meningkatkan resolusi anime hingga 1080p ke ukuran layar saat diputar, dengan jaringan line-art Anime4K, agar garis lebih tajam pada tayangan lama dan beresolusi rendah. Berlaku untuk judul yang ditandai sebagai anime, dan memerlukan tvOS 26 atau lebih baru. Video HDR dan Dolby Vision, video yang ukurannya hampir sama dengan layar, dan saluran TV langsung tidak diubah. Menonaktifkan diri untuk video yang tidak sanggup diproses Apple TV. Mengubahnya saat video berjalan akan membuka ulang video di posisi yang sama.",
++    "upscaling.otherLabel": "Tingkatkan resolusi video lain",
++    "upscaling.otherHelp": "Meningkatkan resolusi film dan acara non-anime dengan super resolution Apple TV, di bawah 1080p, mulai tvOS 26: video lama dan beresolusi rendah tampak lebih tajam, tetapi wajah dan detail halus bisa tampak lebih halus. Video HDR dan Dolby Vision, video yang ukurannya hampir sama dengan layar, saluran TV langsung, dan cuplikan tidak diubah. Mengubahnya saat video berjalan akan membuka ulang video di posisi yang sama.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Memutar video profil 7 dengan lapisan penyempurnaan penuh (beberapa remux UHD Blu-ray) dengan lapisan itu digabungkan ke kurva kecerahan gambar, sehingga TV Dolby Vision menampilkan lebih banyak detail dari disk. Pemulaian dan pencarian posisi sedikit lebih lama.",
++    "toneMap.label": "Tone mapping HDR10",
++    "toneMap.help": "Menurunkan video HDR10 yang dimaster lebih terang dari TV Anda ke kecerahan puncak TV, sehingga bagian terang tetap detail dan tidak terpotong. Pilih kecerahan puncak yang dicapai TV Anda. Video Dolby Vision, HDR10+, dan HLG, serta video yang sudah dalam batas puncak, tidak diubah. Video yang di-tone-map tidak mendukung picture-in-picture dan memutar Dolby Digital Plus Atmos tanpa kanal tinggi.",
++    "toneMap.nits": "{n} nit",
++  },
++  "it": {
++    "about.tvosApp": "App tvOS",
++    "credit.ffmpeg": "Legge ogni file e decodifica ciò per cui l'Apple TV non ha un decoder.",
++    "credit.dav1d": "Decodifica AV1, all'interno di FFmpeg.",
++    "credit.libdovi": "Legge e converte i metadati Dolby Vision.",
++    "credit.libtruehd": "Decodifica gli oggetti TrueHD Atmos per l'audio a oggetti.",
++    "credit.libzvbi": "Decodifica i sottotitoli del televideo, all'interno di FFmpeg.",
++    "credit.libass": "Disegna i sottotitoli ASS e SSA con i loro stili.",
++    "credit.videotoolbox": "Il decoder hardware di Apple, per HEVC, H.264 e gli altri formati dell'Apple TV.",
++    "credit.anime4k": "Esegue l'upscaling degli anime con lo scaler per il tratto delle linee del motore.",
++    "objectAudio.label": "Audio a oggetti per TrueHD Atmos e DTS:X",
++    "objectAudio.help": "Mantiene altezze e oggetti, renderizzati per i tuoi altoparlanti, invece di riprodurne il 7.1. Richiede tvOS 26 e un ricevitore o una soundbar Atmos su HDMI. Il potenziamento dei dialoghi e la modalità notte lo disattivano.",
++    "objectAudio.layoutLabel": "Altoparlanti",
++    "objectAudio.layoutHelp": "La disposizione per cui viene renderizzato l'audio a oggetti. Il tuo ricevitore o la tua soundbar la adatta agli altoparlanti che ha, quindi scegli 9.1.6 solo per un sistema con altoparlanti d'altezza laterali e centrali.",
++    "objectAudio.layout714": "7.1.4, o meno altoparlanti",
++    "subtitles.sizeSmaller": "Più piccolo",
++    "subtitles.styledHelp": "I sottotitoli con stile, comuni negli anime, mantengono font, colori e posizione propri, a meno che questa opzione sia attiva: in tal caso vengono mostrati come testo semplice con il tuo stile. I sottotitoli Blu-ray e DVD mantengono il loro aspetto, nella dimensione scelta qui sopra.",
++    "upscaling.animeHelp": "Esegue l'upscaling degli anime fino a 1080p alla risoluzione dello schermo durante la riproduzione, con le reti per il tratto delle linee di Anime4K, per linee più nitide nelle serie più vecchie e a bassa risoluzione. Si applica ai titoli contrassegnati come anime e richiede tvOS 26 o successivo. I video HDR e Dolby Vision, i video grandi più o meno quanto lo schermo e i canali in diretta restano invariati. Si disattiva da solo per un video che l'Apple TV non riesce a gestire. Cambiarlo durante un video riapre il video dallo stesso punto.",
++    "upscaling.otherLabel": "Upscaling di altri video",
++    "upscaling.otherHelp": "Esegue l'upscaling di film e serie che non sono anime con la super risoluzione dell'Apple TV, sotto 1080p, da tvOS 26: i video più vecchi e a bassa risoluzione appaiono più nitidi, ma i volti e i dettagli fini possono sembrare attenuati. I video HDR e Dolby Vision, i video grandi più o meno quanto lo schermo, i canali in diretta e i trailer restano invariati. Cambiarlo durante un video riapre il video dallo stesso punto.",
++    "dolbyVision.felLabel": "Dolby Vision profilo 7 FEL",
++    "dolbyVision.felHelp": "Riproduce i video di profilo 7 con un livello di miglioramento completo (alcuni remux UHD Blu-ray) integrando quel livello nelle curve di luminosità dell'immagine, così un TV Dolby Vision mostra più dettagli del disco. Avvio e ricerca richiedono un po' più di tempo.",
++    "toneMap.label": "Tone mapping HDR10",
++    "toneMap.help": "Adatta i video HDR10 masterizzati con una luminosità superiore a quella del tuo TV al picco di luminosità del TV, così le alte luci mantengono i dettagli invece di venire tagliate. Scegli il picco che raggiunge il tuo TV. I video Dolby Vision, HDR10+ e HLG, e quelli già entro il picco, restano invariati. Un video con tone mapping non ha picture-in-picture e riproduce Dolby Digital Plus Atmos senza i canali d'altezza.",
++    "toneMap.nits": "{n} nit",
++  },
++  "ms": {
++    "about.tvosApp": "Aplikasi tvOS",
++    "credit.ffmpeg": "Membaca semua fail dan menyahkod format yang tiada penyahkod pada Apple TV.",
++    "credit.dav1d": "Menyahkod AV1, di dalam FFmpeg.",
++    "credit.libdovi": "Membaca dan menukar metadata Dolby Vision.",
++    "credit.libtruehd": "Menyahkod objek TrueHD Atmos untuk audio objek.",
++    "credit.libzvbi": "Menyahkod sarikata teleteks, di dalam FFmpeg.",
++    "credit.libass": "Melukis sarikata ASS dan SSA dengan gayanya.",
++    "credit.videotoolbox": "Penyahkod perkakasan Apple, untuk HEVC, H.264 dan format lain Apple TV.",
++    "credit.anime4k": "Meningkatkan skala anime dalam penskala seni garis enjin.",
++    "objectAudio.label": "Audio objek untuk TrueHD Atmos dan DTS:X",
++    "objectAudio.help": "Mengekalkan ketinggian dan objeknya, diterjemah untuk pembesar suara anda, dan bukannya memainkan versi 7.1. Memerlukan tvOS 26 dan penerima atau bar bunyi Atmos pada HDMI. Peningkatan dialog dan mod malam mematikannya.",
++    "objectAudio.layoutLabel": "Pembesar suara",
++    "objectAudio.layoutHelp": "Susun atur yang digunakan untuk audio objek. Penerima atau bar bunyi anda menyesuaikannya dengan pembesar suara yang ada, jadi pilih 9.1.6 hanya untuk sistem yang mempunyai pembesar suara ketinggian lebar dan tengah.",
++    "objectAudio.layout714": "7.1.4, atau kurang pembesar suara",
++    "subtitles.sizeSmaller": "Lebih kecil",
++    "subtitles.styledHelp": "Sarikata berstail, yang biasa dalam anime, mengekalkan fon, warna dan kedudukannya sendiri melainkan tetapan ini dihidupkan, dan ia dipaparkan sebagai teks biasa mengikut gaya anda. Sarikata Blu-ray dan DVD mengekalkan rupanya, pada saiz yang dipilih di atas.",
++    "upscaling.animeHelp": "Meningkatkan skala anime sehingga 1080p ke saiz skrin semasa dimainkan, dengan rangkaian seni garis Anime4K, untuk garisan lebih tajam dalam siri lama dan beresolusi rendah. Ia terpakai pada tajuk yang ditanda sebagai anime dan memerlukan tvOS 26 atau lebih baharu. Video HDR dan Dolby Vision, video yang hampir sebesar skrin, dan saluran langsung kekal seperti asal. Mematikan diri untuk video yang tidak dapat dikejar oleh Apple TV. Menukarnya semasa video dimainkan akan membuka semula video di kedudukan yang sama.",
++    "upscaling.otherLabel": "Tingkatkan skala video lain",
++    "upscaling.otherHelp": "Meningkatkan skala filem dan rancangan bukan anime dengan resolusi super Apple TV, di bawah 1080p, dari tvOS 26: video lama dan beresolusi rendah kelihatan lebih tajam, tetapi wajah dan butiran halus mungkin kelihatan lebih licin. Video HDR dan Dolby Vision, video yang hampir sebesar skrin, saluran langsung dan treler kekal seperti asal. Menukarnya semasa video dimainkan akan membuka semula video di kedudukan yang sama.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Memainkan video profil 7 dengan lapisan peningkatan penuh (sesetengah remux UHD Blu-ray) dengan lapisan itu digabungkan ke dalam lengkung kecerahan gambar, supaya TV Dolby Vision memaparkan lebih banyak butiran cakera. Permulaan dan pencarian mengambil masa sedikit lebih lama.",
++    "toneMap.label": "Pemetaan ton HDR10",
++    "toneMap.help": "Memetakan video HDR10 yang dimaster lebih cerah daripada TV anda kepada kecerahan puncaknya, supaya kawasan terang kekal berbutiran dan tidak terpotong. Pilih puncak yang dicapai TV anda. Video Dolby Vision, HDR10+ dan HLG, serta video yang sudah dalam had puncak, kekal seperti asal. Video yang dipetakan ton tiada Gambar dalam Gambar (PiP) dan memainkan Dolby Digital Plus Atmos tanpa ketinggiannya.",
++    "toneMap.nits": "{n} nit",
++  },
++  "nb": {
++    "about.tvosApp": "tvOS-app",
++    "credit.ffmpeg": "Leser hver fil og dekoder det Apple TV ikke har noen dekoder for.",
++    "credit.dav1d": "Dekoder AV1, inne i FFmpeg.",
++    "credit.libdovi": "Leser og konverterer Dolby Vision-metadataene.",
++    "credit.libtruehd": "Dekoder TrueHD Atmos-objekter for objektlyd.",
++    "credit.libzvbi": "Dekoder tekst-TV-undertekster, inne i FFmpeg.",
++    "credit.libass": "Tegner ASS- og SSA-undertekster med stilene sine.",
++    "credit.videotoolbox": "Apples maskinvaredekoder, for HEVC, H.264 og de andre formatene til Apple TV.",
++    "credit.anime4k": "Skalerer opp anime i linjeskaleren til motoren.",
++    "objectAudio.label": "Objektlyd for TrueHD Atmos og DTS:X",
++    "objectAudio.help": "Beholder høydekanaler og objekter og rendrer dem for høyttalerne dine, i stedet for å spille av 7.1-miksen. Krever tvOS 26 og en Atmos-receiver eller soundbar på HDMI. Dialogforsterkning og nattmodus slår det av.",
++    "objectAudio.layoutLabel": "Høyttalere",
++    "objectAudio.layoutHelp": "Oppsettet objektlyden rendres for. Receiveren eller soundbaren din tilpasser det til høyttalerne den har, så velg 9.1.6 bare for et system med brede høyttalere og høyttalere for midthøyde.",
++    "objectAudio.layout714": "7.1.4, eller færre høyttalere",
++    "subtitles.sizeSmaller": "Mindre",
++    "subtitles.styledHelp": "Undertekster med stil, vanlig i anime, beholder sine egne skrifttyper, farger og plassering, med mindre dette er slått på. Da vises de som vanlig tekst i din stil. Undertekster fra Blu-ray og DVD beholder utseendet sitt, i størrelsen som er valgt ovenfor.",
++    "upscaling.animeHelp": "Skalerer opp anime opptil 1080p til skjermen mens den spilles av, med linjenettverkene til Anime4K, for skarpere linjer i eldre serier og serier med lavere oppløsning. Det gjelder titler som er merket som anime, og krever tvOS 26 eller nyere. Videoer i HDR og Dolby Vision, videoer som er omtrent like store som skjermen, og live-kanaler forblir uendret. Slår seg av for en video som Apple TV ikke henger med på. Hvis du endrer det under en video, åpnes videoen på nytt på samme sted.",
++    "upscaling.otherLabel": "Skaler opp annen video",
++    "upscaling.otherHelp": "Skalerer opp filmer og serier som ikke er anime med superoppløsningen til Apple TV, under 1080p, fra tvOS 26: eldre videoer og videoer med lavere oppløsning ser skarpere ut, men ansikter og fine detaljer kan se glattet ut. Videoer i HDR og Dolby Vision, videoer som er omtrent like store som skjermen, live-kanaler og trailere forblir uendret. Hvis du endrer det under en video, åpnes videoen på nytt på samme sted.",
++    "dolbyVision.felLabel": "Dolby Vision-profil 7 FEL",
++    "dolbyVision.felHelp": "Spiller av videoer med profil 7 og et fullt forbedringslag (noen UHD Blu-ray-remuxer) med laget innarbeidet i lysstyrkekurvene til bildet, slik at en Dolby Vision-TV viser mer av detaljene på platen. Start og spoling tar litt lengre tid.",
++    "toneMap.label": "HDR10-tonekartlegging",
++    "toneMap.help": "Tilpasser HDR10-videoer som er mastret lysere enn TV-en din til toppstyrken på TV-en, slik at høylys beholder detaljene i stedet for å klippes. Velg toppstyrken TV-en din klarer. Videoer i Dolby Vision, HDR10+ og HLG, og videoer som allerede ligger innenfor toppstyrken, forblir uendret. En tonekartlagt video har ikke bilde-i-bilde og spiller av Dolby Digital Plus Atmos uten høydekanalene.",
++    "toneMap.nits": "{n} nits",
++  },
++  "nl": {
++    "about.tvosApp": "tvOS-app",
++    "credit.ffmpeg": "Leest elk bestand en decodeert wat de Apple TV zelf niet kan decoderen.",
++    "credit.dav1d": "Decodeert AV1, binnen FFmpeg.",
++    "credit.libdovi": "Leest en converteert de Dolby Vision-metadata.",
++    "credit.libtruehd": "Decodeert TrueHD Atmos-objecten voor objectaudio.",
++    "credit.libzvbi": "Decodeert teletekstondertitels, binnen FFmpeg.",
++    "credit.libass": "Tekent ASS- en SSA-ondertitels met hun stijlen.",
++    "credit.videotoolbox": "De hardwaredecoder van Apple, voor HEVC, H.264 en de andere formaten van de Apple TV.",
++    "credit.anime4k": "Schaalt anime op in de lijnenschaler van de engine.",
++    "objectAudio.label": "Objectaudio voor TrueHD Atmos en DTS:X",
++    "objectAudio.help": "Behoudt de hoogtekanalen en objecten en rendert ze voor je luidsprekers, in plaats van de 7.1-mix af te spelen. Vereist tvOS 26 en een Atmos-receiver of soundbar via HDMI. Dialoogversterking en nachtmodus schakelen dit uit.",
++    "objectAudio.layoutLabel": "Luidsprekers",
++    "objectAudio.layoutHelp": "De indeling waarvoor objectaudio wordt gerenderd. Je receiver of soundbar past die aan op de luidsprekers die hij heeft. Kies 9.1.6 dus alleen voor een systeem met brede en middelste hoogteluidsprekers.",
++    "objectAudio.layout714": "7.1.4, of minder luidsprekers",
++    "subtitles.sizeSmaller": "Kleiner",
++    "subtitles.styledHelp": "Ondertitels met opmaak, vaak bij anime, behouden hun eigen lettertypen, kleuren en plaatsing, tenzij dit is ingeschakeld. Dan worden ze als platte tekst in jouw stijl getoond. Blu-ray- en DVD-ondertitels behouden hun uiterlijk, op de hierboven gekozen grootte.",
++    "upscaling.animeHelp": "Schaalt anime tot 1080p tijdens het afspelen op naar het scherm, met de lijnnetwerken van Anime4K, voor scherpere lijnen in oudere series en series met een lagere resolutie. Dit geldt voor titels die als anime zijn gemarkeerd en vereist tvOS 26 of nieuwer. HDR- en Dolby Vision-video's, video's die ongeveer zo groot zijn als het scherm en live-kanalen blijven ongewijzigd. Schakelt zichzelf uit bij een video die de Apple TV niet bijhoudt. Als je dit tijdens een video wijzigt, wordt de video op dezelfde plek opnieuw geopend.",
++    "upscaling.otherLabel": "Andere video opschalen",
++    "upscaling.otherHelp": "Schaalt films en series die geen anime zijn op met de superresolutie van de Apple TV, onder 1080p, vanaf tvOS 26: oudere video's en video's met een lagere resolutie zien er scherper uit, al kunnen gezichten en fijne details glad lijken. HDR- en Dolby Vision-video's, video's die ongeveer zo groot zijn als het scherm, live-kanalen en trailers blijven ongewijzigd. Als je dit tijdens een video wijzigt, wordt de video op dezelfde plek opnieuw geopend.",
++    "dolbyVision.felLabel": "Dolby Vision-profiel 7 FEL",
++    "dolbyVision.felHelp": "Speelt video's met profiel 7 en een volledige enhancement layer (sommige UHD Blu-ray-remuxes) af met die laag verwerkt in de helderheidscurves van het beeld, zodat een Dolby Vision-tv meer details van de disc toont. Starten en spoelen duren iets langer.",
++    "toneMap.label": "HDR10-tone mapping",
++    "toneMap.help": "Past HDR10-video's die helderder zijn gemasterd dan je tv aankan aan op de piekhelderheid van de tv, zodat hooglichten hun details behouden in plaats van weg te vallen. Kies de piek die je tv haalt. Dolby Vision-, HDR10+- en HLG-video's, en video's die al binnen de piek vallen, blijven ongewijzigd. Een video met tone mapping heeft geen beeld-in-beeld en speelt Dolby Digital Plus Atmos af zonder de hoogtekanalen.",
++    "toneMap.nits": "{n} nits",
++  },
++  "pl": {
++    "about.tvosApp": "Aplikacja tvOS",
++    "credit.ffmpeg": "Odczytuje każdy plik i dekoduje to, do czego Apple TV nie ma dekodera.",
++    "credit.dav1d": "Dekoduje AV1 wewnątrz FFmpeg.",
++    "credit.libdovi": "Odczytuje i konwertuje metadane Dolby Vision.",
++    "credit.libtruehd": "Dekoduje obiekty TrueHD Atmos na potrzeby dźwięku obiektowego.",
++    "credit.libzvbi": "Dekoduje napisy telegazety wewnątrz FFmpeg.",
++    "credit.libass": "Rysuje napisy ASS i SSA wraz z ich stylami.",
++    "credit.videotoolbox": "Sprzętowy dekoder Apple, obsługujący HEVC, H.264 i inne formaty Apple TV.",
++    "credit.anime4k": "Poprawia jakość anime w skalerze linii silnika.",
++    "objectAudio.label": "Dźwięk obiektowy dla TrueHD Atmos i DTS:X",
++    "objectAudio.help": "Zachowuje kanały wysokości i obiekty, renderując je pod Twoje głośniki, zamiast odtwarzać ich ścieżkę 7.1. Wymaga tvOS 26 oraz odbiornika lub soundbara z Atmos podłączonego przez HDMI. Wzmocnienie dialogów i tryb nocny wyłączają tę opcję.",
++    "objectAudio.layoutLabel": "Głośniki",
++    "objectAudio.layoutHelp": "Układ, pod który renderowany jest dźwięk obiektowy. Odbiornik lub soundbar dopasowuje go do posiadanych głośników, więc 9.1.6 wybieraj tylko dla systemu z głośnikami szerokimi i środkowymi wysokości.",
++    "objectAudio.layout714": "7.1.4 lub mniej głośników",
++    "subtitles.sizeSmaller": "Mniejsze",
++    "subtitles.styledHelp": "Stylizowane napisy, popularne w anime, zachowują własne czcionki, kolory i położenie, chyba że ta opcja jest włączona. Wtedy wyświetlane są jako zwykły tekst w Twoim stylu. Napisy z płyt Blu-ray i DVD zachowują swój wygląd, w rozmiarze wybranym powyżej.",
++    "upscaling.animeHelp": "Podczas odtwarzania poprawia jakość anime o rozdzielczości do 1080p do rozmiaru ekranu, za pomocą sieci Anime4K do linii, aby linie były ostrzejsze w starszych produkcjach i tych o niższej rozdzielczości. Dotyczy tytułów oznaczonych jako anime i wymaga tvOS 26 lub nowszego. Wideo HDR i Dolby Vision, wideo mniej więcej wielkości ekranu oraz kanały na żywo pozostają bez zmian. Wyłącza się samoczynnie dla wideo, z którym Apple TV nie nadąża. Zmiana w trakcie odtwarzania ponownie otwiera wideo w tym samym miejscu.",
++    "upscaling.otherLabel": "Poprawa jakości innego wideo",
++    "upscaling.otherHelp": "Poprawia jakość filmów i seriali, które nie są anime, za pomocą superrozdzielczości Apple TV, poniżej 1080p, od tvOS 26: starsze wideo i wideo o niższej rozdzielczości wygląda ostrzej, choć twarze i drobne szczegóły mogą wyglądać na wygładzone. Wideo HDR i Dolby Vision, wideo mniej więcej wielkości ekranu, kanały na żywo i zwiastuny pozostają bez zmian. Zmiana w trakcie odtwarzania ponownie otwiera wideo w tym samym miejscu.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Odtwarza wideo profilu 7 z pełną warstwą rozszerzenia (np. niektóre remuxy UHD Blu-ray), włączając tę warstwę w krzywe jasności obrazu, dzięki czemu telewizor z Dolby Vision pokazuje więcej szczegółów z płyty. Uruchamianie i przewijanie trwa nieco dłużej.",
++    "toneMap.label": "Mapowanie tonów HDR10",
++    "toneMap.help": "Mapuje wideo HDR10 przygotowane jaśniej, niż potrafi Twój telewizor, do jego jasności szczytowej, dzięki czemu światła zachowują szczegóły zamiast być ucinane. Wybierz jasność szczytową swojego telewizora. Wideo Dolby Vision, HDR10+ i HLG oraz wideo mieszczące się już w tej jasności pozostają bez zmian. Wideo z mapowaniem tonów nie ma obrazu w obrazie i odtwarza Dolby Digital Plus Atmos bez kanałów wysokości.",
++    "toneMap.nits": "{n} nitów",
++  },
++  "pt": {
++    "about.tvosApp": "App tvOS",
++    "credit.ffmpeg": "Lê todos os ficheiros e descodifica o que a Apple TV não consegue descodificar.",
++    "credit.dav1d": "Descodifica AV1, dentro do FFmpeg.",
++    "credit.libdovi": "Lê e converte os metadados Dolby Vision.",
++    "credit.libtruehd": "Descodifica os objetos TrueHD Atmos para o áudio de objetos.",
++    "credit.libzvbi": "Descodifica as legendas de teletexto, dentro do FFmpeg.",
++    "credit.libass": "Desenha as legendas ASS e SSA com os seus estilos.",
++    "credit.videotoolbox": "O descodificador de hardware da Apple, para HEVC, H.264 e os outros formatos da Apple TV.",
++    "credit.anime4k": "Amplia anime com o ampliador de traço do motor.",
++    "objectAudio.label": "Áudio de objetos para TrueHD Atmos e DTS:X",
++    "objectAudio.help": "Mantém as alturas e os objetos, processados para as suas colunas, em vez de reproduzir o 7.1. Requer o tvOS 26 e um recetor ou soundbar Atmos por HDMI. O realce dos diálogos e o modo noturno desativam-no.",
++    "objectAudio.layoutLabel": "Colunas",
++    "objectAudio.layoutHelp": "A disposição para a qual o áudio de objetos é processado. O seu recetor ou soundbar adapta-a às colunas que tem, por isso escolha 9.1.6 apenas para um sistema com colunas de altura laterais e centrais.",
++    "objectAudio.layout714": "7.1.4, ou menos colunas",
++    "subtitles.sizeSmaller": "Mais pequeno",
++    "subtitles.styledHelp": "As legendas com estilo, comuns em anime, mantêm os seus próprios tipos de letra, cores e posição, a menos que esta opção esteja ativada: nesse caso, são apresentadas como texto simples no seu estilo. As legendas de Blu-ray e DVD mantêm o seu aspeto, no tamanho escolhido acima.",
++    "upscaling.animeHelp": "Amplia anime até 1080p para o ecrã durante a reprodução, com as redes de traço do Anime4K, para linhas mais nítidas em séries mais antigas e de menor resolução. Aplica-se a títulos marcados como anime e requer o tvOS 26 ou posterior. Os vídeos HDR e Dolby Vision, os vídeos com aproximadamente o tamanho do ecrã e os canais em direto ficam como estão. Desativa-se sozinho num vídeo que a Apple TV não consiga acompanhar. Alterá-lo durante um vídeo reabre o vídeo no mesmo ponto.",
++    "upscaling.otherLabel": "Ampliar outros vídeos",
++    "upscaling.otherHelp": "Amplia filmes e séries que não são anime com a super-resolução da Apple TV, abaixo de 1080p, a partir do tvOS 26: os vídeos mais antigos e de menor resolução parecem mais nítidos, embora os rostos e os detalhes finos possam parecer suavizados. Os vídeos HDR e Dolby Vision, os vídeos com aproximadamente o tamanho do ecrã, os canais em direto e os trailers ficam como estão. Alterá-lo durante um vídeo reabre o vídeo no mesmo ponto.",
++    "dolbyVision.felLabel": "Dolby Vision perfil 7 FEL",
++    "dolbyVision.felHelp": "Reproduz vídeos de perfil 7 com uma camada de melhoria completa (alguns remuxes de UHD Blu-ray) integrando essa camada nas curvas de brilho da imagem, para que uma TV Dolby Vision mostre mais detalhe do disco. O início e as procuras demoram um pouco mais.",
++    "toneMap.label": "Mapeamento de tons HDR10",
++    "toneMap.help": "Ajusta os vídeos HDR10 masterizados com mais brilho do que a sua TV ao brilho máximo desta, para que as luzes altas mantenham o detalhe em vez de serem cortadas. Escolha o brilho máximo que a sua TV atinge. Os vídeos Dolby Vision, HDR10+ e HLG, e os que já estão dentro do brilho máximo, ficam como estão. Um vídeo com mapeamento de tons não tem imagem na imagem e reproduz Dolby Digital Plus Atmos sem as alturas.",
++    "toneMap.nits": "{n} nits",
++  },
++  "pt-BR": {
++    "about.tvosApp": "App tvOS",
++    "credit.ffmpeg": "Lê todos os arquivos e decodifica o que a Apple TV não tem decodificador para tratar.",
++    "credit.dav1d": "Decodifica AV1, dentro do FFmpeg.",
++    "credit.libdovi": "Lê e converte os metadados do Dolby Vision.",
++    "credit.libtruehd": "Decodifica os objetos do TrueHD Atmos para o áudio de objetos.",
++    "credit.libzvbi": "Decodifica legendas de teletexto, dentro do FFmpeg.",
++    "credit.libass": "Desenha as legendas ASS e SSA com seus estilos.",
++    "credit.videotoolbox": "O decodificador de hardware da Apple, para HEVC, H.264 e os outros formatos da Apple TV.",
++    "credit.anime4k": "Melhora a imagem de animes com o escalador de traços do mecanismo.",
++    "objectAudio.label": "Áudio de objetos para TrueHD Atmos e DTS:X",
++    "objectAudio.help": "Mantém as alturas e os objetos, renderizados para suas caixas de som, em vez de reproduzir o 7.1. Requer tvOS 26 e um receiver ou soundbar Atmos via HDMI. O realce de diálogos e o modo noturno o desativam.",
++    "objectAudio.layoutLabel": "Caixas de som",
++    "objectAudio.layoutHelp": "O layout para o qual o áudio de objetos é renderizado. Seu receiver ou soundbar o ajusta às caixas de som que tem, então escolha 9.1.6 apenas para um sistema com caixas de altura laterais e centrais.",
++    "objectAudio.layout714": "7.1.4, ou menos caixas de som",
++    "subtitles.sizeSmaller": "Menor",
++    "subtitles.styledHelp": "Legendas estilizadas, comuns em animes, mantêm suas próprias fontes, cores e posição, a menos que esta opção esteja ativada: nesse caso, elas aparecem como texto simples no seu estilo. As legendas de Blu-ray e DVD mantêm a aparência, no tamanho escolhido acima.",
++    "upscaling.animeHelp": "Melhora a imagem de animes de até 1080p para a tela durante a reprodução, com as redes de traços do Anime4K, para linhas mais nítidas em séries mais antigas e de resolução mais baixa. Vale para títulos marcados como anime e requer tvOS 26 ou posterior. Vídeos HDR e Dolby Vision, vídeos com tamanho próximo ao da tela e canais ao vivo permanecem como estão. Desativa-se sozinha em um vídeo que a Apple TV não consegue acompanhar. Alterar a opção durante um vídeo o reabre no mesmo ponto.",
++    "upscaling.otherLabel": "Melhorar a imagem de outros vídeos",
++    "upscaling.otherHelp": "Melhora a imagem de filmes e séries que não são animes com a super-resolução da Apple TV, abaixo de 1080p, a partir do tvOS 26: vídeos mais antigos e de resolução mais baixa ficam mais nítidos, mas rostos e detalhes finos podem parecer suavizados. Vídeos HDR e Dolby Vision, vídeos com tamanho próximo ao da tela, canais ao vivo e trailers permanecem como estão. Alterar a opção durante um vídeo o reabre no mesmo ponto.",
++    "dolbyVision.felLabel": "Dolby Vision perfil 7 FEL",
++    "dolbyVision.felHelp": "Reproduz vídeos de perfil 7 com camada de aprimoramento completa (alguns remuxes de UHD Blu-ray) incorporando essa camada às curvas de brilho da imagem, para que uma TV Dolby Vision mostre mais detalhes do disco. A inicialização e a busca demoram um pouco mais.",
++    "toneMap.label": "Mapeamento de tons HDR10",
++    "toneMap.help": "Ajusta vídeos HDR10 masterizados com mais brilho do que sua TV ao brilho máximo dela, para que as luzes altas mantenham os detalhes em vez de serem cortadas. Escolha o brilho máximo que sua TV atinge. Vídeos Dolby Vision, HDR10+ e HLG, e os que já estão dentro do brilho máximo, permanecem como estão. Um vídeo com mapeamento de tons não tem picture-in-picture e reproduz Dolby Digital Plus Atmos sem as alturas.",
++    "toneMap.nits": "{n} nits",
++  },
++  "ro": {
++    "about.tvosApp": "Aplicația tvOS",
++    "credit.ffmpeg": "Citește fiecare fișier și decodează ceea ce Apple TV nu are cu ce decoda.",
++    "credit.dav1d": "Decodează AV1, în interiorul FFmpeg.",
++    "credit.libdovi": "Citește și convertește metadatele Dolby Vision.",
++    "credit.libtruehd": "Decodează obiectele TrueHD Atmos pentru sunetul pe obiecte.",
++    "credit.libzvbi": "Decodează subtitrările teletext, în interiorul FFmpeg.",
++    "credit.libass": "Desenează subtitrările ASS și SSA cu stilurile lor.",
++    "credit.videotoolbox": "Decodorul hardware Apple, pentru HEVC, H.264 și celelalte formate ale Apple TV.",
++    "credit.anime4k": "Mărește rezoluția animeurilor în scalerul de linii al motorului.",
++    "objectAudio.label": "Sunet pe obiecte pentru TrueHD Atmos și DTS:X",
++    "objectAudio.help": "Păstrează canalele de înălțime și obiectele, redate pentru boxele tale, în loc să redea varianta 7.1. Necesită tvOS 26 și un receiver sau o soundbar Atmos conectat prin HDMI. Amplificarea dialogului și modul de noapte îl dezactivează.",
++    "objectAudio.layoutLabel": "Boxe",
++    "objectAudio.layoutHelp": "Configurația pentru care se redă sunetul pe obiecte. Receiverul sau soundbarul o adaptează la boxele pe care le are, așa că alege 9.1.6 doar pentru un sistem cu boxe de înălțime late și centrale.",
++    "objectAudio.layout714": "7.1.4 sau mai puține boxe",
++    "subtitles.sizeSmaller": "Mai mic",
++    "subtitles.styledHelp": "Subtitrările formatate, frecvente la anime, își păstrează fonturile, culorile și poziția, cu excepția cazului în care aceasta este activată: atunci sunt afișate ca text simplu, în stilul tău. Subtitrările Blu-ray și DVD își păstrează aspectul, la dimensiunea aleasă mai sus.",
++    "upscaling.animeHelp": "Mărește rezoluția animeurilor de până la 1080p la dimensiunea ecranului în timpul redării, cu rețelele pentru linii Anime4K, pentru linii mai clare în producțiile mai vechi și cu rezoluție mai mică. Se aplică titlurilor marcate ca anime și necesită tvOS 26 sau mai nou. Videoclipurile HDR și Dolby Vision, cele aproape la fel de mari ca ecranul și canalele live rămân neschimbate. Se oprește singur pentru un videoclip pe care Apple TV nu îl poate procesa fluent. Schimbarea în timpul redării redeschide videoclipul din același punct.",
++    "upscaling.otherLabel": "Mărește rezoluția altor videoclipuri",
++    "upscaling.otherHelp": "Mărește rezoluția filmelor și serialelor care nu sunt anime cu super rezoluția Apple TV, sub 1080p, începând cu tvOS 26: videoclipurile mai vechi și cu rezoluție mai mică arată mai clar, deși fețele și detaliile fine pot părea netezite. Videoclipurile HDR și Dolby Vision, cele aproape la fel de mari ca ecranul, canalele live și trailerele rămân neschimbate. Schimbarea în timpul redării redeschide videoclipul din același punct.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Redă videoclipurile cu profil 7 cu strat de îmbunătățire complet (unele remuxuri UHD Blu-ray), cu acel strat integrat în curbele de luminozitate ale imaginii, astfel încât un televizor Dolby Vision afișează mai multe detalii de pe disc. Pornirea și derularea durează puțin mai mult.",
++    "toneMap.label": "Mapare de tonuri HDR10",
++    "toneMap.help": "Mapează videoclipurile HDR10 masterizate mai luminos decât televizorul tău la luminozitatea maximă a acestuia, astfel încât zonele luminoase își păstrează detaliile în loc să fie tăiate. Alege luminozitatea maximă a televizorului tău. Videoclipurile Dolby Vision, HDR10+ și HLG, precum și cele deja în limita acestei luminozități, rămân neschimbate. Un videoclip cu mapare de tonuri nu are imagine în imagine și redă Dolby Digital Plus Atmos fără canalele de înălțime.",
++    "toneMap.nits": "{n} de niți",
++  },
++  "ru": {
++    "about.tvosApp": "Приложение tvOS",
++    "credit.ffmpeg": "Читает любые файлы и декодирует то, для чего в Apple TV нет декодера.",
++    "credit.dav1d": "Декодирует AV1 внутри FFmpeg.",
++    "credit.libdovi": "Читает и преобразует метаданные Dolby Vision.",
++    "credit.libtruehd": "Декодирует объекты TrueHD Atmos для объектного звука.",
++    "credit.libzvbi": "Декодирует субтитры телетекста внутри FFmpeg.",
++    "credit.libass": "Отображает субтитры ASS и SSA с их стилями.",
++    "credit.videotoolbox": "Аппаратный декодер Apple для HEVC, H.264 и других форматов Apple TV.",
++    "credit.anime4k": "Повышает разрешение аниме в масштабировщике линий движка.",
++    "objectAudio.label": "Объектный звук для TrueHD Atmos и DTS:X",
++    "objectAudio.help": "Сохраняет каналы высоты и объекты, отображая их для ваших колонок, вместо воспроизведения 7.1. Требуется tvOS 26 и ресивер или саундбар с Atmos, подключённый по HDMI. Усиление диалогов и ночной режим отключают эту функцию.",
++    "objectAudio.layoutLabel": "Колонки",
++    "objectAudio.layoutHelp": "Раскладка, для которой отображается объектный звук. Ресивер или саундбар подстраивает её под имеющиеся колонки, поэтому выбирайте 9.1.6 только для системы с широкими и средними колонками высоты.",
++    "objectAudio.layout714": "7.1.4 или меньше колонок",
++    "subtitles.sizeSmaller": "Меньше",
++    "subtitles.styledHelp": "Стилизованные субтитры, распространённые в аниме, сохраняют свои шрифты, цвета и расположение, если эта функция не включена: тогда они показываются простым текстом в вашем стиле. Субтитры Blu-ray и DVD сохраняют свой вид в размере, выбранном выше.",
++    "upscaling.animeHelp": "Во время воспроизведения повышает разрешение аниме до 1080p до размера экрана с помощью сетей линий Anime4K, чтобы линии были чётче в старых и малоразрешённых сериалах. Применяется к тайтлам, отмеченным как аниме, и требует tvOS 26 или новее. Видео HDR и Dolby Vision, видео примерно с размером экрана и каналы прямого эфира остаются без изменений. Отключается само для видео, с которым Apple TV не справляется. Переключение во время просмотра заново открывает видео с того же места.",
++    "upscaling.otherLabel": "Повышать разрешение другого видео",
++    "upscaling.otherHelp": "Повышает разрешение фильмов и сериалов, не являющихся аниме, с помощью суперразрешения Apple TV, если оно ниже 1080p, начиная с tvOS 26: старое видео и видео с низким разрешением выглядит чётче, хотя лица и мелкие детали могут казаться сглаженными. Видео HDR и Dolby Vision, видео примерно с размером экрана, каналы прямого эфира и трейлеры остаются без изменений. Переключение во время просмотра заново открывает видео с того же места.",
++    "dolbyVision.felLabel": "Dolby Vision профиль 7 FEL",
++    "dolbyVision.felHelp": "Воспроизводит видео профиля 7 с полным слоем улучшения (некоторые ремуксы UHD Blu-ray), встраивая этот слой в кривые яркости изображения, чтобы телевизор с Dolby Vision показывал больше деталей диска. Запуск и перемотка занимают немного больше времени.",
++    "toneMap.label": "Тональное отображение HDR10",
++    "toneMap.help": "Приводит видео HDR10, записанные ярче, чем может показать ваш телевизор, к его пиковой яркости, чтобы света сохраняли детали, а не обрезались. Выберите пиковую яркость вашего телевизора. Видео Dolby Vision, HDR10+ и HLG, а также видео в пределах этой яркости остаются без изменений. У видео с тональным отображением нет режима «картинка в картинке», а Dolby Digital Plus Atmos воспроизводится без каналов высоты.",
++    "toneMap.nits": "{n} нит",
++  },
++  "sl": {
++    "about.tvosApp": "Aplikacija tvOS",
++    "credit.ffmpeg": "Prebere vsako datoteko in dekodira to, za kar Apple TV nima dekodirnika.",
++    "credit.dav1d": "Dekodira AV1 znotraj FFmpeg.",
++    "credit.libdovi": "Prebere in pretvori metapodatke Dolby Vision.",
++    "credit.libtruehd": "Dekodira objekte TrueHD Atmos za objektni zvok.",
++    "credit.libzvbi": "Dekodira podnapise teleteksta znotraj FFmpeg.",
++    "credit.libass": "Izrisuje podnapise ASS in SSA z njihovimi slogi.",
++    "credit.videotoolbox": "Applov strojni dekodirnik za HEVC, H.264 in druge formate naprave Apple TV.",
++    "credit.anime4k": "Poveča ločljivost animeja v pretvorniku črtne risbe pogona.",
++    "objectAudio.label": "Objektni zvok za TrueHD Atmos in DTS:X",
++    "objectAudio.help": "Ohrani višinske kanale in objekte ter jih izriše za vaše zvočnike, namesto da bi predvajal njihov zvok 7.1. Potrebuje tvOS 26 ter sprejemnik ali zvočno vrstico z Atmosom, priključeno prek HDMI. Ojačitev dialoga in nočni način ga izklopita.",
++    "objectAudio.layoutLabel": "Zvočniki",
++    "objectAudio.layoutHelp": "Razporeditev, za katero se izriše objektni zvok. Sprejemnik ali zvočna vrstica jo prilagodi zvočnikom, ki jih ima, zato 9.1.6 izberite le za sistem s širokimi in srednjimi višinskimi zvočniki.",
++    "objectAudio.layout714": "7.1.4 ali manj zvočnikov",
++    "subtitles.sizeSmaller": "Manjši",
++    "subtitles.styledHelp": "Stilizirani podnapisi, pogosti pri animeju, obdržijo svoje pisave, barve in položaj, razen če je to vklopljeno: takrat so prikazani kot navadno besedilo v vašem slogu. Podnapisi Blu-ray in DVD ohranijo svoj videz v velikosti, izbrani zgoraj.",
++    "upscaling.animeHelp": "Med predvajanjem poveča ločljivost animeja do 1080p na velikost zaslona z omrežji za črtno risbo Anime4K, za ostrejše črte v starejših oddajah in oddajah z nižjo ločljivostjo. Velja za naslove, označene kot anime, in zahteva tvOS 26 ali novejši. Videi HDR in Dolby Vision, videi, približno tako veliki kot zaslon, in kanali v živo ostanejo nespremenjeni. Samodejno se izklopi pri videu, ki ga Apple TV ne zmore. Preklop med predvajanjem znova odpre video na istem mestu.",
++    "upscaling.otherLabel": "Povečaj ločljivost drugih videov",
++    "upscaling.otherHelp": "Poveča ločljivost filmov in oddaj, ki niso anime, s super ločljivostjo naprave Apple TV, pod 1080p, od tvOS 26: starejši videi in videi z nižjo ločljivostjo so videti ostrejši, obrazi in drobni detajli pa so lahko videti zglajeni. Videi HDR in Dolby Vision, videi, približno tako veliki kot zaslon, kanali v živo in napovedniki ostanejo nespremenjeni. Preklop med predvajanjem znova odpre video na istem mestu.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Predvaja videe profila 7 s polno izboljševalno plastjo (nekateri remuxi UHD Blu-ray), ki je vgrajena v svetlostne krivulje slike, tako da televizor z Dolby Vision pokaže več podrobnosti diska. Zagon in previjanje trajata malo dlje.",
++    "toneMap.label": "Preslikava tonov HDR10",
++    "toneMap.help": "Videe HDR10, masterirane svetleje od vašega televizorja, preslika na njegovo najvišjo svetlost, da svetle točke ohranijo podrobnosti in se ne porežejo. Izberite najvišjo svetlost svojega televizorja. Videi Dolby Vision, HDR10+ in HLG ter videi, ki so že znotraj te svetlosti, ostanejo nespremenjeni. Video s preslikavo tonov nima slike v sliki in predvaja Dolby Digital Plus Atmos brez višinskih kanalov.",
++    "toneMap.nits": "{n} nitov",
++  },
++  "sv": {
++    "about.tvosApp": "tvOS-app",
++    "credit.ffmpeg": "Läser alla filer och avkodar det som Apple TV saknar avkodare för.",
++    "credit.dav1d": "Avkodar AV1, inuti FFmpeg.",
++    "credit.libdovi": "Läser och konverterar metadata för Dolby Vision.",
++    "credit.libtruehd": "Avkodar TrueHD Atmos-objekt för objektljud.",
++    "credit.libzvbi": "Avkodar text-tv-undertexter, inuti FFmpeg.",
++    "credit.libass": "Ritar ut ASS- och SSA-undertexter med deras stilar.",
++    "credit.videotoolbox": "Apples hårdvaruavkodare, för HEVC, H.264 och Apple TV:s andra format.",
++    "credit.anime4k": "Skalar upp anime i motorns linjeskalare.",
++    "objectAudio.label": "Objektljud för TrueHD Atmos och DTS:X",
++    "objectAudio.help": "Behåller höjdkanaler och objekt och renderar dem för dina högtalare, i stället för att spela upp 7.1-mixen. Kräver tvOS 26 och en Atmos-receiver eller soundbar via HDMI. Dialogförstärkning och nattläge stänger av det.",
++    "objectAudio.layoutLabel": "Högtalare",
++    "objectAudio.layoutHelp": "Den layout som objektljudet renderas för. Din receiver eller soundbar anpassar den efter de högtalare den har, så välj bara 9.1.6 för ett system med breda högtalare och högtalare för mittenhöjd.",
++    "objectAudio.layout714": "7.1.4, eller färre högtalare",
++    "subtitles.sizeSmaller": "Mindre",
++    "subtitles.styledHelp": "Formaterade undertexter, vanliga i anime, behåller sina egna typsnitt, färger och placering, om inte detta är på. Då visas de som vanlig text i din stil. Undertexter från Blu-ray och DVD behåller sitt utseende, i storleken som valts ovan.",
++    "upscaling.animeHelp": "Skalar upp anime upp till 1080p till skärmen medan den spelas, med Anime4K:s linjenätverk, för skarpare linjer i äldre serier och serier med lägre upplösning. Det gäller titlar som är markerade som anime och kräver tvOS 26 eller senare. Videor i HDR och Dolby Vision, videor som är ungefär lika stora som skärmen och livekanaler lämnas oförändrade. Stängs av automatiskt för en video som Apple TV inte hänger med på. Om du ändrar det under en video öppnas videon igen på samma ställe.",
++    "upscaling.otherLabel": "Skala upp annan video",
++    "upscaling.otherHelp": "Skalar upp filmer och serier som inte är anime med Apple TV:s superupplösning, under 1080p, från tvOS 26: äldre videor och videor med lägre upplösning ser skarpare ut, men ansikten och fina detaljer kan se utjämnade ut. Videor i HDR och Dolby Vision, videor som är ungefär lika stora som skärmen, livekanaler och trailers lämnas oförändrade. Om du ändrar det under en video öppnas videon igen på samma ställe.",
++    "dolbyVision.felLabel": "Dolby Vision-profil 7 FEL",
++    "dolbyVision.felHelp": "Spelar upp videor med profil 7 och ett fullständigt förbättringslager (vissa UHD Blu-ray-remuxar) med det lagret inräknat i bildens ljusstyrkekurvor, så att en Dolby Vision-tv visar mer av skivans detaljer. Start och spolning tar lite längre tid.",
++    "toneMap.label": "HDR10-tonmappning",
++    "toneMap.help": "Anpassar HDR10-videor som är masterade ljusare än din tv till tv:ns toppljusstyrka, så att högdagrar behåller sina detaljer i stället för att klippas. Välj den toppnivå som din tv klarar. Videor i Dolby Vision, HDR10+ och HLG, och videor som redan ligger inom toppnivån, lämnas oförändrade. En tonmappad video har ingen bild-i-bild och spelar upp Dolby Digital Plus Atmos utan höjdkanalerna.",
++    "toneMap.nits": "{n} nits",
++  },
++  "tr": {
++    "about.tvosApp": "tvOS uygulaması",
++    "credit.ffmpeg": "Tüm dosyaları okur ve Apple TV'nin çözücüsü olmayan biçimleri çözer.",
++    "credit.dav1d": "FFmpeg içinde AV1'i çözer.",
++    "credit.libdovi": "Dolby Vision meta verilerini okur ve dönüştürür.",
++    "credit.libtruehd": "Nesne tabanlı ses için TrueHD Atmos nesnelerini çözer.",
++    "credit.libzvbi": "FFmpeg içinde teletekst altyazılarını çözer.",
++    "credit.libass": "ASS ve SSA altyazılarını stilleriyle çizer.",
++    "credit.videotoolbox": "Apple'ın donanım çözücüsü; HEVC, H.264 ve Apple TV'nin diğer biçimleri için.",
++    "credit.anime4k": "Motorun çizgi sanatı ölçekleyicisinde animeyi yüksek çözünürlüğe yükseltir.",
++    "objectAudio.label": "TrueHD Atmos ve DTS:X için nesne tabanlı ses",
++    "objectAudio.help": "7.1 sürümünü oynatmak yerine yükseklikleri ve nesneleri korur ve hoparlörlerinize göre işler. tvOS 26 ve HDMI üzerinden bir Atmos alıcı veya soundbar gerekir. Diyalogları güçlendir ve gece modu bunu kapatır.",
++    "objectAudio.layoutLabel": "Hoparlörler",
++    "objectAudio.layoutHelp": "Nesne tabanlı sesin işlendiği düzen. Alıcınız veya soundbar'ınız bunu sahip olduğu hoparlörlere uyarlar; bu yüzden 9.1.6'yı yalnızca geniş ve orta yükseklik hoparlörleri olan bir sistemde seçin.",
++    "objectAudio.layout714": "7.1.4 veya daha az hoparlör",
++    "subtitles.sizeSmaller": "Daha küçük",
++    "subtitles.styledHelp": "Animelerde sık görülen biçimlendirilmiş altyazılar, bu ayar açık olmadıkça kendi yazı tiplerini, renklerini ve konumlarını korur. Ayar açıksa düz metin olarak sizin stilinizle gösterilir. Blu-ray ve DVD altyazıları görünümlerini, yukarıda seçilen boyutta korur.",
++    "upscaling.animeHelp": "1080p'ye kadar olan animeyi oynatılırken Anime4K'nın çizgi sanatı ağlarıyla ekran boyutuna yükseltir; eski ve düşük çözünürlüklü dizilerde çizgiler daha keskin görünür. Anime olarak işaretlenmiş yapımlara uygulanır ve tvOS 26 veya üzeri gerekir. HDR ve Dolby Vision videolar, ekranla yaklaşık aynı boyuttaki videolar ve canlı kanallar olduğu gibi kalır. Apple TV'nin yetişemediği videoda kendiliğinden kapanır. Video sırasında değiştirmek videoyu bulunduğu yerden yeniden açar.",
++    "upscaling.otherLabel": "Diğer videoları yükselt",
++    "upscaling.otherHelp": "Anime olmayan film ve dizileri, tvOS 26'dan itibaren Apple TV'nin süper çözünürlüğüyle 1080p'nin altından yükseltir: eski ve düşük çözünürlüklü videolar daha keskin görünür, ancak yüzler ve ince ayrıntılar yumuşamış görünebilir. HDR ve Dolby Vision videolar, ekranla yaklaşık aynı boyuttaki videolar, canlı kanallar ve fragmanlar olduğu gibi kalır. Video sırasında değiştirmek videoyu bulunduğu yerden yeniden açar.",
++    "dolbyVision.felLabel": "Dolby Vision profil 7 FEL",
++    "dolbyVision.felHelp": "Tam geliştirme katmanlı profil 7 videolarını (bazı UHD Blu-ray remux'ları), bu katman görüntünün parlaklık eğrilerine katılarak oynatır; böylece Dolby Vision destekli TV diskin daha fazla ayrıntısını gösterir. Başlatma ve ileri sarma biraz daha uzun sürer.",
++    "toneMap.label": "HDR10 ton eşleme",
++    "toneMap.help": "TV'nizden daha parlak hazırlanmış HDR10 videolarını TV'nizin tepe parlaklığına indirir; böylece parlak alanlar kırpılmak yerine ayrıntısını korur. TV'nizin ulaştığı tepe değerini seçin. Dolby Vision, HDR10+ ve HLG videolar ile zaten tepe değerin içindeki videolar olduğu gibi kalır. Ton eşlenmiş videoda küçük pencere (PiP) olmaz ve Dolby Digital Plus Atmos yükseklikler olmadan oynatılır.",
++    "toneMap.nits": "{n} nit",
++  },
++  "zh-Hans": {
++    "about.tvosApp": "tvOS 应用",
++    "credit.ffmpeg": "读取所有文件，并解码 Apple TV 没有解码器的格式。",
++    "credit.dav1d": "在 FFmpeg 中解码 AV1。",
++    "credit.libdovi": "读取并转换 Dolby Vision 元数据。",
++    "credit.libtruehd": "解码 TrueHD Atmos 对象，用于对象音频。",
++    "credit.libzvbi": "在 FFmpeg 中解码图文电视字幕。",
++    "credit.libass": "按样式绘制 ASS 和 SSA 字幕。",
++    "credit.videotoolbox": "Apple 的硬件解码器，支持 HEVC、H.264 以及 Apple TV 的其他格式。",
++    "credit.anime4k": "在引擎的线条艺术缩放器中放大动漫画面。",
++    "objectAudio.label": "TrueHD Atmos 和 DTS:X 的对象音频",
++    "objectAudio.help": "保留其高度声道和声音对象，并针对你的扬声器进行渲染，而不是播放 7.1 版本。需要 tvOS 26，以及通过 HDMI 连接的支持 Atmos 的接收器或条形音箱。对白增强和夜间模式会将其关闭。",
++    "objectAudio.layoutLabel": "扬声器",
++    "objectAudio.layoutHelp": "对象音频渲染所使用的布局。你的接收器或条形音箱会根据自身的扬声器进行适配，因此只有系统配有宽声场和中置高度扬声器时才选择 9.1.6。",
++    "objectAudio.layout714": "7.1.4，或更少扬声器",
++    "subtitles.sizeSmaller": "更小",
++    "subtitles.styledHelp": "动漫中常见的样式化字幕会保留自己的字体、颜色和位置，开启此选项后则会以你设置的样式显示为纯文本。蓝光和 DVD 字幕保留原有外观，大小按上方所选设置。",
++    "upscaling.animeHelp": "播放时将最高 1080p 的动漫放大至屏幕尺寸，使用 Anime4K 的线条艺术网络，让旧作和低分辨率节目的线条更清晰。适用于标记为动漫的内容，需要 tvOS 26 或更高版本。HDR 和 Dolby Vision 视频、与屏幕大小相近的视频以及直播频道保持不变。如果 Apple TV 处理不过来，会自动关闭。在视频播放期间切换会从当前位置重新打开视频。",
++    "upscaling.otherLabel": "放大其他视频",
++    "upscaling.otherHelp": "从 tvOS 26 起，使用 Apple TV 的超分辨率放大低于 1080p 的非动漫电影和节目：旧视频和低分辨率视频看起来更清晰，但人脸和细节可能显得过于平滑。HDR 和 Dolby Vision 视频、与屏幕大小相近的视频、直播频道和预告片保持不变。在视频播放期间切换会从当前位置重新打开视频。",
++    "dolbyVision.felLabel": "Dolby Vision 配置文件 7 FEL",
++    "dolbyVision.felHelp": "播放带完整增强层的配置文件 7 视频（部分 UHD Blu-ray remux），并将该层融入画面亮度曲线，让支持 Dolby Vision 的电视呈现更多碟片细节。启动和跳转所需时间会稍长。",
++    "toneMap.label": "HDR10 色调映射",
++    "toneMap.help": "将母带亮度高于你电视的 HDR10 视频映射到电视的峰值亮度，使高光保留细节而不是被截断。请选择你的电视能达到的峰值。Dolby Vision、HDR10+ 和 HLG 视频，以及已在峰值范围内的视频保持不变。经过色调映射的视频不支持画中画，播放 Dolby Digital Plus Atmos 时也没有高度声道。",
++    "toneMap.nits": "{n} nits",
++  },
++} as const;
++/* eslint-enable lingui/no-unlocalized-strings */
++
++export type TvTextKey = keyof (typeof TEXT)['en-GB'];
++
++type Table = Record<TvTextKey, string>;
++const tables = TEXT as unknown as Record<string, Table>;
++const languageOf = (tag: string) => tag.split('-')[0].toLowerCase();
++
++function tableFor(locale: string): Table {
++  if (tables[locale]) return tables[locale];
++  const language = languageOf(locale);
++  const same = Object.keys(tables).find((l) => languageOf(l) === language);
++  return same ? tables[same] : tables['en-GB'];
++}
++
++/** The Apple TV app's text for `key` in the active language, its `{name}`s filled from `values`. */
++export function tvText(
++  key: TvTextKey,
++  values?: Record<string, string | number>
++): string {
++  const text = tableFor(i18n.locale || 'en-GB')[key] ?? tables['en-GB'][key];
++  return values
++    ? text.replace(/\{(\w+)\}/g, (all, name: string) =>
++        name in values ? String(values[name]) : all
++      )
++    : text;
++}
+diff --git a/packages/web/src/lib/subtitles/style.ts b/packages/web/src/lib/subtitles/style.ts
+index f4e31b8a3..7bdb1ac65 100644
+--- a/packages/web/src/lib/subtitles/style.ts
++++ b/packages/web/src/lib/subtitles/style.ts
+@@ -1,4 +1,5 @@
+ import { t } from '@lingui/core/macro';
++import { tvText } from '@/lib/hosts/shell/tvos-text';
+ import {
+   settings,
+   SUBTITLE_POSITION_MAX,
+@@ -21,8 +22,8 @@ const SCALE: Record<SubtitleSize, number> = {
+ 
+ export const subtitleSizeLabel = (size: SubtitleSize) =>
+   ({
+-    // eslint-disable-next-line lingui/no-unlocalized-strings -- the Apple TV app's own build, untranslated
+-    smaller: 'Smaller',
++    // The Apple TV app's own size, in its own catalog (AIOStreamsTVOS).
++    smaller: tvText('subtitles.sizeSmaller'),
+     small: t`Small`,
+     normal: t`Normal`,
+     large: t`Large`,

@@ -2,45 +2,32 @@ import TVServices
 
 /**
  * The Top Shelf over AIOStreams' icon on the home screen: Continue Watching
- * and Next Up, from the list the app saved when the page last sent it.
+ * and Next Up, from the list the app saved when the page last sent it, or
+ * one Continue Watching row where the page merges them, as its home page does.
  * Selecting a title opens its page in the app; Play plays it from where it
  * stopped. With nothing to show, tvOS shows the app's Top Shelf image.
  */
 final class ContentProvider: TVTopShelfContentProvider {
     override func loadTopShelfContent(completionHandler: @escaping (TVTopShelfContent?) -> Void) {
-        // The app writes a list, even an empty one, whenever the page sends it.
+        // The app writes a list, even an empty one, whenever the page sends it. With none where this
+        // extension can read it (the app not opened since it was installed, or a signing that gave
+        // the two no App Group in common), tvOS shows the Top Shelf image; the app menu lists the groups.
         guard TopShelfStore.hasList else {
             TopShelfStore.noteAsked(shown: 0)
-            return completionHandler(notShared())
+            return completionHandler(nil)
         }
         let items = TopShelfStore.load()
-        let sections = [
-            section("Continue Watching", items.filter(\.resumes)),
-            section("Next Up", items.filter { !$0.resumes }),
-        ].compactMap { $0 }
+        // The rows' titles in the page's language, as its home page words them.
+        let text = TopShelfText.text(for: TopShelfStore.language)
+        // With the page's "Merge Continue Watching and Next Up" on, one row in the home page's order.
+        let sections = (TopShelfStore.merged
+            ? [section(text.continueWatching, items)]
+            : [
+                section(text.continueWatching, items.filter(\.resumes)),
+                section(text.nextUp, items.filter { !$0.resumes }),
+            ]).compactMap { $0 }
         TopShelfStore.noteAsked(shown: sections.reduce(0) { $0 + $1.items.count })
         completionHandler(sections.isEmpty ? nil : TVTopShelfSectionedContent(sections: sections))
-    }
-
-    /**
-     * No list where this extension can read it: the signing gave it no App
-     * Group the app has, or the app hasn't been opened since it was installed.
-     * Shows this extension's groups, to compare with the app menu's.
-     */
-    private func notShared() -> TVTopShelfContent {
-        let groups = TopShelfStore.entitled
-        let names = groups.isEmpty ? ["No App Groups in this extension's signature"] : groups
-        let open = URL(string: "aiostreams://open")
-        let items = names.enumerated().map { index, name -> TVTopShelfSectionedItem in
-            let item = TVTopShelfSectionedItem(identifier: "group-\(index)")
-            item.title = name
-            item.imageShape = .hdtv
-            if let open { item.displayAction = TVTopShelfAction(url: open) }
-            return item
-        }
-        let section = TVTopShelfItemCollection(items: items)
-        section.title = "No list from the app: open AIOStreams, or compare these groups with its menu"
-        return TVTopShelfSectionedContent(sections: [section])
     }
 
     private func section(_ title: String, _ items: [TopShelfItem]) -> TVTopShelfItemCollection<TVTopShelfSectionedItem>? {

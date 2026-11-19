@@ -46,7 +46,8 @@ def main():
         "date": datetime.date.today().isoformat(),
         "localizedDescription": f"AIOStreams for Apple TV {version}. Release notes: "
         f"https://github.com/{REPO}/releases/tag/{tag}",
-        "downloadURL": f"https://github.com/{REPO}/releases/download/{tag}/AIOStreams.ipa",
+        # The release's .ipa by its own name (aiostreams-v1.3.2.ipa), as the workflow attaches it.
+        "downloadURL": f"https://github.com/{REPO}/releases/download/{tag}/{os.path.basename(ipa)}",
         "size": os.path.getsize(ipa),
         "minOSVersion": project_setting("tvOS"),
     }
