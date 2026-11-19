@@ -485,12 +485,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
         present(confirm, animated: true)
     }
 
-    /**
-     * tvOS has no keyboard for a web page, so a field the page asks for opens
-     * the system's, with dictation. Most fields get the search keyboard over
-     * the page, typing straight into the field; passwords and PINs get the
-     * alert, which keeps them hidden and sends a PIN's form on Done.
-     */
     /// `rgb(r, g, b)` as the page sends its colour (read off a canvas pixel), or nil.
     static func pageColor(_ text: String) -> UIColor? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
@@ -510,14 +504,27 @@ final class MainViewController: UIViewController, RemoteReceiver {
         return look
     }
 
+    /**
+     * tvOS has no keyboard for a web page, so a field the page asks for opens
+     * the system's search keyboard over the page, with dictation, typing
+     * straight into the field: a password as dots, a PIN on the number keys.
+     * Its return key, where it has one, sends the field's form.
+     */
     private func showKeyboard(_ message: Message) {
         guard presentedViewController == nil else { return }
-        if message.flag("secure") == true || message.flag("numeric") == true { return showKeyboardAlert(message) }
+        let secure = message.flag("secure") == true
+        let numeric = message.flag("numeric") == true
+        let type: UIKeyboardType = numeric ? .numberPad
+            : message.flag("email") == true ? .emailAddress
+            : message.flag("url") == true ? .URL : .default
         let keyboard = SearchKeyboard(
             text: message.text("value") ?? "",
             prompt: message.text("label") ?? "",
             look: keyboardLook(message),
-            keyboardType: message.flag("email") == true ? .emailAddress : message.flag("url") == true ? .URL : .default,
+            keyboardType: type,
+            secure: secure,
+            // A password or a PIN is the last thing its form asks for.
+            returnKey: secure || numeric ? .done : .search,
             onChange: { [weak self] text in
                 guard let self else { return }
                 self.callTV("input(\(self.jsString(text)))")
@@ -535,36 +542,6 @@ final class MainViewController: UIViewController, RemoteReceiver {
 
     /// The keyboard open over the page, kept until it closes.
     private var keyboard: SearchKeyboard?
-
-    private func showKeyboardAlert(_ message: Message) {
-        let label = message.text("label") ?? ""
-        let alert = UIAlertController(title: label.isEmpty ? "Enter text" : label, message: nil, preferredStyle: .alert)
-        alert.addTextField { field in
-            field.text = message.text("value") ?? ""
-            field.isSecureTextEntry = message.flag("secure") == true
-            if message.flag("email") == true { field.keyboardType = .emailAddress }
-            if message.flag("url") == true { field.keyboardType = .URL }
-            // A PIN gets the digits-only keyboard.
-            if message.flag("numeric") == true { field.keyboardType = .numberPad }
-            field.autocorrectionType = .no
-            field.autocapitalizationType = .none
-        }
-        alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self, weak alert] _ in
-            guard let self else { return }
-            let text = alert?.textFields?.first?.text ?? ""
-            // A PIN is the last thing its form asks for, so Done sends it.
-            let submit = message.flag("numeric") == true
-            self.callTV("type(\(self.jsString(text)),\(submit))")
-            self.web?.focusPage()
-        })
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-            self?.web?.focusPage()
-        })
-        present(alert, animated: true) { [weak alert] in
-            // Straight to the keyboard rather than the alert's field.
-            alert?.textFields?.first?.becomeFirstResponder()
-        }
-    }
 
     // MARK: Links
 
@@ -780,30 +757,34 @@ final class MainViewController: UIViewController, RemoteReceiver {
     /// (`patches/web/0006-test-video-page.patch`), reached by an `aiostreams://test-video` link.
     private static let testURLKey = "debug.testVideoURL"
 
+    /**
+     * The system keyboard, as for the page's fields: an http(s) link to a video file or an HLS
+     * playlist, which plays in the page's player, with its controls and settings; Back stops it.
+     * Closing the keyboard plays the link in its field, so a keyboard without a return key plays
+     * it too; an empty field, or anything but a link, plays nothing.
+     */
     private func askTestVideo() {
         guard presentedViewController == nil else { return }
-        let alert = UIAlertController(
-            title: "Play a test video",
-            message: "An http(s) link to a video file or an HLS playlist. It plays in the page's player, with its controls and settings; Back stops it.",
-            preferredStyle: .alert
+        var typed = UserDefaults.standard.string(forKey: Self.testURLKey) ?? ""
+        let keyboard = SearchKeyboard(
+            text: typed,
+            prompt: "Test video: an http(s) link. Close to play it; clear it to cancel",
+            keyboardType: .URL,
+            returnKey: .go,
+            onChange: { typed = $0 },
+            onClose: { [weak self] _ in
+                guard let self else { return }
+                self.keyboard = nil
+                let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else {
+                    self.web?.focusPage()
+                    return
+                }
+                self.startTestVideo(text)
+            }
         )
-        alert.addTextField { field in
-            field.text = UserDefaults.standard.string(forKey: Self.testURLKey) ?? ""
-            field.placeholder = "https://…"
-            field.keyboardType = .URL
-            field.autocorrectionType = .no
-            field.autocapitalizationType = .none
-        }
-        alert.addAction(UIAlertAction(title: "Play", style: .default) { [weak self, weak alert] _ in
-            let text = (alert?.textFields?.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            self?.startTestVideo(text)
-        })
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-            self?.web?.focusPage()
-        })
-        present(alert, animated: true) { [weak alert] in
-            alert?.textFields?.first?.becomeFirstResponder()
-        }
+        self.keyboard = keyboard
+        present(keyboard.controller, animated: true)
     }
 
     private func startTestVideo(_ url: String) {

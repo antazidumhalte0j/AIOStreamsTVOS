@@ -1702,12 +1702,6 @@ enum BridgeScript {
         watchPip(pipOffered);
         queuePip();
       },
-      /** The text typed on the app's alert keyboard, all at once. */
-      type(value, submit) {
-        const el = editing;
-        if (el && el.isConnected) setValue(el, value);
-        this.done(submit);
-      },
     }),
   });
 

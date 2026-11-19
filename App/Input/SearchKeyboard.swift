@@ -43,10 +43,12 @@ struct KeyboardLook {
 }
 
 /**
- * tvOS's own search keyboard, shown over the page for one of the page's text
- * fields. Each change goes straight into the page's field, so a search's
- * results update while typing. Menu, or moving off the keyboard, closes it
- * and hands the remote back to the page.
+ * tvOS's own search keyboard, shown over the page for each of the page's text
+ * fields, passwords (shown as dots) and PINs (the number keys) included, and
+ * for the app menu's own. Each change goes straight into the page's field, so
+ * a search's results update while typing. Menu, or moving off the keyboard,
+ * closes it and hands the remote back to the page; the return key, where the
+ * keyboard has one, closes it and sends the field's form.
  */
 final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelegate {
     /// What to present.
@@ -63,6 +65,8 @@ final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelega
         prompt: String,
         look: KeyboardLook = KeyboardLook(),
         keyboardType: UIKeyboardType,
+        secure: Bool = false,
+        returnKey: UIReturnKeyType = .search,
         onChange: @escaping (String) -> Void,
         onClose: @escaping (_ submit: Bool) -> Void
     ) {
@@ -84,8 +88,11 @@ final class SearchKeyboard: NSObject, UISearchResultsUpdating, UISearchBarDelega
         bar.text = text
         bar.placeholder = prompt
         bar.keyboardType = keyboardType
+        bar.returnKeyType = returnKey
         bar.autocorrectionType = .no
         bar.autocapitalizationType = .none
+        // A password shows as dots in the keyboard's field, as in the page's own.
+        bar.searchTextField.isSecureTextEntry = secure
 
         // Over the page, which shows through beside or below the keyboard. Faded in, as tvOS fades its
         // keyboard in, so the box behind it comes with it rather than sliding up from below.
