@@ -11,7 +11,7 @@ struct TopShelfText {
     static func text(for language: String) -> TopShelfText { AppLanguage.pick(texts, for: language) }
 
     private static let texts: [String: TopShelfText] = [
-        "en-GB": TopShelfText(continueWatching: "Continue Watching", nextUp: "Next Up"),
+        "en-GB": TopShelfText(continueWatching: "Continue watching", nextUp: "Next up"),
         "ar": TopShelfText(continueWatching: "متابعة المشاهدة", nextUp: "التالي"),
         "ca": TopShelfText(continueWatching: "Continua mirant", nextUp: "A continuació"),
         "de": TopShelfText(continueWatching: "Weiterschauen", nextUp: "Als Nächstes"),
