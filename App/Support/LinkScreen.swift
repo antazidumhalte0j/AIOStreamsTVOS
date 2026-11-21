@@ -146,6 +146,11 @@ final class LinkScreen: UIViewController {
             note: "Scannez le code avec l'appareil photo de votre téléphone pour y ouvrir ce lien, ou saisissez l'adresse.",
             done: "OK"
         ),
+        "he": Text(
+            title: "פתיחה בטלפון",
+            note: "יש לסרוק את הקוד במצלמת הטלפון כדי לפתוח שם את הקישור, או להקליד את הכתובת.",
+            done: "סיום"
+        ),
         "id": Text(
             title: "Buka di ponsel Anda",
             note: "Pindai kode dengan kamera ponsel Anda untuk membuka tautan ini di sana, atau ketik alamatnya.",

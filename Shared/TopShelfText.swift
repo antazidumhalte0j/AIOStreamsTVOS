@@ -19,6 +19,7 @@ struct TopShelfText {
         "es": TopShelfText(continueWatching: "Seguir viendo", nextUp: "A continuación"),
         "fi": TopShelfText(continueWatching: "Jatka katsomista", nextUp: "Seuraavaksi"),
         "fr": TopShelfText(continueWatching: "Reprendre la lecture", nextUp: "À suivre"),
+        "he": TopShelfText(continueWatching: "המשך צפייה", nextUp: "הבאים בתור"),
         "id": TopShelfText(continueWatching: "Lanjutkan menonton", nextUp: "Berikutnya ditonton"),
         "it": TopShelfText(continueWatching: "Continua a guardare", nextUp: "In arrivo"),
         "ms": TopShelfText(continueWatching: "Teruskan menonton", nextUp: "Seterusnya"),

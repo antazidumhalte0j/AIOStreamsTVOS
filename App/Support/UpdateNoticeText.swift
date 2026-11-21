@@ -62,6 +62,12 @@ struct UpdateNoticeText: Sendable {
             viewRelease: "Voir cette version",
             ok: "OK"
         ),
+        "he": UpdateNoticeText(
+            title: "יש עדכון זמין",
+            message: { "AIOStreams for Apple TV \($0) כבר זמין; הגרסה הנוכחית היא \($1). אפשר לעדכן דרך האפליקציה שמשמשת להתקנה הצדדית, או להוריד מ־\($2)." },
+            viewRelease: "הצגת הגרסה הזו",
+            ok: "אישור"
+        ),
         "id": UpdateNoticeText(
             title: "Pembaruan tersedia",
             message: { "AIOStreams for Apple TV \($0) sudah dirilis; versi ini adalah \($1). Perbarui melalui aplikasi yang Anda gunakan untuk memasangnya, atau unduh dari \($2)." },
