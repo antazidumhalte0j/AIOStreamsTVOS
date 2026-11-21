@@ -438,6 +438,14 @@ final class AetherPlayer {
             // of a remux. Asking for more than any Apple TV holds leaves only the quarter-of-free-space
             // cap; 1 TiB rather than Int.max, so nothing the engine adds to it can overflow.
             options.sessionCacheByteBudget = 1 << 40
+            // Back to the title and Resume plays from what the last session already fetched (engine
+            // 7.71, AE#1095): the stopped session's segments stay on disk and are served again when the
+            // next load is the same URL with the same options. The page's stream URL carries no play
+            // session, so a Resume asks for the same one. One session is kept, in the budget it played
+            // in; loading anything else, the end of the process or Reset the app's data deletes it. The
+            // engine keeps it only for its own loopback route: not live, AVPlayer's remote HLS or the
+            // software player.
+            options.retainsSessionCacheAfterStop = true
         }
         options.heldSourceConnection = Self.heldSourceConnection
         // Each VOD segment is served while it is still being written, so playback starts on its first

@@ -476,6 +476,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
             // as it deletes files, before the page loads again and sends its defaults.
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 ArtworkCache.reset()
+                // The last video's segments, kept on disk for a Resume.
+                AetherEngine.discardRetainedSessionCache()
                 DispatchQueue.main.async { [weak self] in
                     self?.web?.removeAllWebData { [weak self] in self?.loadPage() }
                 }

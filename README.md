@@ -318,6 +318,15 @@ lists no trailers (`RemoteTrailers: []`), and the page took that empty list for 
 the title's details, which do list them, had come. It now waits for the details unless the row's
 copy names some (`patches/web/0037-tvos-trailers-wait-for-the-details.patch`).
 
+### Resume
+
+Leaving a video for its page and pressing Resume plays from what was already fetched. The engine
+keeps the stopped video's segments on disk (`retainsSessionCacheAfterStop`, AetherEngine 7.71) and
+serves them again when the next load is the same stream, which it is: the page's stream URL carries
+no play session. One video is kept, in the space it played in; playing anything else, quitting the
+app or **Reset the app's data** deletes it. Live channels, AVPlayer's own HLS and videos the engine
+decodes itself aren't kept.
+
 ### Seek-bar thumbnails
 
 Seeking shows a picture of the keyframe at or before the position, over the seek bar and in the
