@@ -1,0 +1,68 @@
+diff --git a/packages/web/src/app/live-tv/page.tsx b/packages/web/src/app/live-tv/page.tsx
+index 3f29ebe19..209cdaaef 100644
+--- a/packages/web/src/app/live-tv/page.tsx
++++ b/packages/web/src/app/live-tv/page.tsx
+@@ -294,6 +294,8 @@ export function LiveTvPage({
+   // focused on the way would pick instead.
+   const leaveUp = () => {
+     const target =
++      // The Guide and Channels pills lie directly above the channels, and are picked as they are focused (AIOStreamsTVOS).
++      find('[data-name=live-view] [aria-selected=true]') ??
+       find('[data-name=live-group] [aria-selected=true]') ??
+       find('[data-ui=live-group-picker]');
+     if (target) focusOn(target);
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index 46913e4d1..4c36b4030 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -725,6 +725,41 @@ function pillsAbove(
+   );
+ }
+ 
++/**
++ * Where Down from `from` reaches the row `start` is in: the item of that row straight below it, or
++ * the nearest along, as the row's first only when nothing else lies in that row (AIOStreamsTVOS).
++ */
++function beneath(from: HTMLElement, start: HTMLElement): HTMLElement {
++  const mark = start.closest<HTMLElement>('[data-nav-start]');
++  if (!mark) return start;
++  const row = rectOf(start);
++  const at = rectOf(from);
++  const edge = mark.getBoundingClientRect();
++  let best = start;
++  let apart = Infinity;
++  for (const el of mark.querySelectorAll<HTMLElement>(FOCUSABLE)) {
++    if (ruledOut(el) || el.closest('[data-nav-out]') || inTitle(el)) continue;
++    const r = rectOf(el);
++    if (r.bottom <= row.top || r.top >= row.bottom || !canFocus(el, r))
++      continue;
++    // Not one scrolled out of its row or off the screen.
++    if (
++      r.right <= Math.max(edge.left, 0) ||
++      r.left >= Math.min(edge.right, innerWidth)
++    )
++      continue;
++    // Beside it by how far its edges lie apart, the nearer centre first among those it overlaps.
++    const gap =
++      Math.max(r.left - at.right, at.left - r.right, 0) +
++      Math.abs(r.left + r.width / 2 - (at.left + at.width / 2)) / 1000;
++    if (gap < apart) {
++      best = el;
++      apart = gap;
++    }
++  }
++  return best;
++}
++
+ function enterAt(box: HTMLElement): HTMLElement | null {
+   const named = box.querySelector<HTMLElement>(box.dataset.navEnter!);
+   return named && canFocus(named) ? named : null;
+@@ -957,7 +992,7 @@ export function move(dir: Direction): boolean {
+   const pageStart =
+     downBox && startOf(downBox.closest('[data-page]') ?? document);
+   if (downBox && pageStart && !downBox.contains(pageStart)) {
+-    moveTo(pageStart, dir);
++    moveTo(beneath(from, pageStart), dir);
+     return true;
+   }
+   bars = new Map();
