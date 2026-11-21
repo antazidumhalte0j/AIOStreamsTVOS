@@ -7,27 +7,28 @@ import PackageDescription
  * its FFmpeg build with it, and the app is tested against one.
  *
  * The commit is on the app's fork (mickey2266/AetherEngine, branch
- * `aiostreams-7.71.2`): upstream 7.71.2 plus the fork's own commits, replayed
- * from `aiostreams-7.70.0` (their hashes there in brackets). All but a34f7bc6
- * went on unchanged; its reader cleanup in `close()` now sits beside 7.71's.
- * - 9a04ab02 (5b77bc8a): the engine's software player (interlaced H.264 and the like)
+ * `aiostreams-7.72.0`): upstream 7.72.0 plus the fork's own commits, replayed
+ * from `aiostreams-7.71.2` (their hashes there in brackets). All but 2d4d783f
+ * went on unchanged; its `slowConnectionPeriod` now sits in AVIOReader's
+ * init beside 7.72's `liveReopenURL`.
+ * - 277f8cec (9a04ab02): the engine's software player (interlaced H.264 and the like)
  *   labelled 7.1 MPEG_7_1_C, which put the side and rear surrounds in each
  *   other's speakers; it now labels it WAVE_7_1 (Dolby's TrueHD 7.1 channel
  *   check on a Samsung HW-Q990F). The AVPlayer route's FLAC bridge was right
  *   as upstream has it.
- * - 2d4d783f (066241dc): for remuxes, a 64 MB read-ahead window and 128 MB ranges (were
+ * - da591c84 (2d4d783f): for remuxes, a 64 MB read-ahead window and 128 MB ranges (were
  *   16 MB and 32 MB); a connection the reader waits on for 8 s below the
  *   video's mean rate is replaced (3 in a row, then the check rests 2
  *   minutes); `confirmsAtmosOnHeldSourceConnection`, so the Atmos
  *   confirmation runs on the held connection the app uses by default.
- * - 31cf9ae5 (61f95f45): the silent Atmos stream the engine plays beside a rendered
+ * - 97e6591e (31cf9ae5): the silent Atmos stream the engine plays beside a rendered
  *   TrueHD Atmos or DTS:X bed stops while the picture-in-picture window
  *   shows, as the bed played nothing in the window beside it.
- * - 94267d50 (a34f7bc6): a forward seek past the read-ahead is read through the live
+ * - cca335d1 (94267d50): a forward seek past the read-ahead is read through the live
  *   connection up to what the link delivers in a new request's first-byte time
  *   (8 to 32 MB, was a fixed 8 MB); `prefetchLandings(atSeconds:)`, which holds
  *   the bytes a skip lands on ahead of the skip, from the page's skip segments.
- * - d2f6d786 (915a7a3b): a VOD `.m3u8` / `.m3u` whose loopback open fails, for any
+ * - 1d1d8835 (d2f6d786): a VOD `.m3u8` / `.m3u` whose loopback open fails, for any
  *   reason but the origin's refusal, takes the AE#154 reroute onto AVPlayer. Apple's trailer CDN
  *   (play-edge.itunes.apple.com) answers its playlist differently each time, so the reader caught it
  *   "answering byte ranges with other bytes" (or FFmpeg read invalid data) before it saw `#EXTM3U`.
@@ -50,7 +51,7 @@ let package = Package(
         .library(name: "AetherHost", targets: ["AetherHost"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mickey2266/AetherEngine", revision: "d2f6d786673cd33fddb15f9b155892549c175b2f",
+        .package(url: "https://github.com/mickey2266/AetherEngine", revision: "1d1d8835842aa8cd79126b0ab8d0f020a4f46b72",
                  traits: ["TrueHDObjectAudio", "DTSXObjectAudio", "DolbyVisionFelCurves"]),
     ],
     targets: [
