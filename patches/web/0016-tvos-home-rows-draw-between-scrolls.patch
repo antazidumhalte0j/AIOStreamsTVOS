@@ -1,20 +1,21 @@
-diff --git a/packages/web/src/app/home/page.tsx b/packages/web/src/app/home/page.tsx
-index 6f6a6f5cd..7a69d59f9 100644
---- a/packages/web/src/app/home/page.tsx
-+++ b/packages/web/src/app/home/page.tsx
-@@ -40,6 +40,7 @@ import { href, itemPath, navigate, to, versionsPath } from '@/lib/paths';
- import { settings, useSetting, type FeaturedSource } from '@/lib/settings';
- import { useFeature, useServerInfo } from '@/lib/jellyfin/server-info';
- import { useNear } from '@/hooks/use-in-view';
+diff --git a/packages/web/src/components/media/items-row.tsx b/packages/web/src/components/media/items-row.tsx
+index f123bf973..0c943b7a6 100644
+--- a/packages/web/src/components/media/items-row.tsx
++++ b/packages/web/src/components/media/items-row.tsx
+@@ -5,6 +5,8 @@ import { useItemPages, type ItemPagesOptions } from '@/lib/jellyfin/queries';
+ import { cardImages, cardShape, animatedPosterOf } from '@/lib/artwork/urls';
+ import { itemSubtitle, progressOf } from '@/lib/format';
+ import { href, itemPath } from '@/lib/paths';
++import { currentHost } from '@/lib/hosts';
 +import { whenStill } from '@/lib/input/glide';
- import { FollowHero, Hero } from '@/components/media/hero';
- import { CardPreviewHost } from '@/components/media/card-preview';
- import { MediaRow } from '@/components/media/media-row';
-@@ -331,6 +332,24 @@ function UpcomingRow() {
+ import { useNear } from '@/hooks/use-in-view';
+ import { Anchor } from '@/components/anchor';
+ import { MediaRow } from './media-row';
+@@ -13,6 +15,24 @@ import { ItemMenu } from './item-menu';
  
- const ROW_PAGE = 20;
+ export const ROW_PAGE = 20;
  
-+/** How far below the screen a TV starts a library row: a screen's height. */
++/** How far below the screen a TV starts a row: a screen's height. */
 +// eslint-disable-next-line lingui/no-unlocalized-strings -- a root margin
 +const TV_ROW_AHEAD = '100% 0px';
 +
@@ -32,13 +33,13 @@ index 6f6a6f5cd..7a69d59f9 100644
 +  return shown;
 +}
 +
- /** Favourite channels, then those played here lately, with what is on. */
- function LiveRow() {
-   const enabled = useLiveTvShown(true);
-@@ -387,7 +406,12 @@ function LiveRow() {
- function LibraryRow({ view, first }: { view: BaseItemDto; first: boolean }) {
+ /**
+  * A row of a parent's items, fetched and drawn once near the screen and paged
+  * as it scrolls. Its cards wait too when already fetched, as most rows are out
+@@ -36,16 +56,22 @@ export function ItemsRow({
+   first: boolean;
+ }) {
    const { client } = useSession();
-   const { stock } = useServerInfo();
 -  const [ref, near] = useNear<HTMLElement>('400px', first);
 +  // A TV starts a row a screen ahead, so it's drawn between presses rather than as it scrolls in.
 +  const [ref, nearNow] = useNear<HTMLElement>(
@@ -46,12 +47,10 @@ index 6f6a6f5cd..7a69d59f9 100644
 +    first
 +  );
 +  const near = useStill(nearNow);
-   const pages = useItemPages(view.Id!, {
-     types: libraryTypes(view),
-     recursive: true,
-@@ -396,10 +420,11 @@ function LibraryRow({ view, first }: { view: BaseItemDto; first: boolean }) {
-     // A catalog's order is its own; a server's own files show newest first.
-     ...(stock && { sortBy: NEWEST, descending: true }),
+   const pages = useItemPages(parentId, {
+     ...query,
+     pageSize: ROW_PAGE,
+     enabled: near,
    });
 -  const items = React.useMemo(
 +  const fetched = React.useMemo(
@@ -62,7 +61,7 @@ index 6f6a6f5cd..7a69d59f9 100644
    const landscape =
      items.length > 0 &&
      items.filter((i) => cardShape(i) === 'landscape').length > items.length / 2;
-@@ -457,7 +482,12 @@ function LibraryRow({ view, first }: { view: BaseItemDto; first: boolean }) {
+@@ -102,7 +128,12 @@ export function ItemsRow({
          </Anchor>
        }
        shape={landscape ? 'wide' : 'poster'}

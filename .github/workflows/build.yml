@@ -13,7 +13,7 @@ on:
     inputs:
       aiostreams_ref:
         description: AIOStreams branch, tag or commit to take the web app from
-        default: 37bb17432604137c7d4cf37ed05eea290cc40f66
+        default: f9d76cc3d81a9ea7bc3425051a57dd17f0d90b4b
 
 permissions:
   contents: write
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build the web app
         env:
-          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || '37bb17432604137c7d4cf37ed05eea290cc40f66' }}
+          AIOSTREAMS_REF: ${{ inputs.aiostreams_ref || 'f9d76cc3d81a9ea7bc3425051a57dd17f0d90b4b' }}
         run: |
           corepack enable
           bash scripts/fetch-web.sh
