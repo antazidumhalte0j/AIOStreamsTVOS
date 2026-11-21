@@ -1,0 +1,37 @@
+diff --git a/packages/web/src/lib/hosts/shell/tvos-text.ts b/packages/web/src/lib/hosts/shell/tvos-text.ts
+index 5789f9b73..0e29eb53f 100644
+--- a/packages/web/src/lib/hosts/shell/tvos-text.ts
++++ b/packages/web/src/lib/hosts/shell/tvos-text.ts
+@@ -216,6 +216,32 @@ const TEXT = {
+     "toneMap.help": "Ramène les vidéos HDR10 masterisées plus lumineuses que votre téléviseur à sa luminosité maximale, afin que les hautes lumières gardent leurs détails au lieu d'être écrêtées. Choisissez la luminosité maximale que atteint votre téléviseur. Les vidéos Dolby Vision, HDR10+ et HLG, ainsi que celles déjà dans la limite de la luminosité maximale, restent inchangées. Une vidéo avec tone mapping n'a pas d'image dans l'image et lit le Dolby Digital Plus Atmos sans ses canaux de hauteur.",
+     "toneMap.nits": "{n} nits",
+   },
++  "he": {
++    "about.tvosApp": "אפליקציית tvOS",
++    "credit.ffmpeg": "קורא כל קובץ ומפענח את מה שאין ל־Apple TV מפענח עבורו.",
++    "credit.dav1d": "מפענח AV1, בתוך FFmpeg.",
++    "credit.libdovi": "קורא וממיר את המטא־נתונים של Dolby Vision.",
++    "credit.libtruehd": "מפענח את האובייקטים של TrueHD Atmos עבור שמע מבוסס אובייקטים.",
++    "credit.libzvbi": "מפענח כתוביות טלטקסט, בתוך FFmpeg.",
++    "credit.libass": "מצייר כתוביות ASS ו־SSA עם הסגנונות שלהן.",
++    "credit.videotoolbox": "המפענח החומרתי של Apple, עבור HEVC,‏ H.264 ושאר הפורמטים של Apple TV.",
++    "credit.anime4k": "משפר את הרזולוציה של אנימה במגדיל הקווים של המנוע.",
++    "objectAudio.label": "שמע מבוסס אובייקטים עבור TrueHD Atmos ו־DTS:X",
++    "objectAudio.help": "שומר על ערוצי הגובה והאובייקטים ומעבד אותם עבור הרמקולים במקום לנגן את מיקס ה־7.1. נדרשים tvOS 26 ומקלט או מקרן קול (סאונדבר) עם Atmos דרך HDMI. הגברת הדיאלוג ומצב הלילה מכבים אותו.",
++    "objectAudio.layoutLabel": "רמקולים",
++    "objectAudio.layoutHelp": "הפריסה שעבורה מעובד השמע מבוסס האובייקטים. המקלט או מקרן הקול מתאימים אותה לרמקולים שמחוברים אליהם, ולכן יש לבחור 9.1.6 רק במערכת עם רמקולים רחבים ורמקולי גובה אמצעיים.",
++    "objectAudio.layout714": "7.1.4, או פחות רמקולים",
++    "subtitles.sizeSmaller": "קטן יותר",
++    "subtitles.styledHelp": "כתוביות מעוצבות, הנפוצות באנימה, שומרות על הגופנים, הצבעים והמיקום שלהן, אלא אם אפשרות זו פועלת, ואז הן מוצגות כטקסט רגיל בסגנון שנבחר. כתוביות Blu-ray ו־DVD שומרות על המראה שלהן, בגודל שנבחר למעלה.",
++    "upscaling.animeHelp": "משפר את הרזולוציה של אנימה עד 1080p לגודל המסך בזמן הניגון, עם רשתות הקווים של Anime4K, לקווים חדים יותר בסדרות ישנות וברזולוציה נמוכה. חל על כותרים שמסומנים כאנימה ודורש tvOS 26 ואילך. סרטוני HDR ו־Dolby Vision, סרטונים בערך בגודל המסך וערוצים חיים נשארים כפי שהם. נכבה מעצמו בסרטון ש־Apple TV לא מצליח לעמוד בקצב שלו. שינוי ההגדרה במהלך סרטון פותח אותו מחדש באותה נקודה.",
++    "upscaling.otherLabel": "שיפור רזולוציה לווידאו אחר",
++    "upscaling.otherHelp": "משפר את הרזולוציה של סרטים וסדרות שאינם אנימה בעזרת רזולוציית העל של Apple TV, מתחת ל־1080p, החל מ־tvOS 26: סרטונים ישנים וברזולוציה נמוכה נראים חדים יותר, אם כי פנים ופרטים עדינים עלולים להיראות מוחלקים. סרטוני HDR ו־Dolby Vision, סרטונים בערך בגודל המסך, ערוצים חיים וטריילרים נשארים כפי שהם. שינוי ההגדרה במהלך סרטון פותח אותו מחדש באותה נקודה.",
++    "dolbyVision.felLabel": "Dolby Vision פרופיל 7 FEL",
++    "dolbyVision.felHelp": "מנגן סרטוני פרופיל 7 עם שכבת שיפור מלאה (חלק מקובצי ה־remux של UHD Blu-ray) כשהשכבה משולבת בעקומות הבהירות של התמונה, כך שטלוויזיית Dolby Vision מציגה יותר מהפרטים שבדיסק. ההפעלה והדילוגים אורכים מעט יותר זמן.",
++    "toneMap.label": "מיפוי גוונים ל־HDR10",
++    "toneMap.help": "מתאים סרטוני HDR10 שמוסטרו בהירים יותר מהטלוויזיה לבהירות השיא שלה, כך שהאזורים הבהירים שומרים על הפרטים במקום להישרף. יש לבחור את השיא שהטלוויזיה מגיעה אליו. סרטוני Dolby Vision,‏ HDR10+ ו־HLG, וסרטונים שכבר נמצאים בתוך השיא, נשארים כפי שהם. בסרטון עם מיפוי גוונים אין תמונה בתוך תמונה, ו־Dolby Digital Plus Atmos מתנגן בלי ערוצי הגובה.",
++    "toneMap.nits": "{n} ניט",
++  },
+   "id": {
+     "about.tvosApp": "Aplikasi tvOS",
+     "credit.ffmpeg": "Membaca semua file dan mendekode format yang tidak punya dekoder di Apple TV.",

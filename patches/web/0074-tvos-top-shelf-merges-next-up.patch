@@ -46,19 +46,19 @@ index f7a92d495..335e96d67 100644
  
  const browserHost: Host = { name: 'browser', keepAwake: keepScreenOn };
 diff --git a/packages/web/src/lib/hosts/shell/android.ts b/packages/web/src/lib/hosts/shell/android.ts
-index a7b6f015f..d63372369 100644
+index 8b5f16f13..aafad4127 100644
 --- a/packages/web/src/lib/hosts/shell/android.ts
 +++ b/packages/web/src/lib/hosts/shell/android.ts
 @@ -3,7 +3,7 @@ import { toast } from 'sonner';
  import type { Host } from '..';
  import { onSettingsChange, settings, type PlayerEngine } from '@/lib/settings';
- import { backGesture, backPressed, noteHomeScroll } from './back-slide';
+ import { backGesture, backPressed } from './back-slide';
 -import { appBridge, ask } from './bridge';
 +import { appBridge, appleTv, ask } from './bridge';
  import { shellDownloads } from './downloads';
- import { appEngine, setEngine } from './player';
+ import { appEngine, setEngine, shellFeatures } from './player';
  import { resolveYouTube } from './youtube';
-@@ -107,8 +107,13 @@ const listen: NonNullable<Host['listen']> = ({ hearing, signal }) =>
+@@ -105,8 +105,13 @@ const listen: NonNullable<Host['listen']> = ({ hearing, signal }) =>
      bridge?.send({ type: 'voice-search' });
    });
  

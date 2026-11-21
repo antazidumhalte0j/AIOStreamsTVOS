@@ -1,108 +1,85 @@
-diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
-index 5952027cf..33bf1bbf7 100644
---- a/packages/web/src/components/shell/layout.tsx
-+++ b/packages/web/src/components/shell/layout.tsx
-@@ -36,6 +36,7 @@ import { pageOpening } from '@/lib/page-open';
- import { navigate, to } from '@/lib/paths';
- import { currentHost } from '@/lib/hosts';
- import { shellHost } from '@/lib/hosts/shell';
+diff --git a/packages/web/src/components/shell/page-stack.tsx b/packages/web/src/components/shell/page-stack.tsx
+index 9c95cb32e..29feaac78 100644
+--- a/packages/web/src/components/shell/page-stack.tsx
++++ b/packages/web/src/components/shell/page-stack.tsx
+@@ -8,6 +8,7 @@ import {
+ } from '@tanstack/react-router';
+ import { cn } from '@aiostreams/ui/core/styling';
+ import { currentWash } from '@/lib/artwork/background';
 +import { appleTv } from '@/lib/hosts/shell/bridge';
- import { useDiscordBrowsing } from '@/lib/discord';
- import { useServerEvents } from '@/features/remote/server-events';
- import { downloadsHost, useDownloadRunner } from '@/lib/downloads';
-@@ -117,6 +118,60 @@ export function PageBackground() {
-   );
- }
+ import { pageOpening } from '@/lib/page-open';
+ import { PageSearch, PageShown } from '@/lib/page-shown';
+ import { PageScroll } from './page-scroll';
+@@ -91,6 +92,35 @@ function settle(
  
-+/** How long Home waits, once the page left is gone, before it's drawn again. */
-+const HOME_AFTER_MS = 100;
+ const pageName = (pathname: string) => pathname.split('/')[1] || 'home';
+ 
++/** How long a page waits, once the page left is gone, before it's drawn. */
++const STAGE_AFTER_MS = 100;
 +
 +/**
-+ * Whether the kept Home is shown. On an Apple TV, going back to it waits until
-+ * the page left has been taken down and a frame drawn without it, so WebKit
-+ * can let go of that page before Home's pictures and layers are made again:
-+ * both at once ended the page's process (AIOStreamsTVOS).
++ * The open page's id once it may be drawn. On an Apple TV, a page opened or
++ * gone back to waits until the page it replaces has been taken down and a
++ * frame drawn without it, so WebKit can let go of that page before the next
++ * one's pictures and layers are made: both at once ended the page's process
++ * (AIOStreamsTVOS). A page pushed over the same one (`still`) shows at once.
 + */
-+function useHomeShown(onHome: boolean): boolean {
++function useStagedOpen(open: Entry | undefined): number | undefined {
 +  const staged = appleTv();
-+  const [shown, setShown] = React.useState(onHome);
++  const id = open?.id;
++  const now = !staged || !!open?.still;
++  const [shown, setShown] = React.useState(id);
 +  React.useEffect(() => {
-+    if (!onHome) {
-+      setShown(false);
-+      return;
-+    }
-+    if (!staged) return;
++    if (now) return;
 +    let timer = 0;
 +    const frame = requestAnimationFrame(() => {
-+      timer = window.setTimeout(() => setShown(true), HOME_AFTER_MS);
++      timer = window.setTimeout(() => setShown(id), STAGE_AFTER_MS);
 +    });
 +    return () => {
 +      cancelAnimationFrame(frame);
 +      clearTimeout(timer);
 +    };
-+  }, [onHome, staged]);
-+  return onHome && (!staged || shown);
++  }, [id, now]);
++  return now || shown === id ? id : undefined;
 +}
 +
-+/**
-+ * The page shown other than Home. On an Apple TV a new page waits, as Home
-+ * does, until the page it replaces has been taken down and a frame drawn
-+ * without it: one title page built as the last was let go, a few in quick
-+ * succession, ended the page's process (AIOStreamsTVOS).
-+ */
-+function useStagedPath(pathname: string): string | undefined {
-+  const staged = appleTv();
-+  const [shown, setShown] = React.useState(pathname);
-+  React.useEffect(() => {
-+    if (!staged) return;
-+    let timer = 0;
-+    const frame = requestAnimationFrame(() => {
-+      timer = window.setTimeout(() => setShown(pathname), HOME_AFTER_MS);
-+    });
-+    return () => {
-+      cancelAnimationFrame(frame);
-+      clearTimeout(timer);
-+    };
-+  }, [pathname, staged]);
-+  if (!staged) return pathname;
-+  return shown === pathname ? pathname : undefined;
-+}
-+
- function pageName(pathname: string): string {
-   return pathname.split('/')[1] || 'home';
+ const StackPage = React.memo(function StackPage({
+   entry,
+   open,
+@@ -163,15 +193,26 @@ export function PageStack({
+     [router]
+   );
+   const open = stack.at(-1);
++  const ready = useStagedOpen(open);
++  // Pages already made, which wait hidden rather than unmade while the open one is staged.
++  const drawn = React.useRef(new Set<number>());
++  if (ready !== undefined) drawn.current.add(ready);
++  for (const id of drawn.current)
++    if (!stack.some((e) => e.id === id)) drawn.current.delete(id);
+   const back = stack.find((e) => e.index === (open?.index ?? 0) - 1);
+-  return stack.map((entry) => (
+-    <StackPage
+-      key={entry.id}
+-      entry={entry}
+-      open={entry === open}
+-      shown={!covered}
+-      backTo={entry === back}
+-      className={className}
+-    />
+-  ));
++  return stack.map((entry) => {
++    const waiting = entry === open && ready !== entry.id;
++    // A new page isn't made until it may be drawn (AIOStreamsTVOS).
++    if (waiting && !drawn.current.has(entry.id)) return null;
++    return (
++      <StackPage
++        key={entry.id}
++        entry={entry}
++        open={entry === open && !waiting}
++        shown={!covered}
++        backTo={entry === back}
++        className={className}
++      />
++    );
++  });
  }
-@@ -165,6 +220,8 @@ export function WebLayout() {
-   // starts afresh.
-   const [kept, setKept] = React.useState<string>();
-   if (onHome && kept !== entry) setKept(entry);
-+  const homeShown = useHomeShown(onHome);
-+  const pageShown = useStagedPath(pathname);
-   const activity: SidebarItem = {
-     id: 'activity',
-     name: t`Activity`,
-@@ -428,20 +485,20 @@ export function WebLayout() {
-                           key={kept}
-                           data-page="home"
-                           {...PAGE_FADE}
--                          inert={!onHome}
-+                          inert={!homeShown}
-                           className={cn(
-                             page,
--                            !onHome &&
-+                            !homeShown &&
-                               'invisible absolute inset-x-0 top-0 [content-visibility:hidden]'
-                           )}
-                         >
--                          <PageShown.Provider value={onHome}>
-+                          <PageShown.Provider value={homeShown}>
-                             <KeptHome />
-                           </PageShown.Provider>
--                          {onHome && <PageScroll />}
-+                          {homeShown && <PageScroll />}
-                         </motion.div>
-                       )}
--                      {!onHome && !playing && (
-+                      {!onHome && !playing && pageShown && (
-                         <motion.div
-                           key={pathname}
-                           data-page={pageName(pathname)}

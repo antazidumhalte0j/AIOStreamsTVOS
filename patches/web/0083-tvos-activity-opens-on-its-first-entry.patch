@@ -1,0 +1,32 @@
+diff --git a/packages/web/src/app/history/page.tsx b/packages/web/src/app/history/page.tsx
+index 09af3918c..913913b0a 100644
+--- a/packages/web/src/app/history/page.tsx
++++ b/packages/web/src/app/history/page.tsx
+@@ -323,7 +323,8 @@ function Days({
+ }) {
+   const days = React.useMemo(() => groupByDay(entries), [entries]);
+   return (
+-    <div className="space-y-8">
++    // A TV's keys start on the first day's first entry, not the header's view switch (AIOStreamsTVOS).
++    <div data-nav-start className="space-y-8">
+       {days.map((day) => (
+         <section key={day.key} data-ui="history-day" className="space-y-3">
+           <div className="flex flex-wrap items-baseline gap-x-3">
+@@ -792,7 +793,7 @@ function HistoryTable({
+             </tr>
+           </thead>
+           <tbody>
+-            {entries.map((entry) => {
++            {entries.map((entry, i) => {
+               const item = entry.item;
+               return (
+                 <tr
+@@ -814,6 +815,8 @@ function HistoryTable({
+                   <td className="p-3">
+                     <Anchor
+                       href={href(itemPath(item))}
++                      // The keys start on the first entry, past the boxes to select it and all (AIOStreamsTVOS).
++                      data-nav-start={i === 0 || undefined}
+                       className="flex items-center gap-3 hover:underline"
+                     >
+                       <span className="w-8 flex-none">

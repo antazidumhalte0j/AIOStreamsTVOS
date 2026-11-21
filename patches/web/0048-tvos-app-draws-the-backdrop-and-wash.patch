@@ -1,8 +1,8 @@
 diff --git a/packages/web/src/app/item/_components/backdrop.tsx b/packages/web/src/app/item/_components/backdrop.tsx
-index 7e10d61f0..1e4619aec 100644
+index 494f76ddc..d6fbaa34d 100644
 --- a/packages/web/src/app/item/_components/backdrop.tsx
 +++ b/packages/web/src/app/item/_components/backdrop.tsx
-@@ -4,6 +4,8 @@ import { BackdropFrame } from '@/components/media/hero';
+@@ -5,6 +5,8 @@ import { useTrailersOn } from '@/features/trailers/preview';
  import { CachedImage } from '@/components/cached-image';
  import { DrawnWash } from '@/components/drawn-wash';
  import { currentHost } from '@/lib/hosts';
@@ -11,7 +11,7 @@ index 7e10d61f0..1e4619aec 100644
  
  /** Art that arrives within this was never seen missing, so it just appears. */
  const UNSEEN_MS = 250;
-@@ -32,6 +34,13 @@ export function Backdrop({
+@@ -45,6 +47,13 @@ export function Backdrop({
    const src = sources[attempt];
    const loaded = !!src && arrived?.src === src;
    const wash = attempt >= images.length;
@@ -25,7 +25,7 @@ index 7e10d61f0..1e4619aec 100644
    // Shown before the first frame when another image already holds it in memory.
    const held = React.useCallback(
      (el: HTMLImageElement | null) => {
-@@ -45,7 +54,7 @@ export function Backdrop({
+@@ -58,7 +67,7 @@ export function Backdrop({
        key,
        count: (f.key === key ? f.count : 0) + 1,
      }));
@@ -34,14 +34,14 @@ index 7e10d61f0..1e4619aec 100644
      // A CSS blur is drawn again on each frame the page scrolls, which a TV can't keep up with.
      <DrawnWash
        key={src}
-@@ -104,6 +113,7 @@ export function Backdrop({
-   );
+@@ -138,6 +147,7 @@ export function Backdrop({
+   }, [bare, onBare]);
    return (
      <div
 +      ref={box}
        aria-hidden
        data-ui="item-backdrop"
-       // Fades out at its edge, where some GPUs draw the art's last row past the shade.
+       data-band={band || undefined}
 diff --git a/packages/web/src/app/item/_components/trailer.tsx b/packages/web/src/app/item/_components/trailer.tsx
 index 77400d684..cdc149f05 100644
 --- a/packages/web/src/app/item/_components/trailer.tsx
@@ -66,7 +66,7 @@ index 77400d684..cdc149f05 100644
            >
              <div className="absolute inset-0 bg-gradient-to-r from-[--background] to-transparent rtl:bg-gradient-to-l" />
 diff --git a/packages/web/src/components/media/hero.tsx b/packages/web/src/components/media/hero.tsx
-index 7266365e5..788af574f 100644
+index ed1492d5d..a2861b010 100644
 --- a/packages/web/src/components/media/hero.tsx
 +++ b/packages/web/src/components/media/hero.tsx
 @@ -12,6 +12,10 @@ import { useSession } from '@/lib/jellyfin/session';
@@ -124,7 +124,7 @@ index 7266365e5..788af574f 100644
 @@ -848,7 +870,9 @@ export function Hero({
                className={cn(slideClass(role), role && 'z-[1]')}
              >
-               <BackdropFrame className="max-w-[calc(26rem*2.6)] sm:max-w-[calc(30rem*2.6)] lg:max-w-[calc(max(36rem,53vh)*2.6)]">
+               <BackdropFrame className="max-w-[calc(26rem*2.6)] sm:max-w-[calc(30rem*2.6)] lg:max-w-[calc(var(--hero-height)*2.6)]">
 -                <Backdrops current={backdropSrc(client, item)} fade={!role} />
 +                {copy && (
 +                  <Backdrops current={backdropSrc(client, item)} fade={!role} />
@@ -181,12 +181,12 @@ index 7266365e5..788af574f 100644
        </div>
        <Shade />
 diff --git a/packages/web/src/components/shell/art-wash.tsx b/packages/web/src/components/shell/art-wash.tsx
-index a2e18b3a4..7022aa9f9 100644
+index 7beb8a8cc..2b6bf7f11 100644
 --- a/packages/web/src/components/shell/art-wash.tsx
 +++ b/packages/web/src/components/shell/art-wash.tsx
 @@ -2,23 +2,114 @@ import React from 'react';
  import { cn } from '@aiostreams/ui/core/styling';
- import { currentWash, subscribeWash } from '@/lib/artwork/background';
+ import { currentWash, subscribeWash, takeCut } from '@/lib/artwork/background';
  import { WASH_H, WASH_W } from '@/lib/artwork/wash';
 +import { appBridge, appleTv } from '@/lib/hosts/shell/bridge';
  
@@ -311,10 +311,10 @@ index a2e18b3a4..7022aa9f9 100644
      <div
        data-ui="art-wash"
 diff --git a/packages/web/src/components/shell/layout.tsx b/packages/web/src/components/shell/layout.tsx
-index a6a6e9176..c314a69ab 100644
+index 300c7e71e..c72a27f70 100644
 --- a/packages/web/src/components/shell/layout.tsx
 +++ b/packages/web/src/components/shell/layout.tsx
-@@ -78,6 +78,7 @@ import {
+@@ -73,6 +73,7 @@ import {
    setWashPaused,
    setWashVisible,
  } from '@/lib/artwork/background';
@@ -322,7 +322,7 @@ index a6a6e9176..c314a69ab 100644
  import { HistoryButtons } from './history-buttons';
  import { ConnectionNote } from './unreachable';
  import { Logo, onBar } from './nav/common';
-@@ -102,6 +103,8 @@ const PAGE_FADE = {
+@@ -88,6 +89,8 @@ import { TOP_BAR_HEIGHT, TopTabs } from './nav/top-tabs';
   * transparent page shows nothing beneath it; the player hides it.
   */
  export function PageBackground({ router }: { router: AnyRouter }) {
@@ -331,9 +331,9 @@ index a6a6e9176..c314a69ab 100644
    const [pages] = useSetting(settings.theme.artBackground);
    const [glass] = useSetting(settings.theme.artGlass);
    const [surface] = useSetting(settings.theme.glassSurface);
-@@ -124,7 +127,9 @@ export function PageBackground({ router }: { router: AnyRouter }) {
-       data-ui="page-background"
-       className="page-background pointer-events-none fixed inset-0 -z-10 bg-[--background]"
+@@ -111,7 +114,9 @@ export function PageBackground({ router }: { router: AnyRouter }) {
+       // The tallest the viewport gets: a browser's bars slide away mid-scroll before it grows to match.
+       className="page-background pointer-events-none fixed inset-x-0 top-0 -z-10 h-screen bg-[--background]"
      >
 -      {pages.length > 0 && <ArtWash className={cn(!shown && 'hidden')} />}
 +      {pages.length > 0 && (
@@ -343,7 +343,7 @@ index a6a6e9176..c314a69ab 100644
    );
  }
 diff --git a/packages/web/src/features/trailers/preview.tsx b/packages/web/src/features/trailers/preview.tsx
-index 86454ba75..e6949ab24 100644
+index bb4d6e2a4..2fa7d06be 100644
 --- a/packages/web/src/features/trailers/preview.tsx
 +++ b/packages/web/src/features/trailers/preview.tsx
 @@ -6,6 +6,7 @@ import { cn } from '@aiostreams/ui/core/styling';
@@ -354,7 +354,7 @@ index 86454ba75..e6949ab24 100644
  import { settings, useSetting, type TrailerSpot } from '@/lib/settings';
  import { usePageShown } from '@/lib/page-shown';
  import { usePlayback } from '@/lib/playback/session';
-@@ -221,6 +222,8 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
+@@ -218,6 +219,8 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
      /* eslint-enable lingui/no-unlocalized-strings */
      const mask = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
      for (const name of MASK) background.style.setProperty(name, mask);
@@ -363,7 +363,7 @@ index 86454ba75..e6949ab24 100644
      const html = document.documentElement;
      html.setAttribute('data-video-hole', '');
      return () => {
-@@ -233,6 +236,28 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
+@@ -230,6 +233,28 @@ function useVideoHole(box: Box | null, radius: number, soft: boolean) {
  /** How much of a soft trailer's height and width its bottom and start fade over. */
  const FADE = 0.5;
  
@@ -392,7 +392,7 @@ index 86454ba75..e6949ab24 100644
  /** Fades a soft trailer's hole at its bottom and start, for an element drawn over `frame`. */
  function fadeMask(frame: Box, hole: Box): React.CSSProperties {
    const rtl = pageRtl();
-@@ -258,6 +283,9 @@ function fadeMask(frame: Box, hole: Box): React.CSSProperties {
+@@ -255,6 +280,9 @@ function fadeMask(frame: Box, hole: Box): React.CSSProperties {
   * page beneath is cut away at once, which would bare its edges.
   */
  export function TrailerVeil({ shown }: { shown: boolean }) {
@@ -402,7 +402,7 @@ index 86454ba75..e6949ab24 100644
    return (
      <div
        className={cn(
-@@ -468,28 +496,45 @@ function PlayedPreview({
+@@ -465,28 +493,45 @@ function PlayedPreview({
      if (error) failed.current();
    }, [error, failed]);
  

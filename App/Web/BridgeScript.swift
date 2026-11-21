@@ -1754,7 +1754,7 @@ enum BridgeScript {
   const PIP_NAMES = {
     'en-GB': 'Picture in picture', ar: 'صورة داخل صورة', ca: "Imatge dins d'imatge", de: 'Bild-in-Bild',
     el: 'Εικόνα μέσα σε εικόνα', es: 'Imagen en imagen', fi: 'Kuva kuvassa', fr: "Image dans l'image",
-    id: 'Picture-in-picture', it: 'Picture-in-picture', ms: 'Gambar dalam gambar', nb: 'Bilde-i-bilde',
+    he: 'תמונה בתוך תמונה', id: 'Picture-in-picture', it: 'Picture-in-picture', ms: 'Gambar dalam gambar', nb: 'Bilde-i-bilde',
     nl: 'Beeld-in-beeld', pl: 'Obraz w obrazie', pt: 'Imagem na imagem', 'pt-BR': 'Picture-in-picture',
     ro: 'Imagine în imagine', ru: 'Картинка в картинке', sl: 'Slika v sliki', sv: 'Bild-i-bild',
     tr: 'Resim içinde resim', 'zh-Hans': '画中画',

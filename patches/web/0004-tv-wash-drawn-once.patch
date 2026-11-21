@@ -1,17 +1,17 @@
 diff --git a/packages/web/src/app/item/_components/backdrop.tsx b/packages/web/src/app/item/_components/backdrop.tsx
-index dba75cfb..897a6f56 100644
+index e020601ca..d7eb27c6e 100644
 --- a/packages/web/src/app/item/_components/backdrop.tsx
 +++ b/packages/web/src/app/item/_components/backdrop.tsx
-@@ -2,6 +2,8 @@ import React from 'react';
- import { cn } from '@aiostreams/ui/core/styling';
+@@ -3,6 +3,8 @@ import { cn } from '@aiostreams/ui/core/styling';
  import { BackdropFrame } from '@/components/media/hero';
+ import { useTrailersOn } from '@/features/trailers/preview';
  import { CachedImage } from '@/components/cached-image';
 +import { DrawnWash } from '@/components/drawn-wash';
 +import { currentHost } from '@/lib/hosts';
  
  /** Art that arrives within this was never seen missing, so it just appears. */
  const UNSEEN_MS = 250;
-@@ -38,7 +40,33 @@ export function Backdrop({
+@@ -51,7 +53,33 @@ export function Backdrop({
      },
      [src]
    );
@@ -48,7 +48,7 @@ index dba75cfb..897a6f56 100644
        ref={held}
 diff --git a/packages/web/src/components/drawn-wash.tsx b/packages/web/src/components/drawn-wash.tsx
 new file mode 100644
-index 00000000..98858f85
+index 000000000..98858f850
 --- /dev/null
 +++ b/packages/web/src/components/drawn-wash.tsx
 @@ -0,0 +1,61 @@

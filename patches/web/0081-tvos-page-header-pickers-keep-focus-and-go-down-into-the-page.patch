@@ -1,0 +1,140 @@
+diff --git a/packages/web/src/app/discover/page.tsx b/packages/web/src/app/discover/page.tsx
+index 92171a117..da49c8ba4 100644
+--- a/packages/web/src/app/discover/page.tsx
++++ b/packages/web/src/app/discover/page.tsx
+@@ -371,6 +371,8 @@ export function DiscoverPage({
+     <PageBody>
+       <div className="space-y-6">
+         <PageHeader
++          // Down from the catalog, genre and sort pickers goes into the catalog (AIOStreamsTVOS).
++          downToStart
+           title={view?.Name ?? t`Discover`}
+           beside={
+             <>
+diff --git a/packages/web/src/app/live-tv/page.tsx b/packages/web/src/app/live-tv/page.tsx
+index 66970479f..26eeceb4f 100644
+--- a/packages/web/src/app/live-tv/page.tsx
++++ b/packages/web/src/app/live-tv/page.tsx
+@@ -407,6 +407,8 @@ export function LiveTvPage({
+   const header = (
+     <header className="flex flex-none flex-col gap-6">
+       <PageHeader
++        // Down from the group and day pickers goes into the guide or the channels (AIOStreamsTVOS).
++        downToStart
+         title={<Trans>Live TV</Trans>}
+         actions={
+           (picked || guide) && (
+diff --git a/packages/web/src/components/shell/page.tsx b/packages/web/src/components/shell/page.tsx
+index 9c7ccebcf..8efa6b5a9 100644
+--- a/packages/web/src/components/shell/page.tsx
++++ b/packages/web/src/components/shell/page.tsx
+@@ -28,10 +28,16 @@ export function PageHeader({
+   title,
+   beside,
+   actions,
++  downToStart = false,
+ }: {
+   title: React.ReactNode;
+   beside?: React.ReactNode;
+   actions?: React.ReactNode;
++  /**
++   * Down from the pickers and buttons goes to the page's start (`data-nav-start`), past the rows of
++   * pills between, which a remote reaches from the content below instead (AIOStreamsTVOS).
++   */
++  downToStart?: boolean;
+ }) {
+   return (
+     <div
+@@ -48,6 +54,7 @@ export function PageHeader({
+         // Taller than the title, so they overhang it rather than move it.
+         <div
+           data-ui="page-actions"
++          data-nav-down={downToStart ? 'start' : undefined}
+           className="-my-1 flex w-full flex-wrap items-center gap-3 sm:ms-auto sm:w-auto"
+         >
+           {actions}
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index 3599c0824..b42ba9830 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -914,6 +914,18 @@ export function move(dir: Direction): boolean {
+     root.contains(lastMove.from)
+       ? lastMove.from
+       : null;
++  // Down from a box marked `data-nav-down=start`, as a page header's pickers, the page's start,
++  // past what lies between (AIOStreamsTVOS).
++  const downBox =
++    dir === 'down' && !exit
++      ? from.closest<HTMLElement>('[data-nav-down=start]')
++      : null;
++  const pageStart =
++    downBox && startOf(downBox.closest('[data-page]') ?? document);
++  if (downBox && pageStart && !downBox.contains(pageStart)) {
++    moveTo(pageStart, dir);
++    return true;
++  }
+   bars = new Map();
+   for (let box = from.parentElement; box; box = box.parentElement) {
+     const [x, y] = drift(box);
+diff --git a/packages/web/src/lib/input/return.ts b/packages/web/src/lib/input/return.ts
+index ee5d904d5..8bdf2484c 100644
+--- a/packages/web/src/lib/input/return.ts
++++ b/packages/web/src/lib/input/return.ts
+@@ -10,6 +10,9 @@ interface Spot {
+ }
+ 
+ const RETRY_MS = 5000;
++/** How long after arriving a page header's picker gets the keys back if the page drops them (AIOStreamsTVOS). */
++const SETTLE_MS = 1500;
++const PAGE_ACTIONS = '[data-ui=page-actions]';
+ 
+ const keyOf = (location: ParsedLocation) =>
+   location.state.__TSR_key ?? location.href;
+@@ -60,6 +63,8 @@ export function returnFocus(router: AnyRouter): () => void {
+   let frame = 0;
+   // A menu or dialog the page opened can be what navigates, so the page's own element is kept.
+   let onPage: HTMLElement | null = null;
++  /** Stops watching for a top-right picker the page took the keys from (AIOStreamsTVOS). */
++  let settle = () => {};
+   const track = (e: FocusEvent) => {
+     if (e.target instanceof HTMLElement && !inOverlay(e.target))
+       onPage = e.target;
+@@ -101,6 +106,31 @@ export function returnFocus(router: AnyRouter): () => void {
+         else if (performance.now() < until) frame = requestAnimationFrame(look);
+       };
+       look();
++      // A page header's picker the page draws again just after a pick can take the keys with it:
++      // they go back to it, until a key is pressed or a moment has passed (AIOStreamsTVOS).
++      settle();
++      const kept = spot ?? same;
++      if (!kept) return;
++      const by = performance.now() + SETTLE_MS;
++      let watching = 0;
++      const pressed = () => settle();
++      const watch = () => {
++        if (performance.now() > by) return settle();
++        const active = document.activeElement;
++        if (!active || active === document.body) {
++          const el = find(kept);
++          if (el?.closest(PAGE_ACTIONS) && el.getClientRects().length)
++            focusOn(el);
++        }
++        watching = requestAnimationFrame(watch);
++      };
++      settle = () => {
++        cancelAnimationFrame(watching);
++        document.removeEventListener('keydown', pressed, true);
++        settle = () => {};
++      };
++      document.addEventListener('keydown', pressed, true);
++      watching = requestAnimationFrame(watch);
+     }
+   );
+   return () => {
+@@ -108,5 +138,6 @@ export function returnFocus(router: AnyRouter): () => void {
+     leave();
+     arrive();
+     cancelAnimationFrame(frame);
++    settle();
+   };
+ }

@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
-index e4c1da48..97089d1b 100644
+index d6545c34d..75df09b03 100644
 --- a/packages/web/src/app/settings/player.tsx
 +++ b/packages/web/src/app/settings/player.tsx
 @@ -45,7 +45,9 @@ import {
@@ -12,7 +12,7 @@ index e4c1da48..97089d1b 100644
    type PlayerBack,
    type PlayerEngine,
    type PipWindow,
-@@ -473,6 +475,7 @@ function VideoCard() {
+@@ -463,6 +465,7 @@ function VideoCard() {
          />
        )}
        {shell && appleTv() && dolbyVision && <DolbyVisionFelSwitch />}
@@ -20,7 +20,7 @@ index e4c1da48..97089d1b 100644
        {(shell ? canUpscale() : webGpu) && (
          <Switch
            side="right"
-@@ -590,6 +593,26 @@ function DolbyVisionFelSwitch() {
+@@ -580,6 +583,26 @@ function DolbyVisionFelSwitch() {
    );
  }
  
@@ -48,10 +48,10 @@ index e4c1da48..97089d1b 100644
    ({
      mpv: {
 diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
-index 8d8d2a66..40e51064 100644
+index d3aef4df4..98a43ce5b 100644
 --- a/packages/web/src/lib/hosts/shell/player.ts
 +++ b/packages/web/src/lib/hosts/shell/player.ts
-@@ -559,6 +559,8 @@ export function playerSettings() {
+@@ -566,6 +566,8 @@ export function playerSettings() {
        upscalingAnime: upscalingAnime(),
        // Only with Dolby Vision on: the switch is hidden without it, and a stored choice is ignored.
        dolbyVisionFel: video.dolbyVision.read() && video.dolbyVisionFel.read(),
@@ -61,10 +61,10 @@ index 8d8d2a66..40e51064 100644
      ...(android
        ? {
 diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
-index 05132030..9260d675 100644
+index 335b71e16..2d6e7360f 100644
 --- a/packages/web/src/lib/settings/index.ts
 +++ b/packages/web/src/lib/settings/index.ts
-@@ -201,6 +201,20 @@ export type AudioChannels = (typeof AUDIO_CHANNELS)[number];
+@@ -206,6 +206,20 @@ export type AudioChannels = (typeof AUDIO_CHANNELS)[number];
  export const OBJECT_AUDIO_LAYOUTS = ['7.1.4', '9.1.6'] as const;
  export type ObjectAudioLayout = (typeof OBJECT_AUDIO_LAYOUTS)[number];
  
@@ -85,7 +85,7 @@ index 05132030..9260d675 100644
  /** What plays versions inside the Android app. */
  /** `auto` is the browser's own player in a browser. */
  export const PLAYER_ENGINES = [
-@@ -697,6 +711,12 @@ export const settings = {
+@@ -700,6 +714,12 @@ export const settings = {
      ),
      /** The Apple TV app folds a Dolby Vision profile 7 FEL video's enhancement layer into its curves (AIOStreamsTVOS). */
      dolbyVisionFel: device<boolean>('aiostreams-web-video-dolby-vision-fel', false),

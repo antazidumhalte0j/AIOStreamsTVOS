@@ -1,0 +1,74 @@
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index d16ecc4bd..9e7d576eb 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -781,6 +781,60 @@ function beneath(from: HTMLElement, start: HTMLElement): HTMLElement {
+   return best;
+ }
+ 
++/**
++ * Sideways off the end of a row of pills under a page header, the header's nearest picker that way;
++ * off the end of its pickers toward the pills, the first row of pills under it, entered at its
++ * picked pill as tabs are. The pickers sit beside the title, a line above the pills, so nothing lay
++ * in line either way (AIOStreamsTVOS).
++ */
++function acrossHeader(from: HTMLElement, dir: Direction): HTMLElement | null {
++  if (dir !== 'left' && dir !== 'right') return null;
++  const page = from.closest('[data-page]') ?? document;
++  const actions = page.querySelector<HTMLElement>(PAGE_ACTIONS);
++  const header = actions?.closest('[data-ui=page-header]');
++  if (!actions || !header) return null;
++  const top = header.getBoundingClientRect().bottom - 1;
++  // Only rows above the page's content, as its catalog or channels.
++  const start = startOf(page);
++  const end = start ? rectOf(start).top + 1 : Infinity;
++  const under = (row: HTMLElement) => {
++    if (header.contains(row) || ruledOut(row)) return false;
++    const r = row.getBoundingClientRect();
++    return r.height > 0 && r.top >= top && r.bottom <= end;
++  };
++  const at = rectOf(from);
++  // The nearest that way of `els`, wholly past `from`'s edge.
++  const nearestOf = (els: Iterable<HTMLElement>) => {
++    let best: HTMLElement | null = null;
++    let apart = Infinity;
++    for (const el of els) {
++      const r = rectOf(el);
++      const gap = dir === 'right' ? r.left - at.right : at.left - r.right;
++      if (gap < -1 || gap >= apart || !canFocus(el, r)) continue;
++      best = el;
++      apart = gap;
++    }
++    return best;
++  };
++  if (actions.contains(from)) {
++    let first: HTMLElement | null = null;
++    let firstTop = Infinity;
++    for (const row of page.querySelectorAll<HTMLElement>('[role=tablist]')) {
++      if (!under(row)) continue;
++      const rowTop = row.getBoundingClientRect().top;
++      if (rowTop < firstTop) {
++        first = row;
++        firstTop = rowTop;
++      }
++    }
++    return first && nearestOf(first.querySelectorAll<HTMLElement>(FOCUSABLE));
++  }
++  const row = from.closest<HTMLElement>('[role=tablist]');
++  return row && under(row)
++    ? nearestOf(actions.querySelectorAll<HTMLElement>(FOCUSABLE))
++    : null;
++}
++
+ function enterAt(box: HTMLElement): HTMLElement | null {
+   const named = box.querySelector<HTMLElement>(box.dataset.navEnter!);
+   return named && canFocus(named) ? named : null;
+@@ -1034,6 +1088,8 @@ export function move(dir: Direction): boolean {
+     if (inside && entered.contains(inside)) near = inside;
+   }
+   near ??= nearest(within, from, dir);
++  // Sideways off the end of the pills under a page header to its pickers, and back (AIOStreamsTVOS).
++  if (!near && within === root) near = acrossHeader(from, dir);
+   // Up into a page header's pickers from below the rows of pills under it, the nearest row first,
+   // even where focus came down from the pickers past the rows (AIOStreamsTVOS).
+   if (

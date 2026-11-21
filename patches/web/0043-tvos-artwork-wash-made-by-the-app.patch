@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/lib/artwork/background.ts b/packages/web/src/lib/artwork/background.ts
-index 29b624f97..8d5337703 100644
+index 0aadae34a..a08746dc3 100644
 --- a/packages/web/src/lib/artwork/background.ts
 +++ b/packages/web/src/lib/artwork/background.ts
 @@ -5,6 +5,7 @@ import { useSession } from '@/lib/jellyfin/session';
@@ -10,8 +10,8 @@ index 29b624f97..8d5337703 100644
  import { imageAccept } from './reads';
  import { washArtwork } from './shrink';
  import { backdropUrls, posterUrl } from './urls';
-@@ -90,7 +91,28 @@ async function washHere(src: string): Promise<WashFrame | null> {
-   return { src, image, tint: wash.tint, panel: wash.panel };
+@@ -102,9 +103,30 @@ function retire(was: WashFrame) {
+   }
  }
  
 +/**
@@ -32,6 +32,8 @@ index 29b624f97..8d5337703 100644
 +}
 +
  async function frameOf(src: string): Promise<WashFrame | null> {
+   const kept = recent.findIndex((f) => f.src === src);
+   if (kept !== -1) return recent.splice(kept, 1)[0];
 +  if (appleTv()) {
 +    const made = await washInApp(src).catch(() => null);
 +    if (made) return made;

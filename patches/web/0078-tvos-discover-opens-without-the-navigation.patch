@@ -1,0 +1,18 @@
+diff --git a/packages/web/src/lib/input/return.ts b/packages/web/src/lib/input/return.ts
+index 87764a020..ee5d904d5 100644
+--- a/packages/web/src/lib/input/return.ts
++++ b/packages/web/src/lib/input/return.ts
+@@ -79,9 +79,13 @@ export function returnFocus(router: AnyRouter): () => void {
+       const spot = spots.get(keyOf(toLocation));
+       if (!spot && !usingKeys()) return;
+       // A new entry of the same kind of page keeps the keys on the same control, where it has one.
++      // One on the page only: picking Discover in a TV's navigation left focus on its entry there,
++      // which Discover's redirect to its last catalog gave back, opening the navigation again
++      // (AIOStreamsTVOS).
+       const same =
+         !spot &&
+         onPage?.isConnected &&
++        !!onPage.closest('[data-page]') &&
+         pageOf(fromLocation) === pageOf(toLocation)
+           ? spotOf(onPage)
+           : undefined;

@@ -1,0 +1,35 @@
+diff --git a/packages/web/src/lib/input/return.ts b/packages/web/src/lib/input/return.ts
+index 8bdf2484c..645dc7ebd 100644
+--- a/packages/web/src/lib/input/return.ts
++++ b/packages/web/src/lib/input/return.ts
+@@ -35,6 +35,19 @@ function spotOf(el: HTMLElement): Spot {
+   };
+ }
+ 
++/**
++ * A tab that isn't picked gives way to its row's picked one: a tab picks as it's focused, and focus
++ * put back on a tab not picked would pick it, as it did when the page it was on had gone (AIOStreamsTVOS).
++ */
++function unpicked(el: HTMLElement | null): HTMLElement | null {
++  if (!el?.matches('[role=tab][aria-selected=false]')) return el;
++  return (
++    el
++      .closest('[role=tablist]')
++      ?.querySelector<HTMLElement>('[role=tab][aria-selected=true]') ?? el
++  );
++}
++
+ // Pages kept hidden behind this one can have the same rows and items.
+ const shown = (el: Element) => !el.closest('[inert]');
+ 
+@@ -101,7 +114,9 @@ export function returnFocus(router: AnyRouter): () => void {
+         // Focus left on a page now kept hidden (inert) counts as none.
+         if (active && active !== document.body && !active.closest('[inert]'))
+           return;
+-        const el = spot ? find(spot) : ((same && find(same)) ?? startOf());
++        const el = unpicked(
++          spot ? find(spot) : ((same && find(same)) ?? startOf())
++        );
+         if (el?.getClientRects().length) focusOn(el);
+         else if (performance.now() < until) frame = requestAnimationFrame(look);
+       };
