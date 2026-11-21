@@ -1,0 +1,13 @@
+diff --git a/packages/web/src/app/favourites/page.tsx b/packages/web/src/app/favourites/page.tsx
+index c429df2f6..b27c6f361 100644
+--- a/packages/web/src/app/favourites/page.tsx
++++ b/packages/web/src/app/favourites/page.tsx
+@@ -88,6 +88,8 @@ export function FavouritesPage({ kind }: { kind?: string }) {
+     <PageBody>
+       <div className="space-y-6">
+         <PageHeader
++          // Down from the sort and Random pick goes into the grid (AIOStreamsTVOS).
++          downToStart
+           title={<Trans>Favourites</Trans>}
+           actions={
+             !channels && (
