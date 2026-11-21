@@ -1,0 +1,25 @@
+diff --git a/packages/web/src/components/media/episodes.tsx b/packages/web/src/components/media/episodes.tsx
+index d0b337845..1172115bd 100644
+--- a/packages/web/src/components/media/episodes.tsx
++++ b/packages/web/src/components/media/episodes.tsx
+@@ -509,6 +509,11 @@ function EpisodeListItem({
+ }
+ 
+ const LONG_LIST = 60;
++/**
++ * A TV's season is long from here: every episode card and its picture drawn at once ran the
++ * page's process out of memory there, where a stretch drawn near the screen holds a few (AIOStreamsTVOS).
++ */
++const TV_LONG_LIST = 24;
+ const FIRST_EPISODES = 24;
+ const AROUND_ANCHOR = 12;
+ 
+@@ -527,7 +532,7 @@ export function EpisodeList({
+   /** Side by side on wide screens. */
+   columns?: boolean;
+ }) {
+-  const long = episodes.length > LONG_LIST;
++  const long = episodes.length > (currentHost().tv ? TV_LONG_LIST : LONG_LIST);
+   const list = React.useRef<HTMLDivElement>(null);
+   const height = React.useRef(0);
+   const outer = React.useContext(ScrollRoot);
