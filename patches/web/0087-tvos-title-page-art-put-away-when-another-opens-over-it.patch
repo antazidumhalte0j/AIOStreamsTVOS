@@ -1,0 +1,32 @@
+diff --git a/packages/web/src/app/item/_components/backdrop.tsx b/packages/web/src/app/item/_components/backdrop.tsx
+index d6fbaa34d..cef692403 100644
+--- a/packages/web/src/app/item/_components/backdrop.tsx
++++ b/packages/web/src/app/item/_components/backdrop.tsx
+@@ -7,6 +7,7 @@ import { DrawnWash } from '@/components/drawn-wash';
+ import { currentHost } from '@/lib/hosts';
+ import { useAppBackdrop } from '@/lib/hosts/shell/app-backdrop';
+ import { appleTv } from '@/lib/hosts/shell/bridge';
++import { usePageShown } from '@/lib/page-shown';
+ 
+ /** Art that arrives within this was never seen missing, so it just appears. */
+ const UNSEEN_MS = 250;
+@@ -51,9 +52,16 @@ export function Backdrop({
+   const box = React.useRef<HTMLDivElement>(null);
+   // Asked at once, as the page loads no copy of its own while the app draws it; one the app can't
+   // load, the page loads and draws, and on through its other sources as they fail (AIOStreamsTVOS).
+-  const { copy } = useAppBackdrop(box, src, !wash && (loaded || appleTv()), {
+-    hidden: !!trailer,
+-  });
++  // Put away as soon as the page is kept hidden behind another, as a title opened from More like
++  // this: asked only once that title had loaded, the app drew this page's art bare under it until
++  // then (AIOStreamsTVOS).
++  const pageShown = usePageShown();
++  const { copy } = useAppBackdrop(
++    box,
++    src,
++    pageShown && !wash && (loaded || appleTv()),
++    { hidden: !!trailer }
++  );
+   // Shown before the first frame when another image already holds it in memory.
+   const held = React.useCallback(
+     (el: HTMLImageElement | null) => {
