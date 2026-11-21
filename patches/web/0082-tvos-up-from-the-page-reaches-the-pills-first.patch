@@ -1,8 +1,8 @@
 diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
-index b42ba9830..46913e4d1 100644
+index b42ba9830..c2690df88 100644
 --- a/packages/web/src/lib/input/focus.ts
 +++ b/packages/web/src/lib/input/focus.ts
-@@ -691,6 +691,40 @@ function first(root: Element): HTMLElement | null {
+@@ -691,6 +691,61 @@ function first(root: Element): HTMLElement | null {
    return (box && enterAt(box)) ?? el ?? null;
  }
  
@@ -11,8 +11,25 @@ index b42ba9830..46913e4d1 100644
 +
 +/**
 + * The nearest row of tabs between `from` and the page header holding `actions`, as the pills under
-+ * it: its picked tab, else its first. None where no row lies between (AIOStreamsTVOS).
++ * it, where its pills lie above `from`: its picked tab, else its first. None where no row lies
++ * between (AIOStreamsTVOS).
 + */
++/** Whether the pills shown in `row`, whose box is `r`, span any of `at` across the screen. */
++function over(row: HTMLElement, r: DOMRect, at: DOMRect): boolean {
++  let left = Infinity;
++  let right = -Infinity;
++  for (const el of row.querySelectorAll<HTMLElement>(FOCUSABLE)) {
++    const p = el.getBoundingClientRect();
++    if (!canFocus(el, p)) continue;
++    left = Math.min(left, p.left);
++    right = Math.max(right, p.right);
++  }
++  // A row scrolled along shows only what lies within its box.
++  left = Math.max(left, r.left);
++  right = Math.min(right, r.right);
++  return left < at.right && right > at.left;
++}
++
 +function pillsAbove(
 +  from: HTMLElement,
 +  actions: HTMLElement
@@ -21,12 +38,16 @@ index b42ba9830..46913e4d1 100644
 +  const page = actions.closest('[data-page]') ?? document;
 +  if (!header) return null;
 +  const top = header.getBoundingClientRect().bottom - 1;
-+  const below = rectOf(from).top + 1;
++  const at = rectOf(from);
++  const below = at.top + 1;
 +  let best: { row: HTMLElement; bottom: number } | null = null;
 +  for (const row of page.querySelectorAll<HTMLElement>('[role=tablist]')) {
 +    if (header.contains(row) || row.contains(from) || ruledOut(row)) continue;
 +    const r = row.getBoundingClientRect();
 +    if (!r.height || r.top < top || r.bottom > below) continue;
++    // Only pills straight above: from past their end, as the last of a row of cards, Up keeps to
++    // the picker nearest (AIOStreamsTVOS).
++    if (!over(row, r, at)) continue;
 +    if (!best || r.bottom > best.bottom) best = { row, bottom: r.bottom };
 +  }
 +  if (!best) return null;
@@ -43,7 +64,7 @@ index b42ba9830..46913e4d1 100644
  function enterAt(box: HTMLElement): HTMLElement | null {
    const named = box.querySelector<HTMLElement>(box.dataset.navEnter!);
    return named && canFocus(named) ? named : null;
-@@ -944,6 +978,14 @@ export function move(dir: Direction): boolean {
+@@ -944,6 +999,14 @@ export function move(dir: Direction): boolean {
      if (inside && entered.contains(inside)) near = inside;
    }
    near ??= nearest(within, from, dir);
