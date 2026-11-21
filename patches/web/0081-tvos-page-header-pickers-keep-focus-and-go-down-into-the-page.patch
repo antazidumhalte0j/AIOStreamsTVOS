@@ -77,7 +77,7 @@ index 3599c0824..b42ba9830 100644
    for (let box = from.parentElement; box; box = box.parentElement) {
      const [x, y] = drift(box);
 diff --git a/packages/web/src/lib/input/return.ts b/packages/web/src/lib/input/return.ts
-index ee5d904d5..b3eb58cd9 100644
+index ee5d904d5..8bdf2484c 100644
 --- a/packages/web/src/lib/input/return.ts
 +++ b/packages/web/src/lib/input/return.ts
 @@ -10,6 +10,9 @@ interface Spot {
@@ -90,55 +90,16 @@ index ee5d904d5..b3eb58cd9 100644
  
  const keyOf = (location: ParsedLocation) =>
    location.state.__TSR_key ?? location.href;
-@@ -60,6 +63,13 @@ export function returnFocus(router: AnyRouter): () => void {
+@@ -60,6 +63,8 @@ export function returnFocus(router: AnyRouter): () => void {
    let frame = 0;
    // A menu or dialog the page opened can be what navigates, so the page's own element is kept.
    let onPage: HTMLElement | null = null;
-+  /**
-+   * The page's control the keys were on as they left, for a new entry of the same kind of page:
-+   * on an Apple TV the page it was on is gone before this one renders (AIOStreamsTVOS).
-+   */
-+  let leftOn: Spot | undefined;
 +  /** Stops watching for a top-right picker the page took the keys from (AIOStreamsTVOS). */
 +  let settle = () => {};
    const track = (e: FocusEvent) => {
      if (e.target instanceof HTMLElement && !inOverlay(e.target))
        onPage = e.target;
-@@ -67,6 +77,8 @@ export function returnFocus(router: AnyRouter): () => void {
-   document.addEventListener('focusin', track);
-   const leave = router.subscribe('onBeforeNavigate', ({ fromLocation }) => {
-     if (!fromLocation) return;
-+    if (onPage?.isConnected && onPage.closest('[data-page]'))
-+      leftOn = spotOf(onPage);
-     if (!usingKeys()) spots.delete(keyOf(fromLocation));
-     // A redirect as the next page opens leaves again, after the page is gone.
-     else if (onPage?.isConnected)
-@@ -76,6 +88,8 @@ export function returnFocus(router: AnyRouter): () => void {
-     'onRendered',
-     ({ fromLocation, toLocation }) => {
-       cancelAnimationFrame(frame);
-+      const left = leftOn;
-+      leftOn = undefined;
-       const spot = spots.get(keyOf(toLocation));
-       if (!spot && !usingKeys()) return;
-       // A new entry of the same kind of page keeps the keys on the same control, where it has one.
-@@ -83,11 +97,10 @@ export function returnFocus(router: AnyRouter): () => void {
-       // which Discover's redirect to its last catalog gave back, opening the navigation again
-       // (AIOStreamsTVOS).
-       const same =
--        !spot &&
--        onPage?.isConnected &&
--        !!onPage.closest('[data-page]') &&
--        pageOf(fromLocation) === pageOf(toLocation)
--          ? spotOf(onPage)
-+        !spot && pageOf(fromLocation) === pageOf(toLocation)
-+          ? onPage?.isConnected && onPage.closest('[data-page]')
-+            ? spotOf(onPage)
-+            : left
-           : undefined;
-       const until = performance.now() + RETRY_MS;
-       // Rows and catalogs can render a while after the page; anything focused meanwhile wins.
-@@ -101,6 +114,31 @@ export function returnFocus(router: AnyRouter): () => void {
+@@ -101,6 +106,31 @@ export function returnFocus(router: AnyRouter): () => void {
          else if (performance.now() < until) frame = requestAnimationFrame(look);
        };
        look();
@@ -170,7 +131,7 @@ index ee5d904d5..b3eb58cd9 100644
      }
    );
    return () => {
-@@ -108,5 +146,6 @@ export function returnFocus(router: AnyRouter): () => void {
+@@ -108,5 +138,6 @@ export function returnFocus(router: AnyRouter): () => void {
      leave();
      arrive();
      cancelAnimationFrame(frame);

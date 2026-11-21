@@ -1,5 +1,5 @@
 diff --git a/packages/web/src/lib/input/return.ts b/packages/web/src/lib/input/return.ts
-index b3eb58cd9..7c7c6ddb4 100644
+index 8bdf2484c..645dc7ebd 100644
 --- a/packages/web/src/lib/input/return.ts
 +++ b/packages/web/src/lib/input/return.ts
 @@ -35,6 +35,19 @@ function spotOf(el: HTMLElement): Spot {
@@ -7,8 +7,8 @@ index b3eb58cd9..7c7c6ddb4 100644
  }
  
 +/**
-+ * A tab that isn't picked gives way to its row's picked one: a tab picks as it's focused, and
-+ * focus put back on another page's tab took the user back to it (AIOStreamsTVOS).
++ * A tab that isn't picked gives way to its row's picked one: a tab picks as it's focused, and focus
++ * put back on a tab not picked would pick it, as it did when the page it was on had gone (AIOStreamsTVOS).
 + */
 +function unpicked(el: HTMLElement | null): HTMLElement | null {
 +  if (!el?.matches('[role=tab][aria-selected=false]')) return el;
@@ -22,26 +22,7 @@ index b3eb58cd9..7c7c6ddb4 100644
  // Pages kept hidden behind this one can have the same rows and items.
  const shown = (el: Element) => !el.closest('[inert]');
  
-@@ -77,8 +90,16 @@ export function returnFocus(router: AnyRouter): () => void {
-   document.addEventListener('focusin', track);
-   const leave = router.subscribe('onBeforeNavigate', ({ fromLocation }) => {
-     if (!fromLocation) return;
--    if (onPage?.isConnected && onPage.closest('[data-page]'))
--      leftOn = spotOf(onPage);
-+    // What has focus now: a pill that picks as it's focused navigates in its own focus handler,
-+    // before `track` hears of it, so `onPage` is still the pill it came from (AIOStreamsTVOS).
-+    const now = document.activeElement;
-+    const left =
-+      now instanceof HTMLElement &&
-+      !inOverlay(now) &&
-+      now.closest('[data-page]')
-+        ? now
-+        : onPage;
-+    if (left?.isConnected && left.closest('[data-page]')) leftOn = spotOf(left);
-     if (!usingKeys()) spots.delete(keyOf(fromLocation));
-     // A redirect as the next page opens leaves again, after the page is gone.
-     else if (onPage?.isConnected)
-@@ -109,7 +130,9 @@ export function returnFocus(router: AnyRouter): () => void {
+@@ -101,7 +114,9 @@ export function returnFocus(router: AnyRouter): () => void {
          // Focus left on a page now kept hidden (inert) counts as none.
          if (active && active !== document.body && !active.closest('[inert]'))
            return;
