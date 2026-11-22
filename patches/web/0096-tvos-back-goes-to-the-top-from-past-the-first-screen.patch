@@ -1,0 +1,174 @@
+diff --git a/packages/web/src/app/live-tv/_components/guide.tsx b/packages/web/src/app/live-tv/_components/guide.tsx
+index 9b72db6..4c9ab23 100644
+--- a/packages/web/src/app/live-tv/_components/guide.tsx
++++ b/packages/web/src/app/live-tv/_components/guide.tsx
+@@ -248,6 +248,10 @@ export function Guide({
+       case 'PageUp':
+         go(focus.row - pageRows);
+         break;
++      // The first channel at the same time, as the channel list takes Home (AIOStreamsTVOS).
++      case 'Home':
++        go(0);
++        break;
+       case 'Enter':
+       case ' ':
+         if (focusChannel) onPlay(focusChannel, focused);
+@@ -296,6 +300,8 @@ export function Guide({
+     <div
+       ref={scroller}
+       data-ui="guide"
++      // Back from scrolled along goes to the first channel, with Home (AIOStreamsTVOS).
++      data-nav-home
+       // Time runs left to right, as cells are placed from the left.
+       dir="ltr"
+       role="grid"
+diff --git a/packages/web/src/components/shell/input-setup.tsx b/packages/web/src/components/shell/input-setup.tsx
+index 0837ada..259d1a6 100644
+--- a/packages/web/src/components/shell/input-setup.tsx
++++ b/packages/web/src/components/shell/input-setup.tsx
+@@ -5,9 +5,11 @@ import type { AnyRouter } from '@tanstack/react-router';
+ import { Button } from '@aiostreams/ui/button';
+ import { Modal } from '@aiostreams/ui/modal';
+ import { currentHost } from '@/lib/hosts';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import {
+   actionText,
+   activate,
++  backToTop,
+   groupActions,
+   groupLabel,
+   isTextField,
+@@ -36,6 +38,8 @@ interface History {
+ 
+ /** Back where no page takes it: into a TV's navigation, out of a field, out of full screen, then a page back. */
+ function back(history: History): boolean {
++  // From past a page's first screen, its top before the navigation (AIOStreamsTVOS).
++  if (appleTv() && backToTop()) return true;
+   if (toNavigation()) return true;
+   const el = document.activeElement;
+   if (isTextField(el)) {
+diff --git a/packages/web/src/features/live-tv/channel-list.tsx b/packages/web/src/features/live-tv/channel-list.tsx
+index e200de1..6f68e4e 100644
+--- a/packages/web/src/features/live-tv/channel-list.tsx
++++ b/packages/web/src/features/live-tv/channel-list.tsx
+@@ -242,6 +242,8 @@ export function ChannelList({
+     <div
+       ref={scroller}
+       data-ui="channel-list"
++      // Back from scrolled along goes to the first channel, with Home (AIOStreamsTVOS).
++      data-nav-home
+       role="listbox"
+       tabIndex={0}
+       data-focus="own"
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index e14e82e..6ca8fea 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -1,4 +1,4 @@
+-import { drift, glideBy, glideTo, headedTo } from './glide';
++import { drift, glideBy, glideTo, headedTo, jumpTo } from './glide';
+ import { pageRtl } from '@/lib/direction';
+ 
+ export type Direction = 'up' | 'down' | 'left' | 'right';
+@@ -1015,6 +1015,68 @@ export function focusOn(el: HTMLElement): void {
+ let lastMove: { from: HTMLElement; to: HTMLElement; dir: Direction } | null =
+   null;
+ 
++/** How long Back to a page's top waits for its first cards to draw again there. */
++const TOP_WAIT_MS = 1500;
++
++/**
++ * Back from past a page's first screen: the page at its top, on what it opened on, before the
++ * navigation or leaving the page, which Back from there goes on to. From anything on the first
++ * screen, which nothing needed scrolling to reach, Back goes on as before. A list scrolling in a box
++ * of its own (`data-nav-home`, Live TV's channels and guide) scrolled along goes to its first row
++ * the same way, with Home, which it takes. Keys only (AIOStreamsTVOS).
++ *
++ * The page goes to its top at once, and focus follows once what it opened on is drawn there. Focus
++ * moved onto the first card drawn, as before, went only as far as the cards drawn near the screen
++ * reach, a couple of rows a Back.
++ */
++export function backToTop(): boolean {
++  const from = keyboardFocus();
++  if (!from || scope() !== document.body || from.closest('[data-nav-back]'))
++    return false;
++  const page = from.closest<HTMLElement>('[data-page]');
++  if (!page || page.closest('[inert]')) return false;
++  const list = from.closest<HTMLElement>('[data-nav-home]');
++  if (list) {
++    if (list.scrollTop <= 0) return false;
++    lastMove = null;
++    from.dispatchEvent(
++      new KeyboardEvent('keydown', {
++        key: 'Home',
++        code: 'Home',
++        bubbles: true,
++        cancelable: true,
++      })
++    );
++    return true;
++  }
++  // A bar stays put as the page scrolls, so it's on the first screen wherever the page is.
++  if (barOf(from)) return false;
++  const root = document.documentElement;
++  const [left, top] = headedTo(root);
++  const [, drawn] = drift(root);
++  // Where it lies on the page, once a scroll under way has ended.
++  if (from.getBoundingClientRect().bottom + drawn + top <= innerHeight)
++    return false;
++  lastMove = null;
++  jumpTo(root, left, 0);
++  // Its start where it marks one: before its cards there draw, the page's first on screen may be
++  // a picker in its header.
++  const marked = !!page.querySelector('[data-nav-start]');
++  const until = performance.now() + TOP_WAIT_MS;
++  const land = () => {
++    if (!page.isConnected || page.closest('[inert]')) return;
++    // Anything the keys moved to meanwhile wins.
++    const now = document.activeElement;
++    if (now && now !== from && now !== document.body && now.isConnected)
++      return;
++    const el = marked ? startOf(page) : first(page);
++    if (el && inView(el)) return focusOn(el);
++    if (performance.now() < until) requestAnimationFrame(land);
++  };
++  requestAnimationFrame(land);
++  return true;
++}
++
+ /**
+  * Where focus came into a `data-nav-exit` box from, which a move out its exit
+  * side returns to, whatever lies that way.
+diff --git a/packages/web/src/lib/input/glide.ts b/packages/web/src/lib/input/glide.ts
+index 69afbff..459a409 100644
+--- a/packages/web/src/lib/input/glide.ts
++++ b/packages/web/src/lib/input/glide.ts
+@@ -363,6 +363,16 @@ export function drift(box: Element): [number, number] {
+   return [box.scrollLeft - glide.to[0], box.scrollTop - glide.to[1] - offset];
+ }
+ 
++/**
++ * Puts `box` at a place at once, ending any scroll under way. A long smooth scroll would pass every
++ * row between, and the cards drawn near the screen would each draw on the way (AIOStreamsTVOS).
++ */
++export function jumpTo(box: Element, left: number, top: number): void {
++  glides.delete(box);
++  endNative(box);
++  box.scrollTo({ left, top, behavior: 'instant' });
++}
++
+ /** Scrolls `box` on from wherever a scroll under way ends. */
+ export function glideBy(box: Element, dx: number, dy: number): void {
+   const [left, top] = headedTo(box);
+diff --git a/packages/web/src/lib/input/index.ts b/packages/web/src/lib/input/index.ts
+index 1c5916c..b9938f0 100644
+--- a/packages/web/src/lib/input/index.ts
++++ b/packages/web/src/lib/input/index.ts
+@@ -29,6 +29,7 @@ export {
+ } from './dispatch';
+ export {
+   activate,
++  backToTop,
+   focusOn,
+   isTextField,
+   keyboardFocus,
