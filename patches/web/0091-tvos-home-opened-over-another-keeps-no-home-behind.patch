@@ -1,0 +1,19 @@
+diff --git a/packages/web/src/components/shell/page-stack.tsx b/packages/web/src/components/shell/page-stack.tsx
+index 64c3baf98..59687c72e 100644
+--- a/packages/web/src/components/shell/page-stack.tsx
++++ b/packages/web/src/components/shell/page-stack.tsx
+@@ -81,7 +81,13 @@ function settle(
+       ];
+   }
+   const open = next.at(-1)!;
+-  const home = next.filter((e) => e.pathname === '/' && e !== open).at(-1);
++  // On an Apple TV, Home opened over another keeps no Home behind it: the two drew every row and
++  // picture twice, which took WebKit's page process past its memory limit. Back to that Home
++  // draws it again (AIOStreamsTVOS).
++  const home =
++    appleTv() && open.pathname === '/'
++      ? undefined
++      : next.filter((e) => e.pathname === '/' && e !== open).at(-1);
+   // On an Apple TV one page stays behind the open one, besides Home: focus kept on the same control
+   // after a pick, and Back to the page as it was left, need it. Not upstream's four, as each page
+   // kept holds its layers and DOM in WebKit's process, which tvOS ends for memory long before the
