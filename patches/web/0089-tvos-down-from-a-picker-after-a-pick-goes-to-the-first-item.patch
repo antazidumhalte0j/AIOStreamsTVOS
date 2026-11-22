@@ -1,0 +1,63 @@
+diff --git a/packages/web/src/lib/input/dispatch.ts b/packages/web/src/lib/input/dispatch.ts
+index 2f7452ec5..995a47a60 100644
+--- a/packages/web/src/lib/input/dispatch.ts
++++ b/packages/web/src/lib/input/dispatch.ts
+@@ -10,6 +10,7 @@ import {
+   isTextField,
+   markPointerFocus,
+   remember,
++  arrived,
+   overlayOpen,
+   ownsKey,
+   sendKey,
+@@ -111,7 +112,11 @@ const onPointer = () => {
+ 
+ const onFocus = (e: FocusEvent) => {
+   markPointerFocus(!keys);
+-  if (e.target instanceof Element) remember(e.target);
++  if (e.target instanceof Element) {
++    remember(e.target);
++    // Where focus came from, for Down from a page header's pickers after a pick (AIOStreamsTVOS).
++    arrived(e.target, e.relatedTarget);
++  }
+ };
+ 
+ let recorder: ((input: string) => void) | null = null;
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index 9e7d576eb..e14e82e98 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -619,6 +619,23 @@ function wrapped(from: HTMLElement, dir: Direction): HTMLElement | null {
+ const GROUP = '[data-nav-group]';
+ const lastIn = new WeakMap<Element, HTMLElement>();
+ 
++/**
++ * Whether focus came onto a `data-nav-down=start` box, as a page header's pickers, from a pick:
++ * back from a picker's list, which lies outside the page, or put back as the page drew again. Come
++ * from the page itself, it's a move, and Down goes to what lies below (AIOStreamsTVOS).
++ */
++const picked = new WeakMap<Element, boolean>();
++
++/** Notes where focus came onto `el` from, for `picked`. */
++export function arrived(el: Element, from: EventTarget | null): void {
++  const box = el.closest('[data-nav-down=start]');
++  if (!box) return;
++  // Along the pickers keeps what brought focus onto them.
++  if (from instanceof Element && box.contains(from)) return;
++  const page = box.closest('[data-page]');
++  picked.set(box, !(from instanceof Element && !!page?.contains(from)));
++}
++
+ export function remember(el: Element): void {
+   if (!(el instanceof HTMLElement)) return;
+   for (let group = el.closest(GROUP); group;) {
+@@ -1067,7 +1084,8 @@ export function move(dir: Direction): boolean {
+   const pageStart =
+     downBox && startOf(downBox.closest('[data-page]') ?? document);
+   if (downBox && pageStart && !downBox.contains(pageStart)) {
+-    moveTo(beneath(from, pageStart), dir);
++    // After a pick, what's below is new: the start of it (AIOStreamsTVOS).
++    moveTo(picked.get(downBox) ? pageStart : beneath(from, pageStart), dir);
+     return true;
+   }
+   bars = new Map();
