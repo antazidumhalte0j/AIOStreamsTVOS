@@ -541,12 +541,14 @@ Back behaviour and the bundled-player path. It also means:
   2160p on an A15; over its frame budget it drops its restore pass, then a source below 1080p
   falls back to the system's super resolution (MetalFX from tvOS 27.1) and a 1080p source goes
   off. HDR, Dolby Vision, a source as large as the display, AirPlay and live channels play as
-  before; the engine's `[Upscale]` log line says why, and the statistics' Upscaling line says what
+  before (live channels have their own switch, below); the engine's `[Upscale]` log line says why, and the statistics' Upscaling line says what
   it did. Turning it on or off during a video, or with its key, reloads the video where it is. The
   setting's help says so in place of the official app's description of its shaders
   (`patches/web/0032-tvos-upscaling-help.patch`). **Upscale other video**, a setting of the Apple
   TV app's own under it (off by default), does the same for everything that isn't anime; trailers
-  are never upscaled (`patches/web/0033-tvos-upscale-other-video.patch`).
+  are never upscaled (`patches/web/0033-tvos-upscale-other-video.patch`). **Upscale live TV**, also
+  off by default, does it for live channels below 1080p with the automatic scaler, from the next
+  channel (`patches/web/0902-tvos-live-tv-upscaling.patch`).
 - The player's Chapters list keeps each chapter's picture as a data URL rather than a blob URL,
   which tvOS's WebKit draws as a broken picture (`patches/web/0031-tvos-chapter-pictures-as-data-urls.patch`).
 - With Autoplay next episode on, once the countdown to the next episode (or the playlist's next

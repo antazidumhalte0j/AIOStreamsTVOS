@@ -140,6 +140,8 @@ struct PlayerSettings: Equatable {
     var hdrToneMapNits = 0.0
     /// The page's Pause and rewind live TV switch (patches/web/0901): on unless the page says off.
     var liveRewind = true
+    /// The page's Upscale live TV switch (patches/web/0902): live channels, which `upscaling` leaves as they are.
+    var upscalingLive = false
 }
 
 enum PlayerProtocol {
@@ -230,6 +232,7 @@ enum PlayerProtocol {
         settings.upscalingAnime = message.flag("upscalingAnime") == true
         settings.dolbyVisionFel = message.flag("dolbyVisionFel") == true
         settings.liveRewind = message.flag("liveRewind") != false
+        settings.upscalingLive = message.flag("upscalingLive") == true
         // Only the page's own choices; anything else is off.
         let toneMapNits = message.number("hdrToneMapNits") ?? 0
         settings.hdrToneMapNits = hdrToneMapPeaks.contains(toneMapNits) ? toneMapNits : 0

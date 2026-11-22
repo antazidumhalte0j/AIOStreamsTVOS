@@ -413,16 +413,22 @@ final class AetherPlayer {
         // The page's Anime upscaling for anime, and its Upscale other video (patches/web/0033) for the rest:
         // the engine's super resolution (#846) for SDR video below 1080p, which then plays on its software
         // player. Not the official app's anime shaders, and only on tvOS 26 and later (MetalFX from 27.1);
-        // HDR, Dolby Vision, a source as large as the display, AirPlay and live keep their route, and the
+        // HDR, Dolby Vision, a source as large as the display and AirPlay keep their route, and the
         // engine logs one `[Upscale]` line why. A trailer plays as it is: it's short, mostly full size, and
         // a muted preview in a card.
-        options.upscalesLowResolutionVideo = settings.upscaling && !live && !request.isTrailer
+        // A live channel follows the page's Upscale live TV instead (patches/web/0902), on the automatic
+        // route: SD and 720p channels below 1080p, which then play on the software player too. The engine
+        // keeps a demuxed-audio live stream on its route; a channel replayed on AVPlayer for its sound
+        // (`liveOnAVPlayer`) isn't the engine's to upscale.
+        let upscales = live ? settings.upscalingLive && !liveOnAVPlayer : settings.upscaling
+        options.upscalesLowResolutionVideo = upscales && !request.isTrailer
         // Anime plays through the engine's line-art scaler (Anime4K mode A, small, since engine 7.63): it
         // also takes 1080p and 10-bit SDR, which the automatic route can't. Anything else keeps the
         // automatic route. It is for drawn content only, so it follows the page's anime test.
-        options.upscaleScaler = settings.upscalingAnime ? .lineArt : .automatic
+        let lineArt = !live && settings.upscalingAnime
+        options.upscaleScaler = lineArt ? .lineArt : .automatic
         loadedUpscaling = options.upscalesLowResolutionVideo
-        loadedLineArt = settings.upscalingAnime
+        loadedLineArt = lineArt
         if !settings.hardwareDecoding { options.preferredDecodePath = .software }
         // Dolby Vision plays as its HDR10 / HLG base layer, HDR10+ metadata included, on a TV without Dolby
         // Vision always and on a Dolby Vision TV when the page's Dolby Vision switch is off: no Profile 7 ->

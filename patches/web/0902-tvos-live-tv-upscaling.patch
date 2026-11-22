@@ -1,0 +1,72 @@
+diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
+index ac4946e22..1bc9d8e2f 100644
+--- a/packages/web/src/app/settings/player.tsx
++++ b/packages/web/src/app/settings/player.tsx
+@@ -498,6 +498,7 @@ function VideoCard() {
+         />
+       )}
+       {appleTv() && <OtherUpscalingSwitch />}
++      {appleTv() && <LiveUpscalingSwitch />}
+       {info?.superResolution && (
+         <Switch
+           side="right"
+@@ -582,6 +583,20 @@ function OtherUpscalingSwitch() {
+   );
+ }
+ 
++/** The Apple TV app's upscaling of live channels (`settings.video.upscalingLive`, AIOStreamsTVOS). */
++function LiveUpscalingSwitch() {
++  const [live, setLive] = useSetting(settings.video.upscalingLive);
++  return (
++    <Switch
++      side="right"
++      label={tvText('upscaling.liveLabel')}
++      help={tvText('upscaling.liveHelp')}
++      value={live}
++      onValueChange={setLive}
++    />
++  );
++}
++
+ /**
+  * The Apple TV app's Dolby Vision Profile 7 FEL switch (`settings.video.dolbyVisionFel`, AIOStreamsTVOS).
+  * Shown only under the Dolby Vision switch, which it depends on. In the app's own catalog (`tvText`).
+diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
+index 1152124f2..9e0056c41 100644
+--- a/packages/web/src/lib/hosts/shell/player.ts
++++ b/packages/web/src/lib/hosts/shell/player.ts
+@@ -575,6 +575,8 @@ export function playerSettings() {
+       objectAudio: audio.objectAudio.read(),
+       objectAudioLayout: audio.objectAudioLayout.read(),
+       upscalingAnime: upscalingAnime(),
++      // Live channels, which the other upscaling settings leave as they are.
++      upscalingLive: video.upscalingLive.read(),
+       // Only with Dolby Vision on: the switch is hidden without it, and a stored choice is ignored.
+       dolbyVisionFel: video.dolbyVision.read() && video.dolbyVisionFel.read(),
+       // The display peak HDR10 videos are tone mapped to, in nits, 0 for off.
+diff --git a/packages/web/src/lib/hosts/shell/tvos-text.ts b/packages/web/src/lib/hosts/shell/tvos-text.ts
+index e16c15360..57aab63da 100644
+--- a/packages/web/src/lib/hosts/shell/tvos-text.ts
++++ b/packages/web/src/lib/hosts/shell/tvos-text.ts
+@@ -28,6 +28,8 @@ const TEXT = {
+     "subtitles.sizeSmaller": "Smaller",
+     "subtitles.styledHelp": "Styled subtitles, common in anime, keep their own fonts, colours and placement unless this is on, which shows them as plain text in your style. Blu-ray and DVD subtitles keep their look, at the size chosen above.",
+     "upscaling.animeHelp": "Upscales anime up to 1080p to the screen as it plays, with Anime4K's line-art networks, for sharper lines in older and lower-resolution shows. It applies to titles marked as anime, and needs tvOS 26 or later. HDR and Dolby Vision videos, videos about as large as the screen, and live channels stay as they are. Turns itself off for a video the Apple TV can't keep up with. Switching it during a video reopens the video where it is.",
++    "upscaling.liveLabel": "Upscale live TV",
++    "upscaling.liveHelp": "Upscales live channels below 1080p with the Apple TV's super resolution, from tvOS 26, as Upscale other video does films and shows: SD channels look sharper, though faces and fine detail can look smoothed. HDR channels and channels about as large as the screen stay as they are. Applies from the next channel.",
+     "upscaling.otherLabel": "Upscale other video",
+     "upscaling.otherHelp": "Upscales films and shows that aren't anime with the Apple TV's super resolution, below 1080p, from tvOS 26: older and lower-resolution videos look sharper, though faces and fine detail can look smoothed. HDR and Dolby Vision videos, videos about as large as the screen, live channels and trailers stay as they are. Switching it during a video reopens the video where it is.",
+     "dolbyVision.felLabel": "Dolby Vision profile 7 FEL",
+diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
+index 61e9263a2..8bbcc6427 100644
+--- a/packages/web/src/lib/settings/index.ts
++++ b/packages/web/src/lib/settings/index.ts
+@@ -710,6 +710,8 @@ export const settings = {
+     upscaling: device<boolean>('aiostreams-web-video-upscaling', false),
+     /** The Apple TV app's upscaling of everything that isn't anime (AIOStreamsTVOS). */
+     upscalingOther: device<boolean>('aiostreams-web-video-upscaling-other', false),
++    /** The Apple TV app's upscaling of live channels (AIOStreamsTVOS). */
++    upscalingLive: device<boolean>('aiostreams-web-video-upscaling-live', false),
+     superResolution: device<boolean>(
+       'aiostreams-web-video-super-resolution',
+       false
