@@ -138,6 +138,8 @@ struct PlayerSettings: Equatable {
     /// The page's HDR10 tone mapping (patches/web/0072): the display peak in nits an HDR10 video brighter
     /// than it is mapped down to, 0 for off (`AetherPlayer.options`).
     var hdrToneMapNits = 0.0
+    /// The page's Pause and rewind live TV switch (patches/web/0901): on unless the page says off.
+    var liveRewind = true
 }
 
 enum PlayerProtocol {
@@ -227,6 +229,7 @@ enum PlayerProtocol {
         settings.upscaling = message.flag("upscaling") == true
         settings.upscalingAnime = message.flag("upscalingAnime") == true
         settings.dolbyVisionFel = message.flag("dolbyVisionFel") == true
+        settings.liveRewind = message.flag("liveRewind") != false
         // Only the page's own choices; anything else is off.
         let toneMapNits = message.number("hdrToneMapNits") ?? 0
         settings.hdrToneMapNits = hdrToneMapPeaks.contains(toneMapNits) ? toneMapNits : 0

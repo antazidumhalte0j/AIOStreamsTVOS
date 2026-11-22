@@ -1,0 +1,69 @@
+diff --git a/packages/web/src/app/settings/player.tsx b/packages/web/src/app/settings/player.tsx
+index 729321237..ac4946e22 100644
+--- a/packages/web/src/app/settings/player.tsx
++++ b/packages/web/src/app/settings/player.tsx
+@@ -410,10 +410,25 @@ function ControlsCard() {
+         value={thumbnails}
+         onValueChange={setThumbnails}
+       />
++      {appleTv() && <LiveRewindSwitch />}
+     </SettingsCard>
+   );
+ }
+ 
++/** The Apple TV app's Live TV pause and rewind (`settings.controls.liveRewind`, AIOStreamsTVOS). */
++function LiveRewindSwitch() {
++  const [liveRewind, setLiveRewind] = useSetting(settings.controls.liveRewind);
++  return (
++    <Switch
++      side="right"
++      label={tvText('liveRewind.label')}
++      help={tvText('liveRewind.help')}
++      value={liveRewind}
++      onValueChange={setLiveRewind}
++    />
++  );
++}
++
+ function VideoCard() {
+   const host = currentHost();
+   const shell = !!shellHost();
+diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
+index b3449c1a6..1152124f2 100644
+--- a/packages/web/src/lib/hosts/shell/player.ts
++++ b/packages/web/src/lib/hosts/shell/player.ts
+@@ -579,6 +579,8 @@ export function playerSettings() {
+       dolbyVisionFel: video.dolbyVision.read() && video.dolbyVisionFel.read(),
+       // The display peak HDR10 videos are tone mapped to, in nits, 0 for off.
+       hdrToneMapNits: Number(video.hdrToneMap.read()) || 0,
++      // Live channels kept behind their edge, to pause and rewind; off, they play live only.
++      liveRewind: settings.controls.liveRewind.read(),
+     }),
+     ...(android
+       ? {
+diff --git a/packages/web/src/lib/hosts/shell/tvos-text.ts b/packages/web/src/lib/hosts/shell/tvos-text.ts
+index 0e29eb53f..e16c15360 100644
+--- a/packages/web/src/lib/hosts/shell/tvos-text.ts
++++ b/packages/web/src/lib/hosts/shell/tvos-text.ts
+@@ -10,6 +10,8 @@ import { i18n } from '@lingui/core';
+ const TEXT = {
+   "en-GB": {
+     "about.tvosApp": "tvOS app",
++    "liveRewind.label": "Pause and rewind live TV",
++    "liveRewind.help": "Keeps up to 30 minutes of a channel behind live, so a pause plays on from where it stopped and the arrows skip back through it. Off, a channel always plays live. Applies from the next channel.",
+     "credit.ffmpeg": "Reads every file and decodes what the Apple TV has no decoder for.",
+     "credit.dav1d": "Decodes AV1, inside FFmpeg.",
+     "credit.libdovi": "Reads and converts the Dolby Vision metadata.",
+diff --git a/packages/web/src/lib/settings/index.ts b/packages/web/src/lib/settings/index.ts
+index 2d6e7360f..61e9263a2 100644
+--- a/packages/web/src/lib/settings/index.ts
++++ b/packages/web/src/lib/settings/index.ts
+@@ -640,6 +640,8 @@ export const settings = {
+     thumbnails: device<boolean>('aiostreams-web-controls-thumbnails', true),
+     timeLeft: device<boolean>('aiostreams-web-controls-time-left', false),
+     clock: device<boolean>('aiostreams-web-controls-clock', true),
++    /** The Apple TV app keeps a live channel behind its edge, to pause and rewind (AIOStreamsTVOS). */
++    liveRewind: device<boolean>('aiostreams-web-controls-live-rewind', true),
+   },
+   player: {
+     /** `app`, a player's id, or `custom` for `link`. */

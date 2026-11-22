@@ -327,6 +327,19 @@ no play session. One video is kept, in the space it played in; playing anything 
 app or **Reset the app's data** deletes it. Live channels, AVPlayer's own HLS and videos the engine
 decodes itself aren't kept.
 
+### Live TV pause and rewind
+
+A live channel can be paused and rewound up to 30 minutes. The engine records it on disk behind its
+live edge (`dvrWindowSeconds`), within its own budget: a quarter of the free space and at most
+2 GiB, so a high-bitrate channel keeps less. Play/Pause holds the picture and plays on from there;
+with the controls hidden, Left and Right skip back and forward through what was kept (held, further
+each step), and the live bar shows how far behind live it plays. **Go live** goes back to the edge
+without opening the channel again (`patches/web/0900-tvos-live-pause-and-rewind.patch`). The bar
+reads Live until a pause or a skip back, and Go live stays until it's pressed or a skip forward
+reaches the edge. A channel played on AVPlayer for its sound keeps only the origin's own window,
+and pauses as before. Settings → Player → Controls → **Pause and rewind live TV** turns it off, from
+the next channel (`patches/web/0901-tvos-live-rewind-switch.patch`).
+
 ### Seek-bar thumbnails
 
 Seeking shows a picture of the keyframe at or before the position, over the seek bar and in the
@@ -601,8 +614,8 @@ Back behaviour and the bundled-player path. It also means:
 - The engine's buffer is always sized as Automatic: it buffers 10 minutes ahead (about 6 GB of an
   80 Mbit/s remux), or as much as a quarter of the free space holds if that's less, so a remux
   rides out a slow stretch of the source. This applies only to video AVPlayer plays: the engine's
-  software player keeps a fixed 96 MB ahead and 128 MB behind in memory. Live TV keeps the
-  engine's own live window.
+  software player keeps a fixed 96 MB ahead and 128 MB behind in memory. Live TV keeps up to 30
+  minutes behind its edge on disk (see Live TV pause and rewind).
 
 ## The remote
 

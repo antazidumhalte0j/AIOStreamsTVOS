@@ -13,6 +13,8 @@ protocol PlayerListener: AnyObject {
     /// `start`, `loaded` or `restart`, as mpv's events.
     func playerEvent(_ name: String)
     func playerEnded(reason: String, error: String?, cause: String?, status: Int?)
+    /// A live channel's rewind window, in the page's `player-live-window` terms; nil where none is kept.
+    func playerLiveWindow(_ window: Message?)
 }
 
 /**
@@ -90,6 +92,23 @@ final class AetherPlayer {
      * goes back to the ingest reader by the engine's own fallback (`nativeRemoteHLSIngestFallback`).
      */
     private var liveOnAVPlayer = false
+
+    /**
+     * How far back a live channel can be paused or rewound. The engine keeps it on disk within its own
+     * budget, a quarter of the free space and at most 2 GiB, so a high-bitrate channel or a fuller
+     * Apple TV keeps less than this.
+     */
+    private static let liveRewindSeconds: Double = 30 * 60
+    /// The last `player-live-window` sent, so an unchanged one isn't sent again.
+    private var lastLiveWindow: Message?
+    /**
+     * The viewer paused the live channel or skipped back, and hasn't gone live again. Only then does the
+     * page hear it plays behind live: the engine's own at-the-edge verdict flips back and forth within a
+     * few seconds of the edge as segments arrive, and the live bar's Go live came and went with it.
+     */
+    private var liveRewound = false
+    /// A skip forward landing this close to the live edge goes live.
+    private static let liveEdgeSnapSeconds: Double = 5
 
     /**
      * The page picked a subtitle (or none) for the file that plays, so the app's own pick doesn't
@@ -247,6 +266,9 @@ final class AetherPlayer {
         endLineWatch()
         health = PlaybackHealth()
         subtitles.reset()
+        // The last channel's rewind window goes with it; this one's follows from the engine.
+        liveRewound = false
+        sendLiveWindow(nil)
         listener?.playerEvent("start")
         // A new file starts with no subtitle, and the page is told so. The engine let go of the last file's
         // with `stop()` already gone, which reports nothing, and a file that picks none never changes it
@@ -333,6 +355,11 @@ final class AetherPlayer {
         options.isLive = live
         // Loaded again for its sound (`liveOnAVPlayer`): AVPlayer reads the live playlist itself.
         if live && liveOnAVPlayer { options.nativeRemoteHLS = true }
+        // Pause and rewind on Live TV: the engine records the channel on disk behind its live edge, so a
+        // pause resumes where it was and the page's skips seek back through what it kept, and Go live
+        // returns to the edge (`goLive`). AVPlayer reading the playlist itself keeps the origin's window.
+        // Off with the page's Pause and rewind live TV switch (patches/web/0901): the channel plays live only.
+        if live && !liveOnAVPlayer && settings.liveRewind { options.dvrWindowSeconds = Self.liveRewindSeconds }
         // A trailer AVPlayer can open plays on AVPlayer from its own address, as another player would:
         // remuxed by the engine, a trailer's closed captions (CEA-608 in the video, or a caption track)
         // never reached AVPlayer, as the engine's playlist declares none, and the stream showed no track.
@@ -695,11 +722,17 @@ final class AetherPlayer {
         subtitles.reset()
         if wasPlaying { listener?.playerEnded(reason: "stop", error: nil, cause: nil, status: nil) }
         listener?.playerState(["idle": true, "buffering": false, "seeking": false])
+        sendLiveWindow(nil)
     }
 
     func change(_ change: Change) {
         if let paused = change.paused {
             self.paused = paused
+            // A live channel paused plays behind live from here on, until Go live.
+            if paused, current != nil, engine.isLive, engine.seekableLiveRange != nil {
+                liveRewound = true
+                liveWindowChanged()
+            }
             // Held for the link, play waits for `releaseHold`, which reads `paused`.
             if current != nil, !holdingForLink {
                 if paused { engine.pause() } else { engine.play() }
@@ -1036,10 +1069,71 @@ final class AetherPlayer {
 
     func seek(_ positionMs: Double) {
         guard current != nil else { return }
-        let seconds = max(0, positionMs / 1000)
+        var seconds = max(0, positionMs / 1000)
+        // A live channel's skips land inside what the engine kept of it, its live edge at the latest.
+        if engine.isLive, let kept = engine.seekableLiveRange {
+            seconds = min(max(seconds, kept.lowerBound), kept.upperBound)
+            // A skip forward to within a few seconds of the edge goes live; anything else plays behind it.
+            if seconds >= kept.upperBound - Self.liveEdgeSnapSeconds {
+                liveRewound = false
+                liveWindowChanged()
+                Task { [weak self] in await self?.engine.seekToLiveEdge() }
+                return
+            }
+            liveRewound = true
+            liveWindowChanged()
+        }
         seekBegan = ProcessInfo.processInfo.systemUptime
         seekTarget = seconds
         Task { [weak self] in await self?.engine.seek(to: seconds) }
+    }
+
+    /// The page's Go live on a channel the engine keeps a rewind window of: back to its live edge, playing.
+    func goLive() {
+        guard current != nil, !ended, engine.isLive else { return }
+        EngineLogBook.note(String(format: "[player] go live from %.0f s behind", engine.behindLiveSeconds))
+        liveRewound = false
+        liveWindowChanged()
+        Task { [weak self] in
+            guard let self else { return }
+            await self.engine.seekToLiveEdge()
+            guard self.current != nil, !self.ended, self.paused, !self.holdingForLink else { return }
+            self.paused = false
+            self.engine.play()
+            self.listener?.playerState(["paused": false])
+        }
+    }
+
+    /**
+     * The rewind window the page shows a live channel by: how far behind the live edge it plays, and the
+     * span it can seek in, on the positions' timeline. Sent when it moves by a second or more, or
+     * becomes the edge; nil (no window) where the engine keeps none, and the page then counts a pause
+     * by the clock as upstream does. Live, at the edge, until the viewer pauses or skips back
+     * (`liveRewound`), and from then on at least a second behind, so Go live stays until it's pressed.
+     */
+    private func liveWindowChanged() {
+        guard current != nil, !ended, engine.isLive, let kept = engine.seekableLiveRange else {
+            return sendLiveWindow(nil)
+        }
+        let behind = liveRewound ? max(1, engine.behindLiveSeconds) : 0
+        sendLiveWindow([
+            "behindMs": (behind * 1000).rounded(),
+            "startMs": (kept.lowerBound * 1000).rounded(),
+            "endMs": (kept.upperBound * 1000).rounded(),
+        ])
+    }
+
+    private func sendLiveWindow(_ window: Message?) {
+        if let window, let last = lastLiveWindow,
+           let behind = window["behindMs"] as? Double, let lastBehind = last["behindMs"] as? Double,
+           (behind == 0) == (lastBehind == 0), abs(behind - lastBehind) < 1000,
+           let start = window["startMs"] as? Double, let lastStart = last["startMs"] as? Double,
+           abs(start - lastStart) < 1000 {
+            return
+        }
+        if window == nil, lastLiveWindow == nil { return }
+        lastLiveWindow = window
+        listener?.playerLiveWindow(window)
     }
 
     /// From the server, or a file the user added, shown in place of track `replace`.
@@ -1368,6 +1462,15 @@ final class AetherPlayer {
             .store(in: &watching)
         engine.clock.$currentTime
             .sink { [weak self] seconds in self?.positionChanged(seconds) }
+            .store(in: &watching)
+        // A live channel's rewind window, read after the clock's fields have all changed.
+        Publishers.Merge3(
+            engine.clock.$seekableLiveRange.map { _ in () },
+            engine.clock.$behindLiveSeconds.map { _ in () },
+            engine.clock.$isAtLiveEdge.map { _ in () }
+        )
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.liveWindowChanged() }
             .store(in: &watching)
         engine.clock.$sourceTime
             .sink { [weak self] seconds in self?.subtitles.setTime(seconds) }

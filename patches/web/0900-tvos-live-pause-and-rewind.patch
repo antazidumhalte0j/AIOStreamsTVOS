@@ -1,0 +1,113 @@
+diff --git a/packages/web/src/features/player/controls.tsx b/packages/web/src/features/player/controls.tsx
+index 93af2f259..48356a70b 100644
+--- a/packages/web/src/features/player/controls.tsx
++++ b/packages/web/src/features/player/controls.tsx
+@@ -38,7 +38,13 @@ import {
+ import { ChaptersSheet } from './chapters';
+ import { EpisodesSheet } from './episodes';
+ import { NumberEntry, useNumberEntry } from '@/features/live-tv/channel-number';
+-import { ChannelsSheet, LiveBar, useBehindLive, useLiveChannel } from './live';
++import {
++  ChannelsSheet,
++  LiveBar,
++  liveRewinds,
++  useBehindLive,
++  useLiveChannel,
++} from './live';
+ import { PlaylistSheet } from '@/features/playlists/playlists';
+ import {
+   Notice,
+@@ -224,7 +230,8 @@ export function PlayerControls({
+   const [burstSeek, seekingTo] = useBurstSeek(player);
+   const [seekPicture, setSeekPicture] = React.useState(true);
+   const seekBy = (deltaMs: number, picture = true) => {
+-    if (live) return;
++    // A live channel the Apple TV app keeps a rewind window of skips through it.
++    if (live && !liveRewinds()) return;
+     setSeekPicture(picture);
+     burstSeek(deltaMs);
+     showSeekFlash(deltaMs);
+@@ -244,7 +251,8 @@ export function PlayerControls({
+       1 + Math.floor(h.repeats / REPEATS_PER_STEP)
+     );
+     const last = scrubbing.current;
+-    if (!last && !(thumbnails?.row() && (repeat || state.paused))) {
++    // A live channel has no pictures to scrub through: its presses only skip, held ones further.
++    if (!last && !(thumbnails?.row() && !live && (repeat || state.paused))) {
+       if (seekingTo === null) skippedFrom.current = playhead.positionMs;
+       seekBy(deltaMs * steps, false);
+       return false;
+diff --git a/packages/web/src/features/player/live.tsx b/packages/web/src/features/player/live.tsx
+index d8cb0b5cd..3d371aa75 100644
+--- a/packages/web/src/features/player/live.tsx
++++ b/packages/web/src/features/player/live.tsx
+@@ -19,6 +19,7 @@ import { party } from '@/lib/party/party';
+ import { lastVersions } from '@/lib/playback/sources';
+ import { zapTo } from '@/lib/playback/session';
+ import type { PlayerController } from '@/lib/playback/controller';
++import { appBridge, appleTv, bridgeStore } from '@/lib/hosts/shell/bridge';
+ import { useRestoreFocus } from '@/lib/input';
+ import type { BaseItemDto } from '@/lib/jellyfin/types';
+ import { ChannelList, useRowSchedules } from '@/features/live-tv/channel-list';
+@@ -104,9 +105,22 @@ export function useLiveChannel(
+   };
+ }
+ 
++/**
++ * The Apple TV app's rewind window on the playing live channel: it records the channel behind its
++ * edge, so a pause resumes where it was and the remote's skips seek back through it (AIOStreamsTVOS).
++ */
++const liveWindow = bridgeStore('player-live-window');
++
++/** Whether the playing live channel can be rewound: the Apple TV app keeps a window of it. */
++export const liveRewinds = () =>
++  appleTv() && liveWindow.get()?.behindMs != null;
++
+ /** How far a pause left a live source behind its edge, by the clock. */
+ export function useBehindLive(player: PlayerController) {
+   const { paused, reconnecting } = player.state;
++  // Where the Apple TV app keeps a rewind window, it says how far behind the edge it plays.
++  const kept = liveWindow.use();
++  const keptBehindMs = appleTv() ? (kept?.behindMs ?? null) : null;
+   const [behindMs, setBehindMs] = React.useState(0);
+   const [pausedAt, setPausedAt] = React.useState<number | null>(null);
+   /** Pauses before the source last joined its edge don't count. */
+@@ -131,10 +145,14 @@ export function useBehindLive(player: PlayerController) {
+   const now = useNow(1000, pausedAt !== null);
+   const goLive = () => {
+     join();
+-    player.goLive?.();
++    // Back to the edge of what the Apple TV app kept, rather than opening the channel again.
++    if (keptBehindMs !== null) appBridge()?.send({ type: 'player-live-edge' });
++    else player.goLive?.();
+   };
+   return {
+-    behindMs: behindMs + (pausedAt === null ? 0 : Math.max(0, now - pausedAt)),
++    behindMs:
++      keptBehindMs ??
++      behindMs + (pausedAt === null ? 0 : Math.max(0, now - pausedAt)),
+     goLive,
+   };
+ }
+diff --git a/packages/web/src/lib/hosts/shell/bridge.ts b/packages/web/src/lib/hosts/shell/bridge.ts
+index ed78ca23e..76d7a14bf 100644
+--- a/packages/web/src/lib/hosts/shell/bridge.ts
++++ b/packages/web/src/lib/hosts/shell/bridge.ts
+@@ -31,6 +31,17 @@ export type ShellMessage =
+       url: string | null;
+       originalLanguage?: string;
+     }
++  /**
++   * The Apple TV app's rewind window on a live channel (AIOStreamsTVOS): how far behind the live edge
++   * it plays, and the span it can seek in, on the positions' timeline. `behindMs` is null where it
++   * keeps none, and the live bar then counts a pause by the clock.
++   */
++  | {
++      type: 'player-live-window';
++      behindMs: number | null;
++      startMs?: number;
++      endMs?: number;
++    }
+   | {
+       type: 'player-state';
+       positionMs?: number;

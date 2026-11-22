@@ -101,6 +101,9 @@ final class PlayerChannel: PlayerListener {
                     player.seek(at)
                     if resumeAsked { resume() }
                 }
+            case "player-live-edge":
+                // The live bar's Go live, on a channel the engine keeps a rewind window of (`patches/web/0900`).
+                player.goLive()
             case "player-subtitle-add":
                 let url = message.text("url") ?? ""
                 guard PlayerProtocol.isWebURL(url), let address = URL(string: url) else {
@@ -235,6 +238,13 @@ final class PlayerChannel: PlayerListener {
         var message: Message = ["type": "player-ended", "reason": reason, "error": nullable(error)]
         if let cause { message["cause"] = cause }
         if let status { message["status"] = status }
+        send(message)
+    }
+
+    /// The page's live bar shows how far behind the live edge the channel plays from this (`patches/web/0900`).
+    func playerLiveWindow(_ window: Message?) {
+        var message = window ?? ["behindMs": NSNull()]
+        message["type"] = "player-live-window"
         send(message)
     }
 
