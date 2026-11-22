@@ -20,10 +20,10 @@ index 995a47a..60cf9bf 100644
      arrived(e.target, e.relatedTarget);
    }
 diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
-index 6ca8fea..fb8f9a0 100644
+index 6ca8fea..12bffa1 100644
 --- a/packages/web/src/lib/input/focus.ts
 +++ b/packages/web/src/lib/input/focus.ts
-@@ -636,6 +636,66 @@ export function arrived(el: Element, from: EventTarget | null): void {
+@@ -636,6 +636,81 @@ export function arrived(el: Element, from: EventTarget | null): void {
    picked.set(box, !(from instanceof Element && !!page?.contains(from)));
  }
  
@@ -55,6 +55,17 @@ index 6ca8fea..fb8f9a0 100644
 +}
 +
 +/**
++ * With focus lost, what had it, where it's still on the open page and can take focus again: moved
++ * rather than removed, as React moves a keyed element, it drops focus but stays (AIOStreamsTVOS).
++ */
++function stillThere(): HTMLElement | null {
++  const el = lastPlace?.el;
++  if (!el?.isConnected || el.closest('[inert]') || !el.closest('[data-page]'))
++    return null;
++  return canFocus(el) ? el : null;
++}
++
++/**
 + * With focus lost, as a row whose title had it found it had nothing to show and went, what lies
 + * nearest where it was, that way first. Upstream's start of the page from nothing focused found
 + * nothing on a screen of rows still loading, whose titles it passes over, and fell to the first
@@ -62,23 +73,27 @@ index 6ca8fea..fb8f9a0 100644
 + */
 +function nearLost(dir: Direction): HTMLElement | null {
 +  const lost = lastPlace;
-+  if (!lost || lost.el.isConnected) return null;
-+  const page = lost.page;
++  if (!lost) return null;
++  // Still on the page but unable to take focus, as one hidden, where it now is if it has a box.
++  const kept = lost.el.isConnected ? lost.el.getBoundingClientRect() : null;
++  const page = lost.el.isConnected ? lost.el.closest('[data-page]') : lost.page;
 +  if (!page?.isConnected || page.closest('[inert]')) return null;
 +  // Rows after one that went move up into its place, so a little above still counts as below.
 +  const slack = 8;
-+  const y = lost.y - window.scrollY;
++  const sized = kept && kept.width > 0 && kept.height > 0;
++  const y = sized ? kept.top : lost.y - window.scrollY;
++  const x = sized ? kept.left : lost.x;
 +  let best: HTMLElement | null = null;
 +  let score = Infinity;
 +  for (const el of page.querySelectorAll<HTMLElement>(FOCUSABLE)) {
-+    if (ruledOut(el) || el.closest('[data-nav-out]')) continue;
++    if (el === lost.el || ruledOut(el) || el.closest('[data-nav-out]'))
++      continue;
 +    const r = el.getBoundingClientRect();
 +    if (!canFocus(el, r)) continue;
 +    const dy = r.top - y;
 +    const wrongWay =
 +      (dir === 'down' && dy < -slack) || (dir === 'up' && dy > slack);
-+    const s =
-+      (wrongWay ? 1e7 : 0) + Math.abs(dy) * 4 + Math.abs(r.left - lost.x);
++    const s = (wrongWay ? 1e7 : 0) + Math.abs(dy) * 4 + Math.abs(r.left - x);
 +    if (s < score) {
 +      best = el;
 +      score = s;
@@ -90,11 +105,17 @@ index 6ca8fea..fb8f9a0 100644
  export function remember(el: Element): void {
    if (!(el instanceof HTMLElement)) return;
    for (let group = el.closest(GROUP); group;) {
-@@ -1117,6 +1177,13 @@ export function move(dir: Direction): boolean {
+@@ -1117,6 +1192,19 @@ export function move(dir: Direction): boolean {
      from === root ||
      !root.contains(from)
    ) {
-+    // Focus lost on the page, rather than never had: carry on from where it was (AIOStreamsTVOS).
++    // Focus lost on the page, rather than never had: carry on from where it was, the move made
++    // from what had it where that's still there (AIOStreamsTVOS).
++    const there = root === document.body ? stillThere() : null;
++    if (there) {
++      there.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
++      if (document.activeElement === there) return move(dir);
++    }
 +    const resumed = root === document.body ? nearLost(dir) : null;
 +    if (resumed) {
 +      lastMove = null;
