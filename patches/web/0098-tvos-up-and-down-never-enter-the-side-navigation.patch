@@ -1,0 +1,30 @@
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index 6ca8fea..1537541 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -430,6 +430,11 @@ function pick(
+       if (sideways) beside ||= way.off <= rect.height;
+       else if (!other) return inNearestRow(scored, way, home);
+     } else if (inView(way.el)) {
++      // Up or down never enters a navigation down the side, which lies beside the page. Holding
++      // Down past a home page's last row scrolled the page on with focus left on a card, and once
++      // the card was off the top of the screen, the sidebar, fixed and the screen's height, lay
++      // wholly below it: the next Down opened it (AIOStreamsTVOS).
++      if (!sideways && besideNav(way.el)) continue;
+       // The nearest bar that way, as a page's own sticky column before the sidebar past it.
+       const box = bar ?? way.el;
+       if (!gaps.has(box)) gaps.set(box, barGap(home ?? from, box, dir));
+@@ -444,6 +449,13 @@ function pick(
+   return beside ? null : other;
+ }
+ 
++/** In a navigation that Back reaches sideways (`data-nav-back` start or end), as a TV's rail. */
++function besideNav(el: Element): boolean {
++  const nav = el.closest<HTMLElement>('[data-nav-back]');
++  const side = nav ? navSide(nav.dataset.navBack) : undefined;
++  return side === 'left' || side === 'right';
++}
++
+ /**
+  * Up or down with nothing in line, the best of the nearest row, or of its
+  * whole `data-nav-group`, so focus never jumps a row.
