@@ -326,11 +326,18 @@ enum BridgeScript {
       // (patches/web/0058, `tvos-page-color`), so the app's art shows through the page with no hole
       // cut for it, and follows the page's scroll there frame by frame.
       "html[data-app-color] [data-ui='page-background']{background-color:transparent!important}",
-      'html.see-through[data-app-color][data-app-color][data-app-color]:not(.playing){background-color:transparent!important}'
+      'html.see-through[data-app-color][data-app-color][data-app-color]:not(.playing){background-color:transparent!important}',
       // Cleared, the background still takes a layer the screen's size, as `position: fixed`, and the
       // page over it layers of their own for overlapping it. Hidden instead (4117b98), composited
       // memory halved, but scrolling a title page while its trailer played drew the sidebar, fixed
       // too, partway down the screen; giving the sidebar a layer of its own didn't keep it in place.
+      // So it's hidden only while no trailer cuts its hole (`data-video-hole`): measured on Home
+      // with scripts/inspect-memory.py layers, the background's 31.6 MB went, and with it the 45 to
+      // 60 MB layer the page's content took for overlapping it (125 MB of layers at rest down to 49,
+      // 236 MB at the peak down to 150). While a trailer plays it's shown as before, so the case the
+      // sidebar was drawn out of place in is as it was. The keyboard reads the page's colour off a
+      // probe inside it, which a hidden box still gives.
+      "html[data-app-color]:not([data-video-hole]) [data-ui='page-background']{display:none!important}"
     );
     // The rotating hero's art and the one following the card in focus (whole window or corner), and a title page's.
     rules.push(

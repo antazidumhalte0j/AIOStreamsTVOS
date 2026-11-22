@@ -1,0 +1,67 @@
+diff --git a/packages/web/src/main.tsx b/packages/web/src/main.tsx
+index 6e0757de0..7da9bff41 100644
+--- a/packages/web/src/main.tsx
++++ b/packages/web/src/main.tsx
+@@ -15,6 +15,7 @@ import {
+ } from '@tanstack/react-query';
+ import JellyfinWebApp from './app';
+ import { persister } from './lib/cache';
++import { appleTv } from './lib/hosts/shell/bridge';
+ import { followReachable } from './lib/jellyfin/connection';
+ import { startI18n } from './lib/i18n';
+ import { setupTv } from './lib/tv';
+@@ -22,6 +23,13 @@ import { setupTv } from './lib/tv';
+ onlineManager.setEventListener(followReachable);
+ setupTv();
+ 
++/*
++ * On an Apple TV, a catalog nothing shows keeps only its first pages: catalogs scrolled far held
++ * thousands of items between them, all in WebKit's page process, which tvOS ends for memory
++ * (AIOStreamsTVOS).
++ */
++const TV_KEPT_PAGES = 2;
++
+ const queryClient = new QueryClient({
+   defaultOptions: {
+     queries: {
+@@ -30,10 +38,40 @@ const queryClient = new QueryClient({
+       persister,
+       // Runs even while the server is out of reach, so saved copies still load.
+       networkMode: 'offlineFirst',
+     },
+   },
+ });
+ 
++// A page shown, or kept behind the open one, still watches its catalog, which keeps all it loaded:
++// only one nothing watches is trimmed. Its next page is worked out from what it holds, so scrolling
++// it again carries on from the pages kept (AIOStreamsTVOS).
++if (appleTv())
++  queryClient.getQueryCache().subscribe((event) => {
++    if (event.type !== 'observerRemoved') return;
++    const { query } = event;
++    if (query.getObserversCount() || query.state.fetchStatus === 'fetching')
++      return;
++    const data = query.state.data as
++      | { pages?: unknown[]; pageParams?: unknown[] }
++      | undefined;
++    if (
++      !data ||
++      !Array.isArray(data.pages) ||
++      data.pages.length <= TV_KEPT_PAGES
++    )
++      return;
++    queryClient.setQueryData(
++      query.queryKey,
++      {
++        ...data,
++        pages: data.pages.slice(0, TV_KEPT_PAGES),
++        pageParams: data.pageParams?.slice(0, TV_KEPT_PAGES),
++      },
++      // Not newer than it was: what was stale still fetches again.
++      { updatedAt: query.state.dataUpdatedAt }
++    );
++  });
++
+ type Listed = { Items?: unknown[] };
+ 
+ /** How many items a query holds: a catalog's across its pages, or a list's. */

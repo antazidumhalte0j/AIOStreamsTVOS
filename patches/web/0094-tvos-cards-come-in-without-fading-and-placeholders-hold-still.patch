@@ -1,0 +1,52 @@
+diff --git a/packages/web/src/components/media/media-row.tsx b/packages/web/src/components/media/media-row.tsx
+index 5e3428433..f2429ca06 100644
+--- a/packages/web/src/components/media/media-row.tsx
++++ b/packages/web/src/components/media/media-row.tsx
+@@ -92,8 +92,13 @@ const CARD_IN = Array.from(
+   }
+ );
+ 
+-/** Cards fade in a little after one another, a page at a time. */
++/**
++ * Cards fade in a little after one another, a page at a time. Not on an Apple TV: each card
++ * fading in was a layer of its own over the app's art, a row or a grid's page of them at once as
++ * items came in, which pressed WebKit's page process for memory (AIOStreamsTVOS).
++ */
+ export function fadeIn(index: number) {
++  if (appleTv()) return {};
+   return { ref: CARD_IN[index % 20] };
+ }
+ 
+diff --git a/packages/web/src/main.tsx b/packages/web/src/main.tsx
+index 7da9bff41..6f259e594 100644
+--- a/packages/web/src/main.tsx
++++ b/packages/web/src/main.tsx
+@@ -42,6 +42,11 @@ const queryClient = new QueryClient({
+   },
+ });
+ 
++// Loading placeholders hold still on an Apple TV (styles.css): each pulsing one was a layer of its
++// own over the app's art, eight to a row and twelve to a grid as items loaded (AIOStreamsTVOS).
++if (appleTv())
++  document.documentElement.toggleAttribute('data-still-loading', true);
++
+ // A page shown, or kept behind the open one, still watches its catalog, which keeps all it loaded:
+ // only one nothing watches is trimmed. Its next page is worked out from what it holds, so scrolling
+ // it again carries on from the pages kept (AIOStreamsTVOS).
+diff --git a/packages/web/src/styles.css b/packages/web/src/styles.css
+index 1152d74cd..f2b6c5a33 100644
+--- a/packages/web/src/styles.css
++++ b/packages/web/src/styles.css
+@@ -662,3 +662,12 @@ html[data-blur-spoilers]:not([data-tv])
+     opacity: 0;
+   }
+ }
++
++/*
++ * The Apple TV app's loading placeholders hold still (main.tsx's `data-still-loading`): each
++ * pulsing one was a layer of its own over the app's art, eight to a row and twelve to a grid as
++ * items loaded (AIOStreamsTVOS).
++ */
++html[data-still-loading] .UI-Skeleton__root {
++  animation: none;
++}
