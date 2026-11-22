@@ -1,0 +1,64 @@
+diff --git a/packages/web/src/components/shell/input-setup.tsx b/packages/web/src/components/shell/input-setup.tsx
+index 0837ada77..945634b47 100644
+--- a/packages/web/src/components/shell/input-setup.tsx
++++ b/packages/web/src/components/shell/input-setup.tsx
+@@ -9,6 +9,7 @@ import {
+   actionText,
+   activate,
+   groupActions,
++  gridBack,
+   groupLabel,
+   isTextField,
+   keysOf,
+@@ -36,6 +37,8 @@ interface History {
+ 
+ /** Back where no page takes it: into a TV's navigation, out of a field, out of full screen, then a page back. */
+ function back(history: History): boolean {
++  // From deep in a grid, its first card before the navigation (AIOStreamsTVOS).
++  if (gridBack()) return true;
+   if (toNavigation()) return true;
+   const el = document.activeElement;
+   if (isTextField(el)) {
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index e14e82e98..73e5cf034 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -1021,6 +1021,26 @@ let lastMove: { from: HTMLElement; to: HTMLElement; dir: Direction } | null =
+  */
+ const cameFrom = new WeakMap<Element, HTMLElement>();
+ 
++/**
++ * Back from a card in a grid past its first: that first card, before the navigation or leaving the
++ * page, which Back from there goes on to. Keys only: a tap leaves focus on a card, and Back from a
++ * touch screen leaves the page (AIOStreamsTVOS).
++ */
++export function gridBack(): boolean {
++  const from = keyboardFocus();
++  if (!from || scope() !== document.body) return false;
++  const grid = from.closest('[data-ui=card-grid]');
++  if (!grid || grid.closest('[inert]')) return false;
++  const first = [...grid.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
++    (el) => !ruledOut(el) && canFocus(el)
++  );
++  if (!first || first === from || first.contains(from)) return false;
++  // A jump, not a step, so Down from there is found afresh.
++  lastMove = null;
++  focusOn(first);
++  return true;
++}
++
+ /**
+  * From a page the navigation leads to, its entry there, which Back moves onto
+  * first; `data-nav-back` marks the way it lies from the page.
+diff --git a/packages/web/src/lib/input/index.ts b/packages/web/src/lib/input/index.ts
+index 1c5916ccd..ed06fdf2d 100644
+--- a/packages/web/src/lib/input/index.ts
++++ b/packages/web/src/lib/input/index.ts
+@@ -37,6 +37,7 @@ export {
+   navSide,
+   navWait,
+   navigationBack,
++  gridBack,
+   openMenu,
+   scrollStep,
+   type Direction,
