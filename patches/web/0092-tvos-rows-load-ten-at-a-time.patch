@@ -1,0 +1,35 @@
+diff --git a/packages/web/src/components/media/items-row.tsx b/packages/web/src/components/media/items-row.tsx
+index 0c943b7a6..ca5148adc 100644
+--- a/packages/web/src/components/media/items-row.tsx
++++ b/packages/web/src/components/media/items-row.tsx
+@@ -6,6 +6,7 @@ import { cardImages, cardShape, animatedPosterOf } from '@/lib/artwork/urls';
+ import { itemSubtitle, progressOf } from '@/lib/format';
+ import { href, itemPath } from '@/lib/paths';
+ import { currentHost } from '@/lib/hosts';
++import { appleTv } from '@/lib/hosts/shell/bridge';
+ import { whenStill } from '@/lib/input/glide';
+ import { useNear } from '@/hooks/use-in-view';
+ import { Anchor } from '@/components/anchor';
+@@ -15,6 +16,13 @@ import { ItemMenu } from './item-menu';
+ 
+ export const ROW_PAGE = 20;
+ 
++/**
++ * On an Apple TV, a row's items come ten at a time, the next ten as focus nears the row's end: a row
++ * loading in drew twenty cards and their artwork at once, which with every row on Home pressed
++ * WebKit's page process for memory (AIOStreamsTVOS).
++ */
++const TV_ROW_PAGE = 10;
++
+ /** How far below the screen a TV starts a row: a screen's height. */
+ // eslint-disable-next-line lingui/no-unlocalized-strings -- a root margin
+ const TV_ROW_AHEAD = '100% 0px';
+@@ -64,7 +72,7 @@ export function ItemsRow({
+   const near = useStill(nearNow);
+   const pages = useItemPages(parentId, {
+     ...query,
+-    pageSize: ROW_PAGE,
++    pageSize: appleTv() ? TV_ROW_PAGE : ROW_PAGE,
+     enabled: near,
+   });
+   const fetched = React.useMemo(
