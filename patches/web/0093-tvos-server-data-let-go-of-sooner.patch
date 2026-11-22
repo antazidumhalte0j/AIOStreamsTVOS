@@ -10,27 +10,24 @@ index 6e0757de0..7da9bff41 100644
  import { followReachable } from './lib/jellyfin/connection';
  import { startI18n } from './lib/i18n';
  import { setupTv } from './lib/tv';
-@@ -22,6 +23,15 @@ import { setupTv } from './lib/tv';
+@@ -22,6 +23,13 @@ import { setupTv } from './lib/tv';
  onlineManager.setEventListener(followReachable);
  setupTv();
  
 +/*
-+ * On an Apple TV, what the server sent is let go of sooner: a query nothing shows goes after a
-+ * minute rather than five, and a catalog nothing shows keeps only its first pages. Catalogs
-+ * scrolled far held thousands of items between them, all in WebKit's page process, which tvOS ends
-+ * for memory (AIOStreamsTVOS).
++ * On an Apple TV, a catalog nothing shows keeps only its first pages: catalogs scrolled far held
++ * thousands of items between them, all in WebKit's page process, which tvOS ends for memory
++ * (AIOStreamsTVOS).
 + */
-+const TV_GC_MS = 60_000;
 +const TV_KEPT_PAGES = 2;
 +
  const queryClient = new QueryClient({
    defaultOptions: {
      queries: {
-@@ -30,10 +40,41 @@ const queryClient = new QueryClient({
+@@ -30,10 +38,40 @@ const queryClient = new QueryClient({
        persister,
        // Runs even while the server is out of reach, so saved copies still load.
        networkMode: 'offlineFirst',
-+      ...(appleTv() && { gcTime: TV_GC_MS }),
      },
    },
  });
