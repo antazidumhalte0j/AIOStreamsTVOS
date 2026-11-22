@@ -1,0 +1,16 @@
+diff --git a/packages/web/src/components/media/media-row.tsx b/packages/web/src/components/media/media-row.tsx
+index f2429ca..b94fa4e 100644
+--- a/packages/web/src/components/media/media-row.tsx
++++ b/packages/web/src/components/media/media-row.tsx
+@@ -613,7 +613,10 @@ export function MediaRow({
+           <NativeRow
+             restoreKey={restoreKey}
+             start={start}
+-            onEnd={onEndReached}
++            // A row still loading draws one placeholder, which never fills the row, so it
++            // read as scrolled to its end and paged on its own, each page asking for the next,
++            // through a whole catalog nothing was showing (AIOStreamsTVOS).
++            onEnd={appleTv() && loading ? undefined : onEndReached}
+             onView={onView}
+             onPitch={appleTv() ? onPitch : undefined}
+             count={
