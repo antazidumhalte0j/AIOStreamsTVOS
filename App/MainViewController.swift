@@ -393,6 +393,7 @@ final class MainViewController: UIViewController, RemoteReceiver {
         lines += MemoryLog.report
         let held = AetherPlayer.heldSourceConnection
         let priming = AudioOutput.primerEnabled
+        let standardSession = AudioOutput.standardSession
         let report = lines.joined(separator: "\n")
         let menu = AppMenu(title: "AIOStreams", text: report, actions: [
             AppMenu.Action(title: "Open the log on a phone…", destructive: false) { [weak self] in
@@ -413,6 +414,15 @@ final class MainViewController: UIViewController, RemoteReceiver {
                 self?.flashStatus(priming
                     ? "Dolby primer off from the next video"
                     : "Dolby primer on from the next video: for surround that plays as stereo")
+            },
+            AppMenu.Action(
+                title: standardSession ? "Use the long-form audio session" : "Use the standard audio session",
+                destructive: false
+            ) { [weak self] in
+                AudioOutput.standardSession = !standardSession
+                self?.flashStatus(standardSession
+                    ? "Long-form audio session from the next video, as before"
+                    : "Standard audio session from the next video: for AirPods spatial audio")
             },
             AppMenu.Action(title: "Reset the app's data", destructive: true) { [weak self] in self?.confirmReset() },
             AppMenu.Action(title: "Close", destructive: false) {},

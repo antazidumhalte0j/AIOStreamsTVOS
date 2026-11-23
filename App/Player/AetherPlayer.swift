@@ -2066,6 +2066,7 @@ final class AetherPlayer {
         }
         lines.append("Audio shaping: \(engine.audioShapingState.rawValue)")
         lines.append("Audio output: \(AudioOutput.routeSummary)")
+        lines.append("Audio session: \(AudioOutput.sessionSummary)")
         if !AudioOutput.primerEnabled {
             lines.append("Dolby primer: off (app menu)")
         } else if let prime = AudioOutput.lastPrime {

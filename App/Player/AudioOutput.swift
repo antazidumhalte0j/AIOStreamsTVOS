@@ -14,16 +14,51 @@ import Foundation
  * AVPlayerViewController here, so the app does it.
  */
 enum AudioOutput {
-    /// What the engine declares on tvOS: movie playback, long-form audio, multichannel.
+    /// Movie playback and multichannel, as the engine declares on tvOS, with the app menu's route-sharing
+    /// policy (`standardSession`; long-form audio, the engine's, unless it's switched). The engine declares
+    /// its own only while the category isn't `.playback`, so this one, at launch, is the one kept.
     static func declare() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio)
+            try session.setCategory(.playback, mode: .moviePlayback, policy: sessionPolicy)
             try session.setSupportsMultichannelContent(true)
         } catch {
             NSLog("[audio] category: %@", error.localizedDescription)
         }
         watchRoute()
+    }
+
+    /**
+     * The app menu's switch for the session's route-sharing policy, off by default. Off, it's
+     * `.longFormAudio`, as the engine declares on tvOS for the HDMI link's negotiation (engine #24).
+     * On, `.default`, as video apps declare: tried for AirPods, where switching Spatial Audio to Fixed
+     * kept the sound head tracked in this app on AVPlayer and the engine's own player alike, but not
+     * in Infuse, and a long-form audio session is the one difference left. Read as each video
+     * activates the session.
+     */
+    static var standardSession: Bool {
+        get { UserDefaults.standard.bool(forKey: "audio.standardSession") }
+        set { UserDefaults.standard.set(newValue, forKey: "audio.standardSession") }
+    }
+
+    private static var sessionPolicy: AVAudioSession.RouteSharingPolicy {
+        standardSession ? .default : .longFormAudio
+    }
+
+    /// The session's mode and route-sharing policy as they are, for the app menu and the diagnostics.
+    static var sessionSummary: String {
+        let session = AVAudioSession.sharedInstance()
+        let policy: String
+        switch session.routeSharingPolicy {
+        case .longFormAudio: policy = "long-form audio"
+        case .default: policy = "standard"
+        default: policy = "policy \(session.routeSharingPolicy.rawValue)"
+        }
+        var line = "\(policy), \(session.mode == .moviePlayback ? "movie playback" : session.mode.rawValue)"
+        if session.routeSharingPolicy != sessionPolicy {
+            line += "; \(standardSession ? "standard" : "long-form audio") from the next video"
+        }
+        return line
     }
 
     private static var watchingRoute = false
@@ -47,7 +82,16 @@ enum AudioOutput {
         queue.async {
             let session = AVAudioSession.sharedInstance()
             do {
-                if session.category != .playback { declare() }
+                if session.category != .playback || session.routeSharingPolicy != sessionPolicy {
+                    declare()
+                    // A policy that didn't take on the session still active from the last video takes
+                    // on one let go first.
+                    if session.routeSharingPolicy != sessionPolicy {
+                        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                        declare()
+                    }
+                    NSLog("[audio] session: %@", sessionSummary)
+                }
                 try session.setActive(true)
             } catch {
                 NSLog("[audio] activate: %@", error.localizedDescription)
