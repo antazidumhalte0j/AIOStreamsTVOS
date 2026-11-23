@@ -17,15 +17,37 @@ enum AudioOutput {
     /// Movie playback and multichannel, as the engine declares on tvOS, with the app menu's route-sharing
     /// policy (`standardSession`; long-form audio, the engine's, unless it's switched). The engine declares
     /// its own only while the category isn't `.playback`, so this one, at launch, is the one kept.
-    static func declare() {
+    /// Returns what went wrong, if anything, for the "Audio session" line.
+    @discardableResult
+    static func declare() -> String? {
         let session = AVAudioSession.sharedInstance()
+        var failed: String?
         do {
             try session.setCategory(.playback, mode: .moviePlayback, policy: sessionPolicy)
             try session.setSupportsMultichannelContent(true)
         } catch {
+            failed = error.localizedDescription
             NSLog("[audio] category: %@", error.localizedDescription)
         }
         watchRoute()
+        return failed
+    }
+
+    private static let changeLock = NSLock()
+    private static var _lastChange: String?
+    /// What the last change of policy did, step by step, for the "Audio session" line: whether the
+    /// system took it, refused it, or took the call and kept the policy it had.
+    private static var lastChange: String? {
+        get { changeLock.lock(); defer { changeLock.unlock() }; return _lastChange }
+        set { changeLock.lock(); _lastChange = newValue; changeLock.unlock() }
+    }
+
+    private static func policyName(_ policy: AVAudioSession.RouteSharingPolicy) -> String {
+        switch policy {
+        case .longFormAudio: return "long-form audio"
+        case .default: return "standard"
+        default: return "policy \(policy.rawValue)"
+        }
     }
 
     /**
@@ -48,16 +70,12 @@ enum AudioOutput {
     /// The session's mode and route-sharing policy as they are, for the app menu and the diagnostics.
     static var sessionSummary: String {
         let session = AVAudioSession.sharedInstance()
-        let policy: String
-        switch session.routeSharingPolicy {
-        case .longFormAudio: policy = "long-form audio"
-        case .default: policy = "standard"
-        default: policy = "policy \(session.routeSharingPolicy.rawValue)"
-        }
-        var line = "\(policy), \(session.mode == .moviePlayback ? "movie playback" : session.mode.rawValue)"
+        var line = "\(policyName(session.routeSharingPolicy)), "
+            + (session.mode == .moviePlayback ? "movie playback" : session.mode.rawValue)
         if session.routeSharingPolicy != sessionPolicy {
-            line += "; \(standardSession ? "standard" : "long-form audio") from the next video"
+            line += "; \(policyName(sessionPolicy)) from the next video"
         }
+        if let change = lastChange { line += "; last change: \(change)" }
         return line
     }
 
@@ -83,13 +101,24 @@ enum AudioOutput {
             let session = AVAudioSession.sharedInstance()
             do {
                 if session.category != .playback || session.routeSharingPolicy != sessionPolicy {
-                    declare()
+                    let wanted = sessionPolicy
+                    let at = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+                    var steps = ["asked \(policyName(wanted)) at \(at) with \(policyName(session.routeSharingPolicy))"]
+                    steps.append(declare().map { "refused: \($0)" } ?? "set")
+                    steps.append("then \(policyName(session.routeSharingPolicy))")
                     // A policy that didn't take on the session still active from the last video takes
                     // on one let go first.
-                    if session.routeSharingPolicy != sessionPolicy {
-                        try? session.setActive(false, options: .notifyOthersOnDeactivation)
-                        declare()
+                    if session.routeSharingPolicy != wanted {
+                        do {
+                            try session.setActive(false, options: .notifyOthersOnDeactivation)
+                            steps.append("let go")
+                        } catch {
+                            steps.append("let go failed: \(error.localizedDescription)")
+                        }
+                        steps.append(declare().map { "refused: \($0)" } ?? "set")
+                        steps.append("then \(policyName(session.routeSharingPolicy))")
                     }
+                    lastChange = steps.joined(separator: ", ")
                     NSLog("[audio] session: %@", sessionSummary)
                 }
                 try session.setActive(true)
