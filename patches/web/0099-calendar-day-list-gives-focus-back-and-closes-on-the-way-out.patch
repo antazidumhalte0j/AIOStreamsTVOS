@@ -1,0 +1,65 @@
+diff --git a/packages/web/src/app/calendar/page.tsx b/packages/web/src/app/calendar/page.tsx
+index 79c2652..95f032f 100644
+--- a/packages/web/src/app/calendar/page.tsx
++++ b/packages/web/src/app/calendar/page.tsx
+@@ -22,6 +22,7 @@ import {
+ } from '@/lib/format';
+ import { landscapeUrls } from '@/lib/artwork/urls';
+ import { href, itemPath, navigate, to } from '@/lib/paths';
++import { useRestoreFocus } from '@/lib/input';
+ import { PageBody } from '@/components/shell/page';
+ import { Artwork } from '@/components/media/cards';
+ import type { BaseItemDto } from '@/lib/jellyfin/types';
+@@ -373,6 +374,31 @@ export function CalendarPage({ month }: { month?: string }) {
+   const first = parseMonth(month);
+   const days = gridDays(first, React.useMemo(weekStart, []));
+   const [openDay, setOpenDay] = React.useState<Date | null>(null);
++  // A day's list is opened from code, with no trigger to give focus back to: closing it gives
++  // focus back to the day, as the app's other dialogs opened from code do (AIOStreamsTVOS).
++  const restoreFocus = useRestoreFocus(!!openDay);
++  /*
++   * Following an entry to its title closes the list, which stayed open over the title page, the
++   * calendar being kept beneath it, and was open again on Back. Focus goes where that page puts
++   * it rather than back to the day, which Back returns to (AIOStreamsTVOS).
++   */
++  const router = useRouter();
++  const shownDay = React.useRef(openDay);
++  shownDay.current = openDay;
++  const leaving = React.useRef(false);
++  React.useEffect(
++    () =>
++      router.subscribe('onBeforeNavigate', () => {
++        if (!shownDay.current) return;
++        leaving.current = true;
++        setOpenDay(null);
++      }),
++    [router]
++  );
++  const openList = (day: Date) => {
++    leaving.current = false;
++    setOpenDay(day);
++  };
+   // A day either side, for dates that arrive as midnight UTC.
+   const from = new Date(days[0]);
+   from.setDate(from.getDate() - 1);
+@@ -462,7 +488,7 @@ export function CalendarPage({ month }: { month?: string }) {
+                 days={days}
+                 month={first.getMonth()}
+                 byDay={byDay}
+-                onOpen={setOpenDay}
++                onOpen={openList}
+               />
+             </div>
+             <div className="md:hidden">
+@@ -493,6 +519,11 @@ export function CalendarPage({ month }: { month?: string }) {
+         data-name="calendar-day"
+         open={!!openDay}
+         onOpenChange={(open) => !open && setOpenDay(null)}
++        onCloseAutoFocus={(e) => {
++          if (!leaving.current) return restoreFocus(e);
++          leaving.current = false;
++          e.preventDefault();
++        }}
+         title={openDay ? longDay(openDay) : undefined}
+         contentClass="max-w-lg"
+       >
