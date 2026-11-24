@@ -76,6 +76,12 @@ final class AetherPlayer {
     /// The file is loading, or playing, again as live after AVPlayer gave up on it (`failed`), so it isn't again.
     private var reloadedAsLive = false
     /**
+     * The file is loading, or playing, again read straight through from its start (`LoadOptions.sequentialOrigin`),
+     * as its origin answered a byte range with other bytes (`failed`), so it isn't again. IPTV catch-up archives
+     * do: the page showed "Playback failed: source origin answers byte ranges with other bytes" (AE#958).
+     */
+    private var reloadedSequentially = false
+    /**
      * The live channel is loading, or playing, again on AVPlayer (`LoadOptions.nativeRemoteHLS`) because the
      * engine's live-ingest reader identified none of its audio (`loaded`), so it isn't again. Seen on an IPTV
      * channel with two AC-3 tracks: "Could not find codec parameters ... unspecified sample rate" with the
@@ -204,10 +210,13 @@ final class AetherPlayer {
 
     /// `asLive`: loaded again as live after AVPlayer gave up on it as a finished video (`failed`).
     /// `onAVPlayer`: a live channel loaded again on AVPlayer, its audio unidentified on the engine's reader (`loaded`).
-    private func start(_ request: LoadRequest, asLive: Bool = false, onAVPlayer: Bool = false) {
+    /// `sequential`: loaded again read straight through, its origin fabricating byte ranges (`failed`).
+    private func start(_ request: LoadRequest, asLive: Bool = false, onAVPlayer: Bool = false, sequential: Bool = false) {
         guard let url = URL(string: request.url) else { return }
-        reloadedAsLive = asLive
+        // Each retry keeps the other's mark, so the two can't take turns on the same file.
+        reloadedAsLive = asLive || (sequential && reloadedAsLive)
         liveOnAVPlayer = onAVPlayer
+        reloadedSequentially = sequential || (asLive && reloadedSequentially)
         if current != nil, !ended {
             keepLastVideo(ending: onAVPlayer ? "loaded again on AVPlayer for its sound"
                 : asLive ? "loaded again as live" : "another video took its place")
@@ -215,7 +224,7 @@ final class AetherPlayer {
             if !onAVPlayer { listener?.playerEnded(reason: "stop", error: nil, cause: nil, status: nil) }
         }
         // The page names the new video once it starts (`now-playing`).
-        if !asLive && !onAVPlayer { title = nil }
+        if !asLive && !onAVPlayer && !sequential { title = nil }
         flushStartTiming()
         generation += 1
         let generation = generation
@@ -292,8 +301,9 @@ final class AetherPlayer {
             do {
                 try await self.engine.load(
                     url: url,
-                    startPosition: !live && request.startMs > 0 ? request.startMs / 1000 : nil,
-                    options: self.options(for: request, live: live)
+                    // A straight read can't start partway, so it plays from the start.
+                    startPosition: !live && !sequential && request.startMs > 0 ? request.startMs / 1000 : nil,
+                    options: self.options(for: request, live: live, sequential: sequential)
                 )
                 guard generation == self.generation else { return }
                 self.loadedAt = ProcessInfo.processInfo.systemUptime
@@ -308,9 +318,15 @@ final class AetherPlayer {
     }
 
     /// How the file plays: mostly the page's sound settings, read for Atmos (see the type's notes).
-    private func options(for request: LoadRequest, live: Bool) -> LoadOptions {
+    private func options(for request: LoadRequest, live: Bool, sequential: Bool = false) -> LoadOptions {
         var options = LoadOptions()
         options.httpHeaders = request.headers
+        // An origin that answers byte ranges with other bytes, read from byte 0 on one request, with the length
+        // the server gives, as the engine can't read it from the file's end (AE#958).
+        if sequential && !live {
+            options.sequentialOrigin = true
+            options.declaredDurationSeconds = request.durationMs.map { $0 / 1000 }
+        }
         // The engine takes a live playlist onto its own HLS reader, which puts the headers on every playlist
         // and segment request: a `.m3u8` at once, any other address once it answers with a playlist (AE#363).
         // Without this it plays the playlist in AVPlayer as a finished one.
@@ -633,6 +649,15 @@ final class AetherPlayer {
             return
         }
         let info = engine.errorInfo
+        // An origin that answers byte ranges with other bytes, as IPTV catch-up archives do, at the open or
+        // mid-video: once more read straight through from its start, before the page hears of it.
+        if !reloadedSequentially, info?.kind == .sourceFabricatesRanges, let request = current,
+           !request.live, !request.isTrailer, !engine.isLive {
+            EngineLogBook.note("[player] the origin answers byte ranges with other bytes: loading again read straight through"
+                + "\(request.durationMs == nil ? ", with no length from the page" : "")")
+            start(request, sequential: true)
+            return
+        }
         var status: Int?
         if let code = info?.underlyingCode, (400..<600).contains(code),
            info?.kind == .sourceRefused || info?.kind == .sourceRateLimited || info?.kind == .sourceOpenFailed {
