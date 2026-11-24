@@ -1,0 +1,72 @@
+diff --git a/packages/web/src/features/player/mini-player.tsx b/packages/web/src/features/player/mini-player.tsx
+index e3fa83bef..786c07674 100644
+--- a/packages/web/src/features/player/mini-player.tsx
++++ b/packages/web/src/features/player/mini-player.tsx
+@@ -15,6 +15,7 @@ import {
+   canMinimise,
+   closePlayback,
+   expandPlayback,
++  playbackNow,
+ } from '@/lib/playback/session';
+ import { useDock } from '@/lib/playback/dock';
+ import { useDocumentPip } from '@/lib/playback/document-pip';
+@@ -297,7 +298,49 @@ export function MiniPlayer(props: MiniPlayerProps) {
+     return () => clearTimeout(timer);
+   }, [room]);
+   if (dock) return <DockedPlayer {...props} dock={dock} />;
+-  return room ? <CornerPlayer {...props} /> : null;
++  return room ? <CornerPlayer {...props} /> : <BetweenDocks {...props} />;
++}
++
++/** No room on the screen: the app's video in no box, and none of it shown. */
++const NOWHERE: VideoFrame = {
++  x: 0,
++  y: 0,
++  width: 0,
++  height: 0,
++  draggable: false,
++  hidden: true,
++  animate: false,
++  radius: 0,
++  bottomRadius: 0,
++  subtitles: false,
++};
++
++/**
++ * The app's video as a docked player goes. Still small, the next one places
++ * it, so it never fills the screen between them; closed, the app has the stop
++ * first, which hides it, and then the whole screen back for the next title.
++ * A frame of none at once filled the screen with a TV's live channel for the
++ * wait between pages, until it stopped (AIOStreamsTVOS).
++ */
++function letGo(setFrame: PlayerController['setFrame']) {
++  if (!setFrame) return;
++  const open = playbackNow();
++  if (open?.mini) return;
++  if (open) setFrame(null);
++  else setTimeout(() => setFrame(null));
++}
++
++/** A TV between one page's preview and the next: the video waits unseen. */
++function BetweenDocks({ player }: MiniPlayerProps) {
++  const setFrame = player?.setFrame;
++  const latestSetFrame = React.useRef(setFrame);
++  latestSetFrame.current = setFrame;
++  const framed = !!setFrame;
++  React.useEffect(() => {
++    if (framed) latestSetFrame.current?.(NOWHERE);
++  }, [framed]);
++  React.useEffect(() => () => letGo(latestSetFrame.current), []);
++  return null;
+ }
+ 
+ /**
+@@ -715,7 +758,7 @@ function DockedPlayer({
+   React.useEffect(() => {
+     if (framed) latestSetFrame.current?.(frame);
+   }, [framed, frame]);
+-  React.useEffect(() => () => latestSetFrame.current?.(null), []);
++  React.useEffect(() => () => letGo(latestSetFrame.current), []);
+   React.useEffect(
+     () =>
+       appBridge()?.subscribe((m) => {
