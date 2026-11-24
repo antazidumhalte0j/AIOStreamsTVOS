@@ -185,7 +185,8 @@ final class MainViewController: UIViewController, RemoteReceiver {
         guard let web else { return }
         connected = false
         linksReady = false
-        showStatus("Loading AIOStreams…")
+        // No text while it loads, only the black screen; a notice from the last load goes.
+        status.isHidden = true
         web.setStartScript(BridgeScript.make(
             version: "\(Identity.version)-tvos",
             device: Identity.device,

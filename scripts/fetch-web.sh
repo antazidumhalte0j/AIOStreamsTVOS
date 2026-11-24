@@ -9,9 +9,9 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
-# The AIOStreams commit the patches are made against (main on 2026-11-21, after the Live TV
-# navigation fixes); a branch, a tag or another commit in AIOSTREAMS_REF tries another.
-ref="${AIOSTREAMS_REF:-f8e66ae12aa62333ff412d486c59eb1f1faf5996}"
+# The AIOStreams commit the patches are made against (main on 2026-11-24, after the Live TV
+# group picker fix); a branch, a tag or another commit in AIOSTREAMS_REF tries another.
+ref="${AIOSTREAMS_REF:-dfe604462cd5a7227a4100c170f4297c695cf233}"
 repo="${AIOSTREAMS_REPO:-https://github.com/Viren070/AIOStreams.git}"
 src="${AIOSTREAMS_DIR:-}"
 

@@ -34,6 +34,9 @@ struct LoadRequest {
     var framed = false
     /// The page says it's a trailer (patches/web/0067, its `trailer:` sources).
     var pageTrailer = false
+    /// The title's length from the server (patches/web/0102), which a source read straight through can't
+    /// tell (`AetherPlayer.failed`, `LoadOptions.declaredDurationSeconds`). nil when the page sends none.
+    var durationMs: Double?
 
     /// A trailer: the page says so, or it's from YouTube (`YouTube.resolve`), whose streams all come from
     /// googlevideo.com.
@@ -156,7 +159,8 @@ enum PlayerProtocol {
             subtitleMode: message.text("subtitleMode").flatMap(SubtitleMode.init(rawValue:)) ?? .default,
             live: message.flag("live") == true,
             framed: message.flag("framed") == true,
-            pageTrailer: message.flag("trailer") == true
+            pageTrailer: message.flag("trailer") == true,
+            durationMs: message.number("durationMs").flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         )
     }
 

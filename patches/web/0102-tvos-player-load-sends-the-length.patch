@@ -1,0 +1,16 @@
+diff --git a/packages/web/src/lib/hosts/shell/player.ts b/packages/web/src/lib/hosts/shell/player.ts
+index b3449c1a6..ce80e71a5 100644
+--- a/packages/web/src/lib/hosts/shell/player.ts
++++ b/packages/web/src/lib/hosts/shell/player.ts
+@@ -145,6 +145,11 @@ export const appEngine: EngineFactory = (emit, { launched }) => {
+       url: played.url,
+       headers: live ? liveHeaders(played.headers) : played.headers,
+       startMs: played.startMs,
++      // The length from the server, which a source the Apple TV app reads straight through can't
++      // tell: IPTV catch-up archives that answer byte ranges with other bytes (AIOStreamsTVOS).
++      durationMs: played.source.RunTimeTicks
++        ? played.source.RunTimeTicks / 10_000
++        : undefined,
+       live,
+       append,
+       audioLanguages: audioCodes(prefs, played.source),

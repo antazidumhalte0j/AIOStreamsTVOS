@@ -1,0 +1,19 @@
+diff --git a/packages/web/src/lib/input/focus.ts b/packages/web/src/lib/input/focus.ts
+index 1537541..ac349dd 100644
+--- a/packages/web/src/lib/input/focus.ts
++++ b/packages/web/src/lib/input/focus.ts
+@@ -617,8 +617,13 @@ function wrapped(from: HTMLElement, dir: Direction): HTMLElement | null {
+   if (!grid || (dir !== 'left' && dir !== 'right')) return null;
+   let cell: Element | null = from;
+   while (cell && cell.parentElement !== grid) cell = cell.parentElement;
++  // A right to left grid's items run from the right, so Left goes on to the next: going by the
++  // arrow alone, Left off a line's end in Hebrew went back to the item beside it, and the next
++  // Left forth again (AIOStreamsTVOS).
++  const onward =
++    (dir === 'right') !== (getComputedStyle(grid).direction === 'rtl');
+   const step = (el: Element) =>
+-    dir === 'right' ? el.nextElementSibling : el.previousElementSibling;
++    onward ? el.nextElementSibling : el.previousElementSibling;
+   for (let next = cell && step(cell); next; next = step(next)) {
+     const el = next.matches(FOCUSABLE)
+       ? (next as HTMLElement)
