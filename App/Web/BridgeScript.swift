@@ -1233,15 +1233,25 @@ enum BridgeScript {
     !document.querySelector('[role=dialog][data-state=open], [role=alertdialog][data-state=open]');
   const focusNav = (to) => to.focus({ preventScroll: true, focusVisible: true });
   /*
-   * A catalog or collection is a grid (`data-nav-wrap`), where Left from the
-   * first poster of a line wraps to the end of the line above, as text does,
-   * so focus moves and the check after the key never sees it stay. Left from
-   * a line's first poster goes to the navigation instead; Right off a line's
-   * end still wraps. Left to right grids only.
+   * The navigation sits at the page's start: on the left, and on the right when the page is laid out
+   * right to left (Hebrew), where every key here that goes toward it or comes back from it is the
+   * other arrow. Only Left and Right toward it were taken before, so in Hebrew Right from a row's
+   * first poster, next to the navigation, never reached it.
+   */
+  const rtl = () => document.documentElement.dir === 'rtl';
+  const TOWARD_NAV = () => (rtl() ? 'ArrowRight' : 'ArrowLeft');
+  const FROM_NAV = () => (rtl() ? 'ArrowLeft' : 'ArrowRight');
+  /*
+   * A catalog or collection is a grid (`data-nav-wrap`), where toward the navigation from the
+   * first poster of a line wraps to the end of the line above, as text does, so focus moves and
+   * the check after the key never sees it stay. From a line's first poster it goes to the
+   * navigation instead; off a line's end the other way still wraps. A right to left grid's line
+   * starts on the right.
    */
   const startsGridLine = (el) => {
     const grid = el.closest?.('[data-nav-wrap]');
-    if (!grid || getComputedStyle(grid).direction === 'rtl') return false;
+    if (!grid) return false;
+    const backwards = getComputedStyle(grid).direction === 'rtl';
     let cell = el;
     while (cell && cell.parentElement !== grid) cell = cell.parentElement;
     if (!cell) return false;
@@ -1249,8 +1259,8 @@ enum BridgeScript {
     for (let prev = cell.previousElementSibling; prev; prev = prev.previousElementSibling) {
       const r = prev.getBoundingClientRect();
       if (!r.width && !r.height) continue;
-      // The poster before it sits at or past its left edge: on the line above.
-      return r.left >= at.left - 1;
+      // The poster before it sits at or past its start edge: on the line above.
+      return backwards ? r.right <= at.right + 1 : r.left >= at.left - 1;
     }
     return true;
   };
@@ -1632,7 +1642,7 @@ enum BridgeScript {
       down(name, repeat) {
         const el = target();
         // Back to the card the navigation was opened from.
-        if (name === 'ArrowRight' && !repeat && leftFrom && el.closest?.(NAV_SIDE) && shown(leftFrom)) {
+        if (name === FROM_NAV() && !repeat && leftFrom && el.closest?.(NAV_SIDE) && shown(leftFrom)) {
           const card = leftFrom;
           leftFrom = null;
           swallowed = name;
@@ -1654,8 +1664,8 @@ enum BridgeScript {
           openKeyboard(el);
           return;
         }
-        // Left from the first poster of a grid's line: into the navigation, not up a line.
-        if (name === 'ArrowLeft' && !repeat && inRow(el) && startsGridLine(el)) {
+        // Toward the navigation from the first poster of a grid's line: into it, not up a line.
+        if (name === TOWARD_NAV() && !repeat && inRow(el) && startsGridLine(el)) {
           const to = navEntry();
           if (to) {
             lastDown = performance.now();
@@ -1673,8 +1683,8 @@ enum BridgeScript {
         // A scrolled slide runs no animation to wait for, so the artwork sweep is told how long it runs.
         if (PAGE_SCROLLS && (name === 'ArrowUp' || name === 'ArrowDown'))
           slidingUntil = Math.max(slidingUntil, performance.now() + 300);
-        // Left from a row's first card that the page left where it was: into the navigation.
-        if (name === 'ArrowLeft' && !repeat && inRow(el)) {
+        // Toward the navigation from a row's first card that the page left where it was: into it.
+        if (name === TOWARD_NAV() && !repeat && inRow(el)) {
           const pressed = now;
           setTimeout(() => {
             if (lastDown !== pressed || document.activeElement !== el) return;
